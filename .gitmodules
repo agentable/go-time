@@ -1,0 +1,24 @@
+[submodule ".agents/skills"]
+	path = .agents/skills
+	url = https://github.com/agentable/golang-skills.git
+	shallow = true
+[submodule ".references/time-rs"]
+	path = .references/time-rs
+	url = https://github.com/time-rs/time.git
+	shallow = true
+[submodule ".references/dayjs"]
+	path = .references/dayjs
+	url = https://github.com/iamkun/dayjs
+	shallow = true
+[submodule ".references/pendulum"]
+	path = .references/pendulum
+	url = https://github.com/python-pendulum/pendulum
+	shallow = true
+[submodule ".references/date-fns"]
+	path = .references/date-fns
+	url = https://github.com/date-fns/date-fns
+	shallow = true
+[submodule ".references/moment-timezone"]
+	path = .references/moment-timezone
+	url = https://github.com/moment/moment-timezone
+	shallow = true

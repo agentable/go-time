@@ -1,0 +1,236 @@
+package natural
+
+import (
+	"testing"
+	"time"
+)
+
+func enCtx(zoneID string) Context {
+	loc := locForZone(zoneID)
+	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc) // Monday
+	return Context{
+		Locale:     "en",
+		ZoneID:     zoneID,
+		RelativeTo: ref,
+	}
+}
+
+func TestEn_RelativeDate(t *testing.T) {
+	ctx := enCtx("America/New_York")
+	loc := locForZone("America/New_York")
+	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc)
+	today := time.Date(ref.Year(), ref.Month(), ref.Day(), 0, 0, 0, 0, loc)
+
+	tests := []struct {
+		input string
+		want  time.Time
+	}{
+		{"today", today},
+		{"tomorrow", today.AddDate(0, 0, 1)},
+		{"yesterday", today.AddDate(0, 0, -1)},
+		{"day after tomorrow", today.AddDate(0, 0, 2)},
+		{"day before yesterday", today.AddDate(0, 0, -2)},
+		// Case insensitive
+		{"Tomorrow", today.AddDate(0, 0, 1)},
+		{"TOMORROW", today.AddDate(0, 0, 1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, ok := Parse(tt.input, ctx)
+			if !ok {
+				t.Fatalf("Parse(%q) returned ok=false", tt.input)
+			}
+			if r.Kind != KindDate {
+				t.Fatalf("Kind = %v, want KindDate", r.Kind)
+			}
+			if !r.DateOnly {
+				t.Error("DateOnly = false, want true")
+			}
+			if !r.Time.Equal(tt.want) {
+				t.Errorf("Time = %v, want %v", r.Time, tt.want)
+			}
+		})
+	}
+}
+
+func TestEn_WeekRelative(t *testing.T) {
+	// RelativeTo = 2026-03-30 (Monday)
+	ctx := enCtx("America/New_York")
+	loc := locForZone("America/New_York")
+
+	tests := []struct {
+		input    string
+		wantDate time.Time
+	}{
+		{"next Friday", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
+		{"this Friday", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
+		{"last Wednesday", time.Date(2026, 3, 25, 0, 0, 0, 0, loc)},
+		// next Monday when today is Monday → +7 days (StrategyLocale)
+		{"next Monday", time.Date(2026, 4, 6, 0, 0, 0, 0, loc)},
+		// Case insensitive
+		{"Next Friday", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, ok := Parse(tt.input, ctx)
+			if !ok {
+				t.Fatalf("Parse(%q) returned ok=false", tt.input)
+			}
+			if r.Kind != KindDate {
+				t.Fatalf("Kind = %v, want KindDate", r.Kind)
+			}
+			if !r.Time.Equal(tt.wantDate) {
+				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			}
+		})
+	}
+}
+
+func TestEn_DateTime(t *testing.T) {
+	ctx := enCtx("America/New_York")
+	loc := locForZone("America/New_York")
+	today := time.Date(2026, 3, 30, 0, 0, 0, 0, loc)
+	tomorrow := today.AddDate(0, 0, 1)
+
+	tests := []struct {
+		input    string
+		wantTime time.Time
+	}{
+		{"tomorrow at 3pm", time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 15, 0, 0, 0, loc)},
+		{"today at 9:30am", time.Date(today.Year(), today.Month(), today.Day(), 9, 30, 0, 0, loc)},
+		{"tomorrow at 12pm", time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 12, 0, 0, 0, loc)},
+		{"today at 12am", time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, loc)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, ok := Parse(tt.input, ctx)
+			if !ok {
+				t.Fatalf("Parse(%q) returned ok=false", tt.input)
+			}
+			if r.Kind != KindDateTime {
+				t.Fatalf("Kind = %v, want KindDateTime", r.Kind)
+			}
+			if !r.Time.Equal(tt.wantTime) {
+				t.Errorf("Time = %v, want %v", r.Time, tt.wantTime)
+			}
+		})
+	}
+}
+
+func TestEn_Duration(t *testing.T) {
+	ctx := enCtx("")
+	hour := int64(time.Hour)
+	minute := int64(time.Minute)
+	day := int64(24 * time.Hour)
+
+	tests := []struct {
+		input     string
+		wantNanos int64
+	}{
+		{"in 2 hours", 2 * hour},
+		{"in 1 hour", hour},
+		{"30 minutes ago", -30 * minute},
+		{"in 3 days", 3 * day},
+		{"1 day ago", -day},
+		{"in 1 minute", minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, ok := Parse(tt.input, ctx)
+			if !ok {
+				t.Fatalf("Parse(%q) returned ok=false", tt.input)
+			}
+			if r.Kind != KindDuration {
+				t.Fatalf("Kind = %v, want KindDuration", r.Kind)
+			}
+			if r.DurNanos != tt.wantNanos {
+				t.Errorf("DurNanos = %d, want %d", r.DurNanos, tt.wantNanos)
+			}
+		})
+	}
+}
+
+func TestEn_NonMatch(t *testing.T) {
+	ctx := enCtx("")
+	tests := []string{
+		"今天",
+		"明天",
+		"2026-03-30",
+		"",
+		"hello world",
+	}
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			_, ok := Parse(input, ctx)
+			if ok {
+				t.Errorf("Parse(%q) returned ok=true, want false", input)
+			}
+		})
+	}
+}
+
+func TestEn_NonEnLocale(t *testing.T) {
+	ctx := Context{Locale: "zh-Hans", ZoneID: "", RelativeTo: time.Now()}
+	_, ok := Parse("today", ctx)
+	if ok {
+		t.Error("en parser should not handle 'zh-Hans' locale")
+	}
+}
+
+func TestEn_WeekRelative_AdditionalWeekdays(t *testing.T) {
+	t.Parallel()
+
+	ctx := enCtx("America/New_York")
+	loc := locForZone("America/New_York")
+	tests := []struct {
+		input    string
+		wantDate time.Time
+	}{
+		{input: "this Tuesday", wantDate: time.Date(2026, 3, 31, 0, 0, 0, 0, loc)},
+		{input: "this Thursday", wantDate: time.Date(2026, 4, 2, 0, 0, 0, 0, loc)},
+		{input: "this Saturday", wantDate: time.Date(2026, 4, 4, 0, 0, 0, 0, loc)},
+		{input: "this Sunday", wantDate: time.Date(2026, 4, 5, 0, 0, 0, 0, loc)},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+
+			r, ok := Parse(tt.input, ctx)
+			if !ok {
+				t.Fatalf("Parse(%q) returned ok=false", tt.input)
+			}
+			if r.Kind != KindDate {
+				t.Fatalf("Kind = %v, want KindDate", r.Kind)
+			}
+			if !r.Time.Equal(tt.wantDate) {
+				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			}
+		})
+	}
+}
+
+func TestLocForZone(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		zoneID string
+		want   string
+	}{
+		{name: "resolved zone", zoneID: "America/New_York", want: "America/New_York"},
+		{name: "fallback to utc", zoneID: "Not/AZone", want: "UTC"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := locForZone(tt.zoneID).String(); got != tt.want {
+				t.Fatalf("locForZone(%q) = %q, want %q", tt.zoneID, got, tt.want)
+			}
+		})
+	}
+}
