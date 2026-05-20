@@ -22,15 +22,14 @@ func clampAddDate(t time.Time, years, months, days int) time.Time {
 	if years == 0 && months == 0 {
 		return t.AddDate(0, 0, days)
 	}
-	year := t.Year() + years
-	month := int(t.Month()) + months
-	for month > 12 {
-		month -= 12
+	year := t.Year() + years + months/12
+	month := int(t.Month()) + months%12
+	if month > 12 {
 		year++
-	}
-	for month < 1 {
-		month += 12
+		month -= 12
+	} else if month < 1 {
 		year--
+		month += 12
 	}
 	day := t.Day()
 	if last := daysInMonth(year, time.Month(month)); day > last {

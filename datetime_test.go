@@ -297,6 +297,36 @@ func TestDateTime_AddCalendar_Years_Simple(t *testing.T) {
 	}
 }
 
+func TestDateTime_AddCalendar_Months_LargeDelta(t *testing.T) {
+	tests := []struct {
+		name string
+		dt   DateTime
+		p    Period
+		want DateTime
+	}{
+		{
+			name: "positive delta clamps",
+			dt:   makeDateTime(2024, time.January, 31, 10, 0, 0, UTC),
+			p:    Months(25),
+			want: makeDateTime(2026, time.February, 28, 10, 0, 0, UTC),
+		},
+		{
+			name: "negative delta clamps",
+			dt:   makeDateTime(2026, time.March, 31, 10, 0, 0, UTC),
+			p:    Months(-25),
+			want: makeDateTime(2024, time.February, 29, 10, 0, 0, UTC),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.dt.AddPeriod(tc.p)
+			if !got.Equal(tc.want) {
+				t.Errorf("AddPeriod(%v) = %v, want %v", tc.p, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestDateTime_AddCalendar_Months_DST(t *testing.T) {
 	// US/Eastern: adding 1 month to 2026-02-08 01:30 should yield 2026-03-08 01:30
 	// (wall-clock preserved; result is in DST zone, 2026-03-08 is after spring-forward)
