@@ -6,13 +6,12 @@ import (
 )
 
 func parseInterval(input string, cfg *config) ParseResult {
-	parts := strings.SplitN(input, "/", 2)
-	if len(parts) != 2 {
+	left, right, ok := strings.Cut(input, "/")
+	if !ok {
 		return invalidResult(input, ErrInvalidFormat,
 			"interval requires start/end separated by /",
 			"Use ISO 8601 interval format: start/end, start/duration, or duration/end")
 	}
-	left, right := parts[0], parts[1]
 
 	startIsDur := strings.HasPrefix(left, "P")
 	endIsDur := strings.HasPrefix(right, "P")

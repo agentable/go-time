@@ -98,6 +98,29 @@ func TestParse_Date_Invalid(t *testing.T) {
 	}
 }
 
+func TestParseDateComponents(t *testing.T) {
+	tests := []struct {
+		input string
+		year  int
+		mon   int
+		day   int
+	}{
+		{input: "2026-03-27", year: 2026, mon: 3, day: 27},
+		{input: "20260327"},
+		{input: "2026-03"},
+		{input: "2026-03-27-extra"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			year, mon, day := parseDateComponents(tt.input)
+			if year != tt.year || mon != tt.mon || day != tt.day {
+				t.Fatalf("parseDateComponents(%q) = (%d, %d, %d), want (%d, %d, %d)",
+					tt.input, year, mon, day, tt.year, tt.mon, tt.day)
+			}
+		})
+	}
+}
+
 func TestParse_Input_Preserved(t *testing.T) {
 	input := "2026-03-27"
 	r := Parse(input)

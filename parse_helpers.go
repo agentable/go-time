@@ -69,11 +69,15 @@ func parseOffsetLocation(offset string) (*time.Location, error) {
 }
 
 func parseDateComponents(dateStr string) (year, mon, day int) {
-	parts := strings.Split(dateStr, "-")
-	if len(parts) != 3 {
+	yearPart, rest, ok := strings.Cut(dateStr, "-")
+	if !ok {
 		return 0, 0, 0
 	}
-	return atoi(parts[0]), atoi(parts[1]), atoi(parts[2])
+	monPart, dayPart, ok := strings.Cut(rest, "-")
+	if !ok || strings.Contains(dayPart, "-") {
+		return 0, 0, 0
+	}
+	return atoi(yearPart), atoi(monPart), atoi(dayPart)
 }
 
 func atoi(s string) int {
