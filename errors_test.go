@@ -25,6 +25,45 @@ func TestTimeError_Error(t *testing.T) {
 	}
 }
 
+func TestTimeError_ErrorEdges(t *testing.T) {
+	t.Parallel()
+
+	var nilErr *TimeError
+	if got := nilErr.Error(); got != "<nil>" {
+		t.Fatalf("nil Error() = %q, want %q", got, "<nil>")
+	}
+	if got := nilErr.Unwrap(); got != nil {
+		t.Fatalf("nil Unwrap() = %v, want nil", got)
+	}
+
+	tests := []struct {
+		name string
+		err  *TimeError
+		want string
+	}{
+		{
+			name: "code only",
+			err:  &TimeError{Code: CodeInvalidFormat},
+			want: string(CodeInvalidFormat),
+		},
+		{
+			name: "message without input",
+			err:  &TimeError{Code: CodeInvalidFormat, Message: "bad format"},
+			want: string(CodeInvalidFormat) + ": bad format",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tc.err.Error(); got != tc.want {
+				t.Fatalf("Error() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestTimeError_JSON(t *testing.T) {
 	e := &TimeError{
 		Code:    CodeAmbiguousDate,

@@ -26,6 +26,8 @@ func TestParseResult_ZeroValue(t *testing.T) {
 }
 
 func TestParseResult_Accessors_ZeroValue(t *testing.T) {
+	t.Parallel()
+
 	var r ParseResult
 	if _, ok := r.DateTime(); ok {
 		t.Error("zero ParseResult.DateTime() should report ok=false")
@@ -38,6 +40,15 @@ func TestParseResult_Accessors_ZeroValue(t *testing.T) {
 	}
 	if _, ok := r.Duration(); ok {
 		t.Error("zero ParseResult.Duration() should report ok=false")
+	}
+	if _, ok := r.Instant(); ok {
+		t.Error("zero ParseResult.Instant() should report ok=false")
+	}
+	if _, ok := r.Period(); ok {
+		t.Error("zero ParseResult.Period() should report ok=false")
+	}
+	if _, ok := r.Interval(); ok {
+		t.Error("zero ParseResult.Interval() should report ok=false")
 	}
 	if v := r.Value(); v != nil {
 		t.Errorf("zero ParseResult.Value() = %v, want nil", v)

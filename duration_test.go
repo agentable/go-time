@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -34,6 +35,43 @@ func TestDuration_ConstArithmetic(t *testing.T) {
 	d2 := 2 * Hour
 	if d2.InHours() != 2.0 {
 		t.Errorf("2*Hour.InHours() = %v, want 2.0", d2.InHours())
+	}
+}
+
+func TestDuration_UnitConversions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		d            Duration
+		milliseconds int64
+		seconds      float64
+	}{
+		{
+			name:         "positive fractional second truncates milliseconds",
+			d:            1500*Millisecond + 999*Microsecond,
+			milliseconds: 1500,
+			seconds:      1.500999,
+		},
+		{
+			name:         "negative fractional second truncates milliseconds toward zero",
+			d:            -(1500*Millisecond + 500*Microsecond),
+			milliseconds: -1500,
+			seconds:      -1.5005,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tc.d.Milliseconds(); got != tc.milliseconds {
+				t.Errorf("Milliseconds() = %d, want %d", got, tc.milliseconds)
+			}
+			if got := tc.d.InSeconds(); math.Abs(got-tc.seconds) > 1e-12 {
+				t.Errorf("InSeconds() = %v, want %v", got, tc.seconds)
+			}
+		})
 	}
 }
 
