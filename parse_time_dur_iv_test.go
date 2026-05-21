@@ -204,12 +204,20 @@ func TestParse_Duration_Invalid(t *testing.T) {
 }
 
 func TestParse_Duration_Overflow(t *testing.T) {
-	r := Parse("PT999999999999999999999H")
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	tests := []string{
+		"PT999999999999999999999H",
+		"PT2562047H48M",
 	}
-	if r.Error.Code != CodeOverflow {
-		t.Errorf("error code = %q, want %q", r.Error.Code, CodeOverflow)
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			r := Parse(input)
+			if r.Status != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid", r.Status)
+			}
+			if r.Error.Code != CodeOverflow {
+				t.Errorf("error code = %q, want %q", r.Error.Code, CodeOverflow)
+			}
+		})
 	}
 }
 

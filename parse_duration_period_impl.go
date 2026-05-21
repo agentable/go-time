@@ -48,43 +48,37 @@ func parseDuration(input string, cfg *config) ParseResult {
 
 func parseISOPeriodMatch(input string, m []string, cfg *config) ParseResult {
 	neg := m[1] == "-"
-	var years, months, weeks, days int64
-	var ok bool
-	if m[2] != "" {
-		years, ok = parsePeriodComponent(m[2])
-		if !ok {
-			return invalidPeriodComponent(input, "year", m[2])
+	var years, months, weeks, days int32
+	for _, component := range []struct {
+		raw    string
+		name   string
+		target *int32
+	}{
+		{m[2], "year", &years},
+		{m[3], "month", &months},
+		{m[4], "week", &weeks},
+		{m[5], "day", &days},
+	} {
+		if component.raw == "" {
+			continue
 		}
-	}
-	if m[3] != "" {
-		months, ok = parsePeriodComponent(m[3])
+		n, ok := parsePeriodComponent(component.raw)
 		if !ok {
-			return invalidPeriodComponent(input, "month", m[3])
+			return invalidPeriodComponent(input, component.name, component.raw)
 		}
-	}
-	if m[4] != "" {
-		weeks, ok = parsePeriodComponent(m[4])
-		if !ok {
-			return invalidPeriodComponent(input, "week", m[4])
-		}
-	}
-	if m[5] != "" {
-		days, ok = parsePeriodComponent(m[5])
-		if !ok {
-			return invalidPeriodComponent(input, "day", m[5])
-		}
+		*component.target = n
 	}
 
-	totalDays, ok := checkedAddInt64(weeks*7, days)
-	if !ok || years > maxInt32 || months > maxInt32 || totalDays > maxInt32 {
+	totalDays, ok := checkedAddInt64(int64(weeks)*7, int64(days))
+	if !ok || totalDays > maxInt32 {
 		return invalidResult(input, ErrOverflow,
 			fmt.Sprintf("period component overflows int32: %q", input),
 			"Use smaller year, month, week, or day components")
 	}
 
 	p := Period{
-		Years:  int32(years),
-		Months: int32(months),
+		Years:  years,
+		Months: months,
 		Days:   int32(totalDays), //nolint:gosec // checked above against maxInt32
 	}
 	if neg {
@@ -98,38 +92,27 @@ func parseISOPeriodMatch(input string, m []string, cfg *config) ParseResult {
 func parseISODurationMatch(input string, m []string, cfg *config) ParseResult {
 	neg := m[1] == "-"
 	var totalNs int64
-	if m[6] != "" {
-		ns, ok := parseDurationComponent(m[6], time.Hour)
-		if !ok {
-			return invalidDurationComponent(input, "hour", m[6])
+	for _, component := range []struct {
+		raw  string
+		name string
+		unit time.Duration
+	}{
+		{m[6], "hour", time.Hour},
+		{m[7], "minute", time.Minute},
+		{m[8], "second", time.Second},
+	} {
+		if component.raw == "" {
+			continue
 		}
-		var added bool
-		totalNs, added = checkedAddInt64(totalNs, ns)
-		if !added {
+		ns, ok := parseDurationComponent(component.raw, component.unit)
+		if !ok {
+			return invalidDurationComponent(input, component.name, component.raw)
+		}
+		total, ok := checkedAddInt64(totalNs, ns)
+		if !ok {
 			return durationOverflow(input)
 		}
-	}
-	if m[7] != "" {
-		ns, ok := parseDurationComponent(m[7], time.Minute)
-		if !ok {
-			return invalidDurationComponent(input, "minute", m[7])
-		}
-		var added bool
-		totalNs, added = checkedAddInt64(totalNs, ns)
-		if !added {
-			return durationOverflow(input)
-		}
-	}
-	if m[8] != "" {
-		ns, ok := parseDurationComponent(m[8], time.Second)
-		if !ok {
-			return invalidDurationComponent(input, "second", m[8])
-		}
-		var added bool
-		totalNs, added = checkedAddInt64(totalNs, ns)
-		if !added {
-			return durationOverflow(input)
-		}
+		totalNs = total
 	}
 	if neg {
 		totalNs = -totalNs
@@ -139,7 +122,7 @@ func parseISODurationMatch(input string, m []string, cfg *config) ParseResult {
 	return r
 }
 
-func parsePeriodComponent(raw string) (int64, bool) {
+func parsePeriodComponent(raw string) (int32, bool) {
 	if strings.ContainsAny(raw, ".,") {
 		return 0, false
 	}
@@ -147,7 +130,7 @@ func parsePeriodComponent(raw string) (int64, bool) {
 	if err != nil {
 		return 0, false
 	}
-	return n, true
+	return int32(n), true
 }
 
 func invalidPeriodComponent(input, component, raw string) ParseResult {
