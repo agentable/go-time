@@ -22,7 +22,7 @@ A Go time semantics library for parsing, computing, and serializing precise time
 go get github.com/agentable/go-time
 ```
 
-Requires **Go 1.26+**.
+Requires the Go version declared in `go.mod`.
 
 ## Quick Start
 
