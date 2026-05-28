@@ -22,7 +22,7 @@ A Go time semantics library for parsing, computing, and serializing precise time
 go get github.com/agentable/go-time
 ```
 
-Requires the Go version declared in `go.mod`.
+Requires Go 1.26.3 or newer.
 
 ## Quick Start
 
@@ -259,7 +259,7 @@ See [`SPECS/30-formatting.md`](SPECS/30-formatting.md) for the full contract.
 
 ```go
 quarter   := 15 * gotime.Minute
-twoDaysExact := 48 * gotime.Hour  // 48 exact hours (crosses DST as 48 wall-clock hours)
+twoDaysExact := 48 * gotime.Hour  // 48 exact elapsed hours
 ```
 
 `Period` is a calendar offset — built via struct literal or sugar constructors (`Years`, `Months`, `Days`). Calendar days are DST-safe; they preserve wall-clock time across the boundary:

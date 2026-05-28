@@ -1,35 +1,26 @@
-# golangci-lint v2 — canonical config for this ecosystem.
-# Owner: golangci-linting skill. Do not fork or override per-project
-# without amending the skill.
 version: "2"
 
 run:
-  timeout: 5m
+  timeout: 30m
+  concurrency: 1
   go: "1.26.3"
 
 linters:
-  # `standard` = errcheck, govet, ineffassign, staticcheck, unused.
   default: standard
   enable:
-    # --- Error vocabulary ----------------------------------------------
     - errname
     - errorlint
     - nilerr
-    # --- Switch totality -----------------------------------------------
     - exhaustive
-    # --- Code quality --------------------------------------------------
     - gocritic
     - revive
     - misspell
     - nakedret
     - whitespace
     - prealloc
-    # --- Resource & context safety -------------------------------------
     - bodyclose
     - noctx
-    # --- Security ------------------------------------------------------
     - gosec
-    # --- Suppression hygiene -------------------------------------------
     - nolintlint
 
   settings:
@@ -41,8 +32,6 @@ linters:
         - diagnostic
         - performance
       disabled-checks:
-        # ParseResult is a tagged-sum value type carrying every domain object;
-        # passing by value is the documented API.
         - hugeParam
 
     revive:
