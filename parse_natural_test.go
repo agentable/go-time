@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -184,6 +185,27 @@ func TestParse_Natural_Unrecognised(t *testing.T) {
 	}
 	if r.Error.Code != CodeUnparseable {
 		t.Errorf("error code = %q, want %q", r.Error.Code, CodeUnparseable)
+	}
+}
+
+func TestParse_Natural_OverflowPreservesSentinel(t *testing.T) {
+	t.Parallel()
+
+	r := Parse("in 9223372036854775808 months", WithInputLocale(language.English))
+	if r.Status != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status)
+	}
+	if r.Error == nil {
+		t.Fatal("Error must not be nil when status is Invalid")
+	}
+	if !errors.Is(r.Error, ErrOverflow) {
+		t.Fatalf("error = %v, want ErrOverflow", r.Error)
+	}
+	if r.Error.Code != CodeOverflow {
+		t.Errorf("error code = %q, want %q", r.Error.Code, CodeOverflow)
+	}
+	if r.Error.Hint == "" {
+		t.Error("error Hint must not be empty")
 	}
 }
 

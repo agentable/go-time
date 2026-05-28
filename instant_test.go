@@ -36,6 +36,19 @@ func TestUnixMillis(t *testing.T) {
 	}
 }
 
+func TestUnixSeconds(t *testing.T) {
+	t.Parallel()
+
+	i := UnixSeconds(1234)
+	want := time.Unix(1234, 0).UTC()
+	if got := i.Std(); !got.Equal(want) {
+		t.Errorf("Std() = %v, want %v", got, want)
+	}
+	if got := i.UnixNano(); got != 1_234_000_000_000 {
+		t.Errorf("UnixNano() = %d, want 1_234_000_000_000", got)
+	}
+}
+
 func TestNow_InstantNonZero(t *testing.T) {
 	i := Now()
 	if i.IsZero() {

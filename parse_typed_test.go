@@ -130,6 +130,68 @@ func TestParseInterval_Resolves(t *testing.T) {
 	}
 }
 
+func TestTypedParsers_ReturnErrorSentinels(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		parse    func() error
+		wantErr  error
+		wantCode ErrorCode
+	}{
+		{
+			name: "ambiguous local datetime",
+			parse: func() error {
+				_, err := ParseDateTime("2026-11-01T01:30:00", WithZone(MustLoadZone("America/New_York")))
+				return err
+			},
+			wantErr:  ErrAmbiguousDate,
+			wantCode: CodeAmbiguousDate,
+		},
+		{
+			name: "invalid clock time",
+			parse: func() error {
+				_, err := ParseTime("25:00")
+				return err
+			},
+			wantErr:  ErrInvalidTime,
+			wantCode: CodeInvalidTime,
+		},
+		{
+			name: "date-only interval endpoints",
+			parse: func() error {
+				_, err := ParseInterval("2026-03-27/2026-03-28")
+				return err
+			},
+			wantErr:  ErrIncompatibleTypes,
+			wantCode: CodeIncompatibleTypes,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tc.parse()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tc.wantErr)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) {
+				t.Fatalf("expected *TimeError, got %T", err)
+			}
+			if te.Code != tc.wantCode {
+				t.Errorf("TimeError.Code = %q, want %q", te.Code, tc.wantCode)
+			}
+			if te.Hint == "" {
+				t.Error("TimeError.Hint must not be empty")
+			}
+		})
+	}
+}
+
 func TestParseDate_InvalidPropagatesError(t *testing.T) {
 	_, err := ParseDate("not a date")
 	if err == nil {

@@ -33,6 +33,30 @@ func TestPeriod_ComponentArithmetic(t *testing.T) {
 	}
 }
 
+func TestPeriod_IsNegative(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		p    Period
+		want bool
+	}{
+		{name: "zero", p: Period{}, want: false},
+		{name: "all positive", p: Period{Years: 1, Months: 2, Days: 3}, want: false},
+		{name: "negative year", p: Period{Years: -1}, want: true},
+		{name: "mixed signs", p: Period{Years: 1, Months: -2, Days: 3}, want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tc.p.IsNegative(); got != tc.want {
+				t.Errorf("IsNegative() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestPeriod_ISO8601(t *testing.T) {
 	t.Parallel()
 

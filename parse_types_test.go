@@ -64,6 +64,11 @@ func TestParseResult_Value_ByKind(t *testing.T) {
 		want  any
 	}{
 		{
+			name:  "instant",
+			input: "2026-03-27T04:00:00Z",
+			want:  Instant{},
+		},
+		{
 			name:  "datetime",
 			input: "2026-03-27T13:00:00+09:00",
 			want:  DateTime{},
