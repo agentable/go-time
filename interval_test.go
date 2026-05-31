@@ -155,8 +155,15 @@ func TestInterval_Intersect(t *testing.T) {
 		t.Errorf("Intersect End = %v, want %v", overlap.End(), ivEnd)
 	}
 
+	// Adjacent half-open intervals share no moment.
+	iv3 := mustInterval(t, ivEnd, ivEnd.Add((1 * Hour)))
+	_, ok = iv1.Intersect(iv3)
+	if ok {
+		t.Error("adjacent intervals should not intersect")
+	}
+
 	// Disjoint
-	iv3 := mustInterval(t, ivEnd.Add((1 * Second)), ivEnd.Add((1 * Hour)))
+	iv3 = mustInterval(t, ivEnd.Add((1 * Second)), ivEnd.Add((1 * Hour)))
 	_, ok = iv1.Intersect(iv3)
 	if ok {
 		t.Error("disjoint intervals should not intersect")

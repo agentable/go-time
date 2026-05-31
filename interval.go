@@ -79,7 +79,7 @@ func (iv Interval) Adjacent(other Interval) bool {
 func (iv Interval) Intersect(other Interval) (Interval, bool) {
 	start := laterInstant(iv.start, other.start)
 	end := earlierInstant(iv.end, other.end)
-	if end.Before(start) {
+	if end.Compare(start) <= 0 {
 		return Interval{}, false
 	}
 	return Interval{start: start, end: end}, true
