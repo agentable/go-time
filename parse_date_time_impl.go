@@ -40,6 +40,11 @@ func tryParseDate(input string, cfg *config) (ParseResult, bool) {
 				"Ordinal day must be between 1 and 366"), true
 		}
 		t := time.Date(year, time.January, doy, 0, 0, 0, 0, time.UTC)
+		if t.Year() != year {
+			return invalidResult(input, ErrInvalidDate,
+				fmt.Sprintf("ordinal day %d does not exist in year %d", doy, year),
+				"Use 366 only for leap years; otherwise use an ordinal day between 1 and 365"), true
+		}
 		return resolvedDateResult(input, DateFromTime(t), cfg), true
 	}
 	if m := reWeekDate.FindStringSubmatch(input); m != nil {

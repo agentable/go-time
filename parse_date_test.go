@@ -41,17 +41,45 @@ func TestParse_Date_ISO(t *testing.T) {
 }
 
 func TestParse_Date_Ordinal(t *testing.T) {
-	// 2026-079 = day 79 of 2026 = March 20
-	r := Parse("2026-079")
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
+	tests := []struct {
+		input    string
+		wantY    int
+		wantM    time.Month
+		wantD    int
+		wantCode ErrorCode
+	}{
+		{input: "2026-079", wantY: 2026, wantM: time.March, wantD: 20},
+		{input: "2024-366", wantY: 2024, wantM: time.December, wantD: 31},
+		{input: "2025-366", wantCode: CodeInvalidDate},
 	}
-	if r.Kind != KindDate {
-		t.Fatalf("kind = %v, want KindDate", r.Kind)
-	}
-	d, _ := r.Date()
-	if d.Year() != 2026 || d.Month() != time.March || d.Day() != 20 {
-		t.Errorf("ordinal date = %v, want 2026-03-20", d)
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r := Parse(tt.input)
+			if tt.wantCode != "" {
+				if r.Status != StatusInvalid {
+					t.Fatalf("status = %v, want Invalid", r.Status)
+				}
+				if r.Error == nil {
+					t.Fatal("Error must not be nil when status is Invalid")
+				}
+				if r.Error.Code != tt.wantCode {
+					t.Errorf("error code = %q, want %q", r.Error.Code, tt.wantCode)
+				}
+				return
+			}
+
+			if r.Status != StatusResolved {
+				t.Fatalf("status = %v, want Resolved", r.Status)
+			}
+			if r.Kind != KindDate {
+				t.Fatalf("kind = %v, want KindDate", r.Kind)
+			}
+			d, _ := r.Date()
+			if d.Year() != tt.wantY || d.Month() != tt.wantM || d.Day() != tt.wantD {
+				t.Errorf("ordinal date = %v, want %04d-%02d-%02d", d, tt.wantY, int(tt.wantM), tt.wantD)
+			}
+		})
 	}
 }
 
