@@ -98,6 +98,19 @@ func TestParse_Date_WeekDate(t *testing.T) {
 	}
 }
 
+func TestParse_Date_WeekDateRejectsInvalidWeek53(t *testing.T) {
+	r := Parse("2021-W53-1")
+	if r.Status != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status)
+	}
+	if r.Error == nil {
+		t.Fatal("Error must not be nil when status is Invalid")
+	}
+	if r.Error.Code != CodeInvalidDate {
+		t.Errorf("error code = %q, want %q", r.Error.Code, CodeInvalidDate)
+	}
+}
+
 func TestParse_Date_Invalid(t *testing.T) {
 	tests := []struct {
 		input    string

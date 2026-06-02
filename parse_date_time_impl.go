@@ -63,7 +63,14 @@ func tryParseDate(input string, cfg *config) (ParseResult, bool) {
 				fmt.Sprintf("invalid day of week %d", dayOfWeek),
 				"Day of week must be between 1 (Monday) and 7 (Sunday)"), true
 		}
-		return resolvedDateResult(input, DateFromTime(isoWeekDate(year, week, dayOfWeek)), cfg), true
+		t := isoWeekDate(year, week, dayOfWeek)
+		isoYear, isoWeek := t.ISOWeek()
+		if isoYear != year || isoWeek != week {
+			return invalidResult(input, ErrInvalidDate,
+				fmt.Sprintf("ISO week %d does not exist in year %d", week, year),
+				"Use an ISO week that exists in the requested year"), true
+		}
+		return resolvedDateResult(input, DateFromTime(t), cfg), true
 	}
 	return ParseResult{}, false
 }
