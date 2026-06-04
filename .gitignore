@@ -33,24 +33,6 @@ build/
 # Mac OS files
 **/.DS_Store
 
-# todo
-.todo
-TODO.md
-IMPROVE.md
-REFACTOR.md
-
-# vscode
-.vscode/
-
-# Claude Code local agent tooling
-.claude/
-
-# .ralphy
-.ralphy/*.json
-
-# Plans
-.plans/*.md
-
 # Scratch/planning docs
 .workspace
 task.md
@@ -58,16 +40,27 @@ task.md
 .cov.after
 .fix.before*
 .fix.after*
-.plans/
-reports/
-PLAN*.md
+.todo
+TODO*.md
 TODO.yaml
 IMPROVE.md
 IMPROVE*.md
+PLAN*.md
 REFACTOR.md
 REFACTOR*.md
 ANALYSIS.md
+.plans/*
+reports/*
 
 # Meeting records
 .meetings/
+
+# vscode
+.vscode/
+
+# Claude Code
+.claude/
+
+# .ralphy
+.ralphy/*.json
 .plans
