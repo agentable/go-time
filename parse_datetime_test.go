@@ -171,6 +171,31 @@ func TestParse_DateTime_DuplicateTimeCandidatesWarn(t *testing.T) {
 	}
 }
 
+func TestParse_DateTime_DuplicateTime_NonHourDSTTransition(t *testing.T) {
+	r := Parse("2026-04-05T01:45:00", WithZone(MustLoadZone("Australia/Lord_Howe")))
+	if r.Status != StatusAmbiguous {
+		t.Fatalf("status = %v, want Ambiguous", r.Status)
+	}
+	if r.Kind != KindDateTime {
+		t.Fatalf("kind = %v, want KindDateTime", r.Kind)
+	}
+	if len(r.Candidates) != 2 {
+		t.Fatalf("len(Candidates) = %d, want 2", len(r.Candidates))
+	}
+	for _, c := range r.Candidates {
+		dt, ok := c.DateTime()
+		if !ok {
+			t.Fatalf("candidate kind = %v, want DateTime", c.Kind)
+		}
+		if dt.Clock().Hour() != 1 || dt.Clock().Minute() != 45 {
+			t.Fatalf("candidate clock = %v, want 01:45", dt.Clock())
+		}
+		if !hasWarning(c.Warnings, WarnDuplicateTime) {
+			t.Fatalf("candidate warnings = %v, want WarnDuplicateTime", c.Warnings)
+		}
+	}
+}
+
 func TestParse_DateTime_InvalidTime(t *testing.T) {
 	tests := []struct {
 		input string

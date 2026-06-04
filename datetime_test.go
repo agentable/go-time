@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -49,6 +50,26 @@ func TestNewDateTime_DuplicateLocalTime(t *testing.T) {
 	ct := mustTime(1, 30, 0)
 	if _, err := NewDateTime(d, ct, testZoneNewYork); err == nil {
 		t.Fatal("NewDateTime(duplicate local time) error = nil, want error")
+	}
+}
+
+func TestNewDateTime_DuplicateLocalTime_NonHourDSTTransition(t *testing.T) {
+	d := mustDate(2026, time.April, 5)
+	ct := mustTime(1, 45, 0)
+	z := MustLoadZone("Australia/Lord_Howe")
+	_, err := NewDateTime(d, ct, z)
+	if !errors.Is(err, ErrDuplicateTime) {
+		t.Fatalf("NewDateTime(non-hour duplicate local time) error = %v, want ErrDuplicateTime", err)
+	}
+}
+
+func TestNewDateTime_NonexistentLocalDate(t *testing.T) {
+	d := mustDate(2011, time.December, 30)
+	ct := mustTime(12, 0, 0)
+	z := MustLoadZone("Pacific/Apia")
+	_, err := NewDateTime(d, ct, z)
+	if !errors.Is(err, ErrNonexistentTime) {
+		t.Fatalf("NewDateTime(skipped local date) error = %v, want ErrNonexistentTime", err)
 	}
 }
 

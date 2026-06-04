@@ -30,10 +30,11 @@ type LocalTimeResult struct {
 //
 // Algorithm:
 //  1. Construct t = time.Date(year, month, day, hour, minute, second, 0, loc).
-//  2. Spring-forward detection: if t's actual H:M:S differs from requested → DSTNonexistent.
-//  3. Fall-back detection: Go may resolve an ambiguous local time to either the first or second
-//     UTC instant. We probe both ±1h neighbours; if either has a different UTC offset but the
-//     same local H:M:S as the requested time, the time is ambiguous.
+//  2. Gap detection: if t's actual local components differ from requested, the wall time
+//     does not exist. Compare the date too, because some zones skip whole calendar days.
+//  3. Overlap detection: collect nearby UTC offsets and reproject the same wall time under
+//     each offset. This catches non-hour transitions such as Australia/Lord_Howe's 30-minute
+//     fall-back overlap without assuming every DST boundary is exactly one hour.
 //  4. Otherwise → DSTNormal with a single instant.
 func ProjectLocalTime(loc *time.Location, year int, month time.Month, day, hour, minute, second int) LocalTimeResult {
 	if loc == nil {
@@ -41,38 +42,62 @@ func ProjectLocalTime(loc *time.Location, year int, month time.Month, day, hour,
 	}
 
 	t := time.Date(year, month, day, hour, minute, second, 0, loc)
-
-	// Spring-forward check: the wall clock jumped forward, so the requested time doesn't exist.
-	if t.Hour() != hour || t.Minute() != minute || t.Second() != second {
+	if !sameLocalTime(t, year, month, day, hour, minute, second) {
 		return LocalTimeResult{Status: DSTNonexistent}
 	}
 
+	candidates := []time.Time{t}
 	_, off0 := t.Zone()
-
-	// Check 1 hour forward in UTC (Go resolved to the first/earlier instance).
-	tFwd := t.UTC().Add(time.Hour).In(loc)
-	_, offFwd := tFwd.Zone()
-	if offFwd != off0 && tFwd.Hour() == hour && tFwd.Minute() == minute && tFwd.Second() == second {
-		return LocalTimeResult{
-			Status: DSTAmbiguous,
-			Times:  []time.Time{t, tFwd},
+	utc := t.UTC()
+	for _, delta := range []time.Duration{
+		-24 * time.Hour, -12 * time.Hour, -6 * time.Hour,
+		-3 * time.Hour, -2 * time.Hour, -time.Hour,
+		-30 * time.Minute, -15 * time.Minute,
+		15 * time.Minute, 30 * time.Minute,
+		time.Hour, 2 * time.Hour, 3 * time.Hour,
+		6 * time.Hour, 12 * time.Hour, 24 * time.Hour,
+	} {
+		probe := utc.Add(delta).In(loc)
+		_, off := probe.Zone()
+		if off == off0 {
+			continue
+		}
+		alt := utc.Add(time.Duration(off0-off) * time.Second).In(loc)
+		if sameLocalTime(alt, year, month, day, hour, minute, second) {
+			candidates = appendUniqueTime(candidates, alt)
 		}
 	}
 
-	// Check 1 hour backward in UTC (Go resolved to the second/later instance).
-	tBwd := t.UTC().Add(-time.Hour).In(loc)
-	_, offBwd := tBwd.Zone()
-	if offBwd != off0 && tBwd.Hour() == hour && tBwd.Minute() == minute && tBwd.Second() == second {
+	if len(candidates) > 1 {
+		slices.SortFunc(candidates, func(a, b time.Time) int { return a.Compare(b) })
 		return LocalTimeResult{
 			Status: DSTAmbiguous,
-			Times:  []time.Time{tBwd, t},
+			Times:  candidates,
 		}
 	}
 
 	return LocalTimeResult{
 		Status: DSTNormal,
-		Times:  []time.Time{t},
+		Times:  candidates,
 	}
+}
+
+func sameLocalTime(t time.Time, year int, month time.Month, day, hour, minute, second int) bool {
+	return t.Year() == year &&
+		t.Month() == month &&
+		t.Day() == day &&
+		t.Hour() == hour &&
+		t.Minute() == minute &&
+		t.Second() == second
+}
+
+func appendUniqueTime(times []time.Time, t time.Time) []time.Time {
+	for _, existing := range times {
+		if existing.Equal(t) {
+			return times
+		}
+	}
+	return append(times, t)
 }
 
 // Zones is a sorted list of canonical IANA timezone identifiers embedded at build time.
