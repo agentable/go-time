@@ -56,6 +56,37 @@ func TestDateTimeJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDateTimeMarshalJSON_ZeroZoneProjectionsUseUTC(t *testing.T) {
+	t.Parallel()
+
+	base := UnixSeconds(0)
+	tests := []struct {
+		name string
+		dt   DateTime
+	}{
+		{name: "instant in zero zone", dt: base.In(Zone{})},
+		{name: "datetime in zero zone", dt: base.In(MustLoadZone("Asia/Tokyo")).In(Zone{})},
+		{name: "stdlib time in zero zone", dt: DateTimeFromTime(base.Std(), Zone{})},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tc.dt.Zone().ID() != "UTC" {
+				t.Fatalf("zone = %q, want UTC", tc.dt.Zone().ID())
+			}
+			b, err := json.Marshal(tc.dt)
+			if err != nil {
+				t.Fatalf("Marshal error: %v", err)
+			}
+			want := `{"kind":"datetime","value":"1970-01-01T00:00:00Z","zone":"UTC","calendar":"iso8601"}`
+			if string(b) != want {
+				t.Fatalf("Marshal() = %s, want %s", b, want)
+			}
+		})
+	}
+}
+
 func TestDateTimeUnmarshalJSON_NoZone(t *testing.T) {
 	// When zone field is absent, fall back to the offset embedded in the value.
 	var dt DateTime

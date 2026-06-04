@@ -3,7 +3,6 @@ package gotime
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/go-json-experiment/json"
@@ -177,7 +176,7 @@ func (p *Period) UnmarshalJSON(b []byte) error {
 // isoPeriodRe matches ISO 8601 period strings.
 // Groups: (1)sign (2)years (3)months (4)weeks (5)days
 var isoPeriodRe = regexp.MustCompile(
-	`^(-?)P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?$`,
+	`^(-?)P(?:([+-]?\d+)Y)?(?:([+-]?\d+)M)?(?:([+-]?\d+)W)?(?:([+-]?\d+)D)?$`,
 )
 
 // parseISO8601Period parses ISO 8601 period strings (date-only portion).
@@ -190,24 +189,37 @@ func parseISO8601Period(s string) (Period, error) {
 		return Period{}, fmt.Errorf("invalid ISO 8601 period: %q", s)
 	}
 	neg := m[1] == "-"
-	var y, mo, w, d int64
-	if m[2] != "" {
-		y, _ = strconv.ParseInt(m[2], 10, 32)
+	y, ok := parsePeriodJSONComponent(m[2])
+	if !ok {
+		return Period{}, fmt.Errorf("invalid years component %q", m[2])
 	}
-	if m[3] != "" {
-		mo, _ = strconv.ParseInt(m[3], 10, 32)
+	mo, ok := parsePeriodJSONComponent(m[3])
+	if !ok {
+		return Period{}, fmt.Errorf("invalid months component %q", m[3])
 	}
-	if m[4] != "" {
-		w, _ = strconv.ParseInt(m[4], 10, 32)
+	w, ok := parsePeriodJSONComponent(m[4])
+	if !ok {
+		return Period{}, fmt.Errorf("invalid weeks component %q", m[4])
 	}
-	if m[5] != "" {
-		d, _ = strconv.ParseInt(m[5], 10, 32)
+	d, ok := parsePeriodJSONComponent(m[5])
+	if !ok {
+		return Period{}, fmt.Errorf("invalid days component %q", m[5])
 	}
-	totalDays := w*7 + d
+	totalDays := int64(w)*7 + int64(d)
+	if totalDays > maxInt32 || totalDays < -maxInt32-1 {
+		return Period{}, fmt.Errorf("days component overflows int32")
+	}
 	if neg {
 		y, mo, totalDays = -y, -mo, -totalDays
 	}
-	return Period{Years: int32(y), Months: int32(mo), Days: int32(totalDays)}, nil //nolint:gosec // ParseInt(_, _, 32) bounds each value to int32 range
+	return Period{Years: y, Months: mo, Days: int32(totalDays)}, nil //nolint:gosec // checked above against int32 bounds
+}
+
+func parsePeriodJSONComponent(s string) (int32, bool) {
+	if s == "" {
+		return 0, true
+	}
+	return parsePeriodComponent(s)
 }
 
 func absInt32(n int32) int32 {

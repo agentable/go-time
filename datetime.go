@@ -67,9 +67,7 @@ func NewDateTime(d Date, t Time, z Zone) (DateTime, error) {
 			"construct Time with NewTime or NewTimeNanos before combining it into a DateTime",
 		)
 	}
-	if z.IsZero() {
-		z = UTC
-	}
+	z = normalizeZone(z)
 
 	res := ianazone.ProjectLocalTime(z.Location(), d.year, d.month, d.day, t.hour, t.minute, t.second)
 	switch res.Status {
@@ -101,6 +99,7 @@ func NewDateTime(d Date, t Time, z Zone) (DateTime, error) {
 
 // DateTimeFromTime creates a DateTime from a stdlib time.Time and a Zone.
 func DateTimeFromTime(t time.Time, z Zone) DateTime {
+	z = normalizeZone(z)
 	return DateTime{t: t.In(z.Location()), zone: z}
 }
 
@@ -122,6 +121,7 @@ func (dt DateTime) Instant() Instant { return InstantFromTime(dt.t) }
 
 // In converts dt to the same absolute moment expressed in zone z.
 func (dt DateTime) In(z Zone) DateTime {
+	z = normalizeZone(z)
 	return DateTime{t: dt.t.In(z.Location()), zone: z}
 }
 

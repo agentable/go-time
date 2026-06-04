@@ -96,57 +96,57 @@ type ParseResult struct {
 	interval Interval
 }
 
-// Instant returns the parsed Instant. ok is false unless Kind == KindInstant.
+// Instant returns the parsed Instant. ok is false unless Status is Resolved and Kind == KindInstant.
 func (r ParseResult) Instant() (Instant, bool) {
-	if r.Kind != KindInstant {
+	if r.Status != StatusResolved || r.Kind != KindInstant {
 		return Instant{}, false
 	}
 	return r.instant, true
 }
 
-// DateTime returns the parsed DateTime. ok is false unless Kind == KindDateTime.
+// DateTime returns the parsed DateTime. ok is false unless Status is Resolved and Kind == KindDateTime.
 func (r ParseResult) DateTime() (DateTime, bool) {
-	if r.Kind != KindDateTime {
+	if r.Status != StatusResolved || r.Kind != KindDateTime {
 		return DateTime{}, false
 	}
 	return r.dateTime, true
 }
 
-// Date returns the parsed Date. ok is false unless Kind == KindDate.
+// Date returns the parsed Date. ok is false unless Status is Resolved and Kind == KindDate.
 func (r ParseResult) Date() (Date, bool) {
-	if r.Kind != KindDate {
+	if r.Status != StatusResolved || r.Kind != KindDate {
 		return Date{}, false
 	}
 	return r.date, true
 }
 
-// Time returns the parsed Time. ok is false unless Kind == KindTime.
+// Time returns the parsed Time. ok is false unless Status is Resolved and Kind == KindTime.
 func (r ParseResult) Time() (Time, bool) {
-	if r.Kind != KindTime {
+	if r.Status != StatusResolved || r.Kind != KindTime {
 		return Time{}, false
 	}
 	return r.timeVal, true
 }
 
-// Duration returns the parsed Duration. ok is false unless Kind == KindDuration.
+// Duration returns the parsed Duration. ok is false unless Status is Resolved and Kind == KindDuration.
 func (r ParseResult) Duration() (Duration, bool) {
-	if r.Kind != KindDuration {
+	if r.Status != StatusResolved || r.Kind != KindDuration {
 		return 0, false
 	}
 	return r.duration, true
 }
 
-// Period returns the parsed Period. ok is false unless Kind == KindPeriod.
+// Period returns the parsed Period. ok is false unless Status is Resolved and Kind == KindPeriod.
 func (r ParseResult) Period() (Period, bool) {
-	if r.Kind != KindPeriod {
+	if r.Status != StatusResolved || r.Kind != KindPeriod {
 		return Period{}, false
 	}
 	return r.period, true
 }
 
-// Interval returns the parsed Interval. ok is false unless Kind == KindInterval.
+// Interval returns the parsed Interval. ok is false unless Status is Resolved and Kind == KindInterval.
 func (r ParseResult) Interval() (Interval, bool) {
-	if r.Kind != KindInterval {
+	if r.Status != StatusResolved || r.Kind != KindInterval {
 		return Interval{}, false
 	}
 	return r.interval, true

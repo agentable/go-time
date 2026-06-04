@@ -74,6 +74,13 @@ func (z Zone) Location() *time.Location {
 	return z.loc
 }
 
+func normalizeZone(z Zone) Zone {
+	if z.IsZero() {
+		return UTC
+	}
+	return z
+}
+
 // String returns the zone identifier.
 func (z Zone) String() string { return z.id }
 

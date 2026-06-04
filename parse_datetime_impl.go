@@ -201,22 +201,21 @@ func buildDateTimeResult(input string, t time.Time, offsetPart string, cfg *conf
 	if strings.EqualFold(offsetPart, "Z") {
 		i := InstantFromTime(t)
 		r := resolvedResult(input, KindInstant, cfg)
+		r.Zone = Zone{}
 		r.instant = i
 		r.HasZone = true
 		return r
 	}
-	// Non-UTC offset -> DateTime with fixed-offset zone
+	// Non-UTC offset -> DateTime with fixed-offset zone. WithZone only
+	// supplies a zone for floating datetimes; explicit offsets win.
 	_, offsetSec := t.Zone()
 	offsetID := formatOffset(offsetSec)
 	loc := time.FixedZone(offsetID, offsetSec)
 	t = t.In(loc)
 	z := Zone{id: offsetID, loc: loc}
-	if !cfg.zone.IsZero() {
-		t = t.In(cfg.zone.Location())
-		z = cfg.zone
-	}
 	dt := DateTime{t: t, zone: z}
 	r := resolvedResult(input, KindDateTime, cfg)
+	r.Zone = Zone{}
 	r.dateTime = dt
 	r.HasZone = true
 	return r

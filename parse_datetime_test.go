@@ -121,6 +121,38 @@ func TestParse_DateTime_NoOffset_WithZoneOption(t *testing.T) {
 	}
 }
 
+func TestParse_DateTime_ExplicitOffsetIgnoresZoneOption(t *testing.T) {
+	t.Parallel()
+
+	r := Parse("2026-03-27T13:00:00+09:00", WithZone(MustLoadZone("America/New_York")))
+	if r.Status != StatusResolved {
+		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+	}
+	if !r.HasZone {
+		t.Fatal("HasZone = false, want true")
+	}
+	if !r.Zone.IsZero() {
+		t.Fatalf("result Zone = %q, want zero because input carried an offset", r.Zone.ID())
+	}
+	if hasWarning(r.Warnings, WarnAssumedZone) {
+		t.Fatalf("warnings = %v, do not want WarnAssumedZone", r.Warnings)
+	}
+	dt, ok := r.DateTime()
+	if !ok {
+		t.Fatal("DateTime() ok=false, want true")
+	}
+	if dt.Zone().ID() != "+09:00" {
+		t.Fatalf("zone = %q, want +09:00", dt.Zone().ID())
+	}
+	if dt.Clock().Hour() != 13 {
+		t.Fatalf("clock hour = %d, want 13", dt.Clock().Hour())
+	}
+	want := time.Date(2026, time.March, 27, 4, 0, 0, 0, time.UTC)
+	if got := dt.Instant().Std(); !got.Equal(want) {
+		t.Fatalf("instant = %v, want %v", got, want)
+	}
+}
+
 func TestParse_DateTime_NoOffset_WithFixedOffsetZoneOption(t *testing.T) {
 	z, err := ResolveZone("UTC+8")
 	if err != nil {
@@ -193,6 +225,38 @@ func TestParse_DateTime_DuplicateTime_NonHourDSTTransition(t *testing.T) {
 		if !hasWarning(c.Warnings, WarnDuplicateTime) {
 			t.Fatalf("candidate warnings = %v, want WarnDuplicateTime", c.Warnings)
 		}
+	}
+}
+
+func TestParse_DateTime_NonexistentLocalTime(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		zone  Zone
+	}{
+		{name: "new york spring forward", input: "2026-03-08T02:30:00", zone: MustLoadZone("America/New_York")},
+		{name: "lord howe half hour gap", input: "2026-10-04T02:15:00", zone: MustLoadZone("Australia/Lord_Howe")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := Parse(tc.input, WithZone(tc.zone))
+			if r.Status != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid", r.Status)
+			}
+			if r.Error == nil {
+				t.Fatal("Error is nil, want TimeError")
+			}
+			if r.Error.Code != CodeNonexistentTime {
+				t.Fatalf("error code = %q, want %q", r.Error.Code, CodeNonexistentTime)
+			}
+			if r.Error.Hint == "" {
+				t.Fatal("error Hint is empty")
+			}
+		})
 	}
 }
 

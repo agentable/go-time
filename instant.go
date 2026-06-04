@@ -41,6 +41,7 @@ func (i Instant) IsZero() bool { return i.t.IsZero() }
 
 // In projects the Instant into a timezone, returning a DateTime.
 func (i Instant) In(z Zone) DateTime {
+	z = normalizeZone(z)
 	return DateTime{t: i.t.In(z.Location()), zone: z}
 }
 

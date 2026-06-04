@@ -129,6 +129,21 @@ func TestParseResult_Value_NilWhenNotResolved(t *testing.T) {
 	}
 }
 
+func TestParseResult_Accessors_NonResolvedReturnFalse(t *testing.T) {
+	t.Parallel()
+
+	r := Parse("04/05/2026")
+	if r.Status != StatusAmbiguous || r.Kind != KindDate {
+		t.Fatalf("Parse status/kind = %q/%q, want ambiguous/date", r.Status, r.Kind)
+	}
+	if _, ok := r.Date(); ok {
+		t.Fatal("ambiguous Date() ok=true, want false")
+	}
+	if v := r.Value(); v != nil {
+		t.Fatalf("ambiguous Value() = %v, want nil", v)
+	}
+}
+
 func typeName(v any) string {
 	switch v.(type) {
 	case Instant:

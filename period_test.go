@@ -130,19 +130,31 @@ func TestPeriod_String(t *testing.T) {
 func TestPeriod_JSONRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	orig := Period{Years: 1, Months: 3, Days: 14}
-	b, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatalf("json.Marshal: %v", err)
+	tests := []struct {
+		name string
+		orig Period
+	}{
+		{name: "positive", orig: Period{Years: 1, Months: 3, Days: 14}},
+		{name: "mixed signs", orig: Period{Years: 1, Months: -2, Days: 3}},
 	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	var got Period
-	if err := json.Unmarshal(b, &got); err != nil {
-		t.Fatalf("json.Unmarshal: %v", err)
-	}
+			b, err := json.Marshal(tc.orig)
+			if err != nil {
+				t.Fatalf("json.Marshal: %v", err)
+			}
 
-	if diff := cmp.Diff(orig, got); diff != "" {
-		t.Errorf("Period round-trip mismatch (-want +got):\n%s", diff)
+			var got Period
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("json.Unmarshal: %v", err)
+			}
+
+			if diff := cmp.Diff(tc.orig, got); diff != "" {
+				t.Errorf("Period round-trip mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
