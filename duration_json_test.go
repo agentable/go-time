@@ -1,6 +1,8 @@
 package gotime
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -88,6 +90,33 @@ func TestDurationUnmarshalJSON_Invalid(t *testing.T) {
 	var d Duration
 	err := json.Unmarshal([]byte(`{"kind":"duration","iso":"not-iso"}`), &d)
 	if err == nil {
-		t.Error("expected error for invalid duration, got nil")
+		t.Fatal("Unmarshal(invalid duration) error = nil, want error")
+	}
+	if !errors.Is(err, errInvalidISO8601Duration) {
+		t.Errorf("Unmarshal(invalid duration) error = %v, want errInvalidISO8601Duration", err)
+	}
+}
+
+func TestDurationUnmarshalJSON_InvalidComponents(t *testing.T) {
+	tests := []struct {
+		name string
+		iso  string
+	}{
+		{name: "hour overflow", iso: "PT999999999999999999999H"},
+		{name: "minute overflow", iso: "PT999999999999999999999M"},
+		{name: "second overflow", iso: "PT1e309S"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var d Duration
+			err := json.Unmarshal([]byte(fmt.Sprintf(`{"kind":"duration","iso":%q}`, tc.iso)), &d)
+			if err == nil {
+				t.Fatalf("Unmarshal(%q) error = nil, want error", tc.iso)
+			}
+			if !errors.Is(err, errInvalidISO8601Duration) {
+				t.Errorf("Unmarshal(%q) error = %v, want errInvalidISO8601Duration", tc.iso, err)
+			}
+		})
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -173,28 +172,40 @@ var isoDurationRe = regexp.MustCompile(
 func parseISO8601Duration(s string) (Duration, error) {
 	m := isoDurationRe.FindStringSubmatch(s)
 	if m == nil {
-		return 0, fmt.Errorf("%w: %q", errInvalidISO8601Duration, s)
+		return 0, fmt.Errorf("duration %q: %w", s, errInvalidISO8601Duration)
 	}
 	if m[2] == "" && m[3] == "" && m[4] == "" {
-		return 0, fmt.Errorf("%w: %q", errInvalidISO8601Duration, s)
+		return 0, fmt.Errorf("duration %q: %w", s, errInvalidISO8601Duration)
 	}
-	neg := m[1] == "-"
-	var h, min int64
-	var sec float64
-	if m[2] != "" {
-		h, _ = strconv.ParseInt(m[2], 10, 64)
+
+	var totalNs int64
+	for _, component := range []struct {
+		raw  string
+		name string
+		unit time.Duration
+	}{
+		{m[2], "hour", time.Hour},
+		{m[3], "minute", time.Minute},
+		{m[4], "second", time.Second},
+	} {
+		if component.raw == "" {
+			continue
+		}
+		ns, ok := parseDurationComponent(component.raw, component.unit)
+		if !ok {
+			return 0, fmt.Errorf("duration %s component %q: %w", component.name, component.raw, errInvalidISO8601Duration)
+		}
+		var addOK bool
+		totalNs, addOK = checkedAddInt64(totalNs, ns)
+		if !addOK {
+			return 0, fmt.Errorf("duration %q overflows nanoseconds: %w", s, errInvalidISO8601Duration)
+		}
 	}
-	if m[3] != "" {
-		min, _ = strconv.ParseInt(m[3], 10, 64)
+
+	if m[1] == "-" {
+		totalNs = -totalNs
 	}
-	if m[4] != "" {
-		sec, _ = strconv.ParseFloat(m[4], 64)
-	}
-	ns := h*int64(time.Hour) + min*int64(time.Minute) + int64(sec*float64(time.Second))
-	if neg {
-		ns = -ns
-	}
-	return Duration(ns), nil
+	return Duration(totalNs), nil
 }
 
 // Decompose breaks d into renderable slots: Hours, Minutes, Seconds,
