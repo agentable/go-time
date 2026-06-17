@@ -67,21 +67,25 @@ func (d Date) Add(p Period) Date {
 	return DateFromTime(clampAddDate(d.toTime(), int(p.Years), int(p.Months), int(p.Days)))
 }
 
-// Sub returns the calendar difference from other to d as a Period
-// (with Years, Months, Days set; signed by direction). Mirrors time.Time.Sub.
-// Use Add for arithmetic — there is no Sub(Period) form.
-func (d Date) Sub(other Date) Period {
+// DaysUntil returns the signed number of calendar days from d to other.
+func (d Date) DaysUntil(other Date) int {
+	return other.dayNumber() - d.dayNumber()
+}
+
+// PeriodUntil returns the signed greedy calendar period from d to other.
+// It prefers years, then months, then days; use DaysUntil for exact day counts.
+func (d Date) PeriodUntil(other Date) Period {
 	if d.Equal(other) {
 		return Period{}
 	}
 
-	start, end := other, d
-	neg := d.Before(other)
+	start, end := d, other
+	neg := other.Before(d)
 	if neg {
-		start, end = d, other
+		start, end = other, d
 	}
 	years := end.year - start.year
-	if start.Add(Years(years)).After(end) {
+	if start.Add(Period{Years: int32(years)}).After(end) { //nolint:gosec // normalized calendar year delta fits Period's int32 fields
 		years--
 	}
 	months := 0
@@ -89,12 +93,39 @@ func (d Date) Sub(other Date) Period {
 		months++
 	}
 	base := start.Add(Period{Years: int32(years), Months: int32(months)}) //nolint:gosec // calendar deltas fit in int32
-	days := int(base.toTime().Sub(end.toTime()).Hours() / -24)
+	days := base.DaysUntil(end)
 	period := Period{Years: int32(years), Months: int32(months), Days: int32(days)} //nolint:gosec // calendar deltas fit in int32
 	if neg {
 		return period.Negate()
 	}
 	return period
+}
+
+func (d Date) dayNumber() int {
+	year := d.year
+	month := int(d.month)
+	if month <= 2 {
+		year--
+	}
+
+	era := divFloor(year, 400)
+	yearOfEra := year - era*400
+	monthPrime := month - 3
+	if monthPrime < 0 {
+		monthPrime += 12
+	}
+	dayOfYear := (153*monthPrime+2)/5 + d.day - 1
+	dayOfEra := yearOfEra*365 + yearOfEra/4 - yearOfEra/100 + dayOfYear
+	return era*146097 + dayOfEra
+}
+
+func divFloor(n, d int) int {
+	q := n / d
+	r := n % d
+	if r != 0 && (r < 0) != (d < 0) {
+		q--
+	}
+	return q
 }
 
 // Compare returns -1 if d is before other, 0 if equal, 1 if d is after other.

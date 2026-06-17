@@ -103,7 +103,7 @@ func TestDate_Add(t *testing.T) {
 	tests := []struct {
 		name string
 		d    Date
-		days int
+		days int32
 		want Date
 	}{
 		{"add 3 days", mustDate(2026, time.March, 27), 3, mustDate(2026, time.March, 30)},

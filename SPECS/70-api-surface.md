@@ -22,6 +22,7 @@ There is no `Today()`. A calendar date depends on a zone; callers must choose on
 func NewDate(year int, month time.Month, day int) (Date, error)
 func NewTime(hour, minute, second int) (Time, error)
 func NewTimeNanos(hour, minute, second, nanosecond int) (Time, error)
+func NewLocalDateTime(d Date, t Time) LocalDateTime
 func NewDateTime(d Date, t Time, z Zone) (DateTime, error)
 
 func InstantFromTime(t time.Time) Instant
@@ -34,11 +35,13 @@ func UnixMillis(ms int64) Instant
 func UnixNanos(ns int64) Instant
 
 func NewInterval(start, end Instant) (Interval, error)
-func IntervalOf(start Instant, d Duration) Interval
+func NewIntervalStartingAt(start Instant, length Duration) (Interval, error)
+func NewIntervalEndingAt(end Instant, length Duration) (Interval, error)
 
-func Years(n int) Period
-func Months(n int) Period
-func Days(n int) Period
+func NewPeriod(years, months, days int32) Period
+func Years(n int32) Period
+func Months(n int32) Period
+func Days(n int32) Period
 ```
 
 Constructors that validate components return errors. They never normalize invalid dates, invalid clock times, DST gaps, or duplicate local times. Use `DateTimeFromTime` when the caller already has a stdlib `time.Time` with the intended offset.
@@ -48,6 +51,36 @@ Constructors that validate components return errors. They never normalize invali
 ```go
 gotime.Period{Years: 1, Months: 3, Days: 7}
 ```
+
+## Local Date-Time Resolution
+
+```go
+type LocalDateTime struct {
+    Date Date
+    Time Time
+}
+
+type LocalResolutionStatus string
+
+const (
+    LocalInvalid     LocalResolutionStatus = "invalid"
+    LocalResolved    LocalResolutionStatus = "resolved"
+    LocalNonexistent LocalResolutionStatus = "nonexistent"
+    LocalAmbiguous   LocalResolutionStatus = "ambiguous"
+)
+
+type LocalResolution struct {
+    Status     LocalResolutionStatus
+    Zone       Zone
+    Local      LocalDateTime
+    Candidates []DateTime
+}
+
+func (ldt LocalDateTime) Resolve(z Zone) LocalResolution
+func (r LocalResolution) Only() (DateTime, error)
+```
+
+`LocalDateTime` carries no zone. `Resolve` exposes DST gaps and overlaps without choosing for the caller. `Only` is the deliberate narrowing operation for code that requires exactly one `DateTime`.
 
 ## Duration Constants
 
@@ -71,6 +104,7 @@ Typed parsers:
 ```go
 func ParseInstant(input string, opts ...Option) (Instant, error)
 func ParseDateTime(input string, opts ...Option) (DateTime, error)
+func ParseLocalDateTime(input string, opts ...Option) (LocalDateTime, error)
 func ParseDate(input string, opts ...Option) (Date, error)
 func ParseTime(input string, opts ...Option) (Time, error)
 func ParseDuration(input string, opts ...Option) (Duration, error)
@@ -78,7 +112,7 @@ func ParsePeriod(input string, opts ...Option) (Period, error)
 func ParseInterval(input string, opts ...Option) (Interval, error)
 ```
 
-Inspection parser:
+Diagnostic parser:
 
 ```go
 func Parse(input string, opts ...Option) ParseResult
@@ -90,6 +124,7 @@ Comma-ok accessors:
 ```go
 func (r ParseResult) Instant() (Instant, bool)
 func (r ParseResult) DateTime() (DateTime, bool)
+func (r ParseResult) LocalDateTime() (LocalDateTime, bool)
 func (r ParseResult) Date() (Date, bool)
 func (r ParseResult) Time() (Time, bool)
 func (r ParseResult) Duration() (Duration, bool)
@@ -131,7 +166,8 @@ func (dt DateTime) Sub(other DateTime) Duration
 func (dt DateTime) Compare(other DateTime) int
 
 func (d Date) Add(p Period) Date
-func (d Date) Sub(other Date) Period
+func (d Date) DaysUntil(other Date) int
+func (d Date) PeriodUntil(other Date) Period
 func (d Date) Compare(other Date) int
 
 func (p Period) Add(other Period) Period
@@ -169,6 +205,7 @@ func LoadZone(id string) (Zone, error)
 func MustLoadZone(id string) Zone
 func ResolveZone(id string) (Zone, error)
 func Zones() []string
+func ZoneCatalogVersion() string
 
 func (z Zone) ID() string
 func (z Zone) Location() *time.Location
@@ -197,6 +234,7 @@ Stable value JSON:
 
 - `Instant`: `{"kind":"instant","iso":"...","epoch_ms":...}`
 - `DateTime`: `{"kind":"datetime","value":"...","zone":"...","calendar":"iso8601"}`
+- `LocalDateTime`: `{"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS","calendar":"iso8601"}`
 - `Date`: `{"kind":"date","value":"YYYY-MM-DD","calendar":"iso8601"}`
 - `Time`: `{"kind":"time","value":"HH:MM:SS","precision":"second"}`
 - `Duration`: `{"kind":"duration","iso":"..."}`

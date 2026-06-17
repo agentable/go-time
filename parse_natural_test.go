@@ -93,31 +93,23 @@ func TestParse_Natural_En(t *testing.T) {
 	}
 }
 
-func TestParse_Natural_En_WithFixedOffsetZone(t *testing.T) {
-	z, err := ResolveZone("UTC+8")
-	if err != nil {
-		t.Fatalf("ResolveZone(UTC+8): %v", err)
-	}
+func TestParse_Natural_DateTimeWithoutZoneReturnsLocalDateTime(t *testing.T) {
 	r := Parse("tomorrow at 3pm",
 		WithInputLocale(language.English),
-		WithZone(z),
 		WithReference(fixedNow),
 	)
 	if r.Status != StatusResolved {
 		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
 	}
-	if r.Kind != KindDateTime {
-		t.Fatalf("Kind = %v, want KindDateTime", r.Kind)
+	if r.Kind != KindLocalDateTime {
+		t.Fatalf("Kind = %v, want KindLocalDateTime", r.Kind)
 	}
-	dt, _ := r.DateTime()
-	if dt.Zone().ID() != "+08:00" {
-		t.Errorf("zone = %q, want +08:00", dt.Zone().ID())
+	ldt, ok := r.LocalDateTime()
+	if !ok {
+		t.Fatal("LocalDateTime() ok=false, want true")
 	}
-	if dt.Date().Year() != 2026 || dt.Date().Month() != time.March || dt.Date().Day() != 31 {
-		t.Errorf("date = %v, want 2026-03-31", dt.Date())
-	}
-	if dt.Clock().Hour() != 15 {
-		t.Errorf("hour = %d, want 15", dt.Clock().Hour())
+	if got := ldt.String(); got != "2026-03-31T15:00:00" {
+		t.Errorf("LocalDateTime() = %s, want 2026-03-31T15:00:00", got)
 	}
 }
 
@@ -223,6 +215,43 @@ func TestParse_Natural_Duration_En(t *testing.T) {
 	d, _ := r.Duration()
 	if d.Std() != 2*time.Hour {
 		t.Errorf("duration = %v, want 2h", d.Std())
+	}
+}
+
+func TestParse_Natural_CalendarUnits_En(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  Period
+	}{
+		{input: "in 2 days", want: Period{Days: 2}},
+		{input: "in 1 week", want: Period{Days: 7}},
+		{input: "3 days ago", want: Period{Days: -3}},
+		{input: "2 weeks ago", want: Period{Days: -14}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+
+			r := Parse(tc.input,
+				WithInputLocale(language.English),
+				WithReference(fixedNow),
+			)
+			if r.Status != StatusResolved {
+				t.Fatalf("Parse(%q).Status = %v (err=%v), want Resolved", tc.input, r.Status, r.Error)
+			}
+			if r.Kind != KindPeriod {
+				t.Fatalf("Parse(%q).Kind = %v, want KindPeriod", tc.input, r.Kind)
+			}
+			got, ok := r.Period()
+			if !ok {
+				t.Fatalf("Parse(%q).Period() ok = false, want true", tc.input)
+			}
+			if got != tc.want {
+				t.Errorf("Parse(%q).Period() = %+v, want %+v", tc.input, got, tc.want)
+			}
+		})
 	}
 }
 

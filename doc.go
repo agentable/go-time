@@ -5,10 +5,11 @@
 //
 // Two layers, picked by what you know up front:
 //
-//   - Typed helpers — [ParseInstant], [ParseDateTime], [ParseDate],
-//     [ParseTime], [ParseDuration], [ParsePeriod], [ParseInterval]. Each
-//     returns (T, error) and is the default path for application code.
-//   - [Parse] — inspection / dispatch entry. Returns a [ParseResult] with
+//   - Typed helpers — [ParseInstant], [ParseDateTime], [ParseLocalDateTime],
+//     [ParseDate], [ParseTime], [ParseDuration], [ParsePeriod],
+//     [ParseInterval]. Each returns (T, error) and is the default path for
+//     application code.
+//   - [Parse] — diagnostic / dispatch entry. Returns a [ParseResult] with
 //     Status / Kind / Candidates / Warnings. Reach for it when you do not
 //     know the kind ahead of time, or when you need ambiguity candidates,
 //     warnings, or zone metadata. Use [ParseResult.Value] with a Go type
@@ -27,12 +28,14 @@
 // # Formatting is out of scope
 //
 // Localization and display formatting are intentionally out of scope. Bridge
-// gotime values to a formatter (for example github.com/agentable/go-intl) via
-// the [Instant.Std], [DateTime.Std], and [Duration.Std] adapters.
+// gotime values to an external renderer through the [Instant.Std],
+// [DateTime.Std], and [Duration.Std] adapters.
 //
 // # Example — typed helper (most common)
 //
-//	dt, err := gotime.ParseDateTime("2026-03-27T13:00:00+09:00")
+//	dt, err := gotime.ParseDateTime("2026-03-27T13:00:00",
+//	    gotime.WithZone(gotime.MustLoadZone("Asia/Tokyo")),
+//	)
 //	if err != nil {
 //	    return err
 //	}

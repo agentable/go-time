@@ -25,16 +25,21 @@ type Period struct {
 	Days   int32 `json:"days,omitzero"`
 }
 
+// NewPeriod creates a Period from calendar year, month, and day components.
+func NewPeriod(years, months, days int32) Period {
+	return Period{Years: years, Months: months, Days: days}
+}
+
 // Years returns Period{Years: n}. Sugar for the struct literal.
-func Years(n int) Period { return Period{Years: int32(n)} } //nolint:gosec // calendar offsets fit in int32; callers building Period directly may use struct literal
+func Years(n int32) Period { return Period{Years: n} }
 
 // Months returns Period{Months: n}. Sugar for the struct literal.
-func Months(n int) Period { return Period{Months: int32(n)} } //nolint:gosec // calendar offsets fit in int32
+func Months(n int32) Period { return Period{Months: n} }
 
 // Days returns Period{Days: n}. These are calendar days (not 24-hour spans);
 // they preserve wall-clock time across DST boundaries. For exact 24-hour math
 // write 24 * gotime.Hour.
-func Days(n int) Period { return Period{Days: int32(n)} } //nolint:gosec // calendar offsets fit in int32
+func Days(n int32) Period { return Period{Days: n} }
 
 // IsZero reports whether p has no calendar offset.
 func (p Period) IsZero() bool { return p.Years == 0 && p.Months == 0 && p.Days == 0 }

@@ -156,7 +156,6 @@ func TestZh_Duration(t *testing.T) {
 	ctx := zhCtx("zh-Hans", "")
 	hour := int64(time.Hour)
 	minute := int64(time.Minute)
-	day := int64(24 * time.Hour)
 
 	tests := []struct {
 		input     string
@@ -165,7 +164,6 @@ func TestZh_Duration(t *testing.T) {
 		{"两小时后", 2 * hour},
 		{"2小时后", 2 * hour},
 		{"30分钟前", -30 * minute},
-		{"3天后", 3 * day},
 		// Traditional
 		{"兩小時後", 2 * hour},
 		{"30分鐘前", -30 * minute},
@@ -183,6 +181,20 @@ func TestZh_Duration(t *testing.T) {
 				t.Errorf("DurNanos = %d, want %d", r.DurNanos, tt.wantNanos)
 			}
 		})
+	}
+}
+
+func TestZh_Period(t *testing.T) {
+	ctx := zhCtx("zh-Hans", "")
+	r, ok := Parse("3天后", ctx)
+	if !ok {
+		t.Fatal("Parse returned ok=false")
+	}
+	if r.Kind != KindPeriod {
+		t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
+	}
+	if r.PeriodDays != 3 {
+		t.Errorf("PeriodDays = %d, want 3", r.PeriodDays)
 	}
 }
 

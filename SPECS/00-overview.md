@@ -17,7 +17,7 @@ The library does not format values for display. Callers bridge out through stdli
 
 ## Design Philosophy
 
-The API follows an Apple-style constraint: remove every decision the caller should not have to make, and make the remaining decisions obvious.
+The API follows constraint-led design: remove every decision the caller should not have to make, and make the remaining decisions obvious.
 
 1. **One obvious way**: one concept, one type, one primary verb.
 2. **Names read as English**: `gotime.Now()`, `dt.In(zone)`, `iv.Contains(t)`.
@@ -32,8 +32,8 @@ The API follows an Apple-style constraint: remove every decision the caller shou
 ## Architecture
 
 ```text
-Product layer      agenttime / agentcalendar / agentreminder / agenttask
-Display layer      stdlib time.Format, go-intl, logs, templates
+Product layer      applications, agents, CLIs, services
+Display layer      stdlib time.Format, external formatters, logs, templates
                   ↑ time.Time / time.Duration / data slots
 go-time            typed time semantics
                   ↓
@@ -63,10 +63,10 @@ These specs describe the current v2 contract. If implementation and specs disagr
 ## Permanent Non-Goals
 
 - No formatter or locale types (`DateTimeFormat`, `RelativeTimeFormat`, `DurationFormat`, `Locale`, `HourCycle`, `Calendar`, `Style`).
-- No i18n, CLDR, message-format, locale-data, JSON/YAML/template locale assets, or `go-intl` dependency.
+- No i18n, CLDR, message-format, locale-data, JSON/YAML/template locale assets, or formatter dependency.
 - No event, reminder, alarm, scheduler, cron, RRULE, recurrence, business-calendar, holiday, lunar-calendar, Julian-day, sunrise/sunset, or moon-phase model.
 - No semantic mixing: `Instant + Period`, `Date + Duration`, and `DateTime + DateTime` remain undefined.
 - No marshal-time calls to `time.Now()`.
 - No public `Must*` except `MustLoadZone`.
 - No exposed monotonic clock concept.
-- No zone-free `DateTime` value object; parsing can report floating input through `ParseResult.HasZone`, but persisted `DateTime` values carry a `Zone`.
+- No zone-free `DateTime`; unresolved wall-clock values use `LocalDateTime`, while persisted `DateTime` values carry a `Zone`.

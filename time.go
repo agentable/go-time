@@ -2,6 +2,7 @@ package gotime
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-json-experiment/json"
@@ -83,9 +84,13 @@ func (t Time) After(other Time) bool {
 	return t.toNano() > other.toNano()
 }
 
-// String returns the clock time as "HH:MM:SS".
+// String returns the canonical clock time as "HH:MM:SS[.fraction]".
 func (t Time) String() string {
-	return fmt.Sprintf("%02d:%02d:%02d", t.hour, t.minute, t.second)
+	if t.nanosecond == 0 {
+		return fmt.Sprintf("%02d:%02d:%02d", t.hour, t.minute, t.second)
+	}
+	frac := strings.TrimRight(fmt.Sprintf("%09d", t.nanosecond), "0")
+	return fmt.Sprintf("%02d:%02d:%02d.%s", t.hour, t.minute, t.second, frac)
 }
 
 // Std returns the clock time projected onto Date d in Zone z as a time.Time.

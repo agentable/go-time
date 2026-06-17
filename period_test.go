@@ -1,11 +1,45 @@
 package gotime
 
 import (
+	"math"
 	"testing"
 
 	"github.com/go-json-experiment/json"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestNewPeriod(t *testing.T) {
+	t.Parallel()
+
+	got := NewPeriod(1, -2, 3)
+	want := Period{Years: 1, Months: -2, Days: 3}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("NewPeriod() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPeriod_ConstructorsUseInt32(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		got  Period
+		want Period
+	}{
+		{name: "years", got: Years(math.MaxInt32), want: Period{Years: math.MaxInt32}},
+		{name: "months", got: Months(math.MinInt32), want: Period{Months: math.MinInt32}},
+		{name: "days", got: Days(math.MaxInt32), want: Period{Days: math.MaxInt32}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if diff := cmp.Diff(tc.want, tc.got); diff != "" {
+				t.Errorf("Period constructor mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestPeriod_ComponentArithmetic(t *testing.T) {
 	t.Parallel()

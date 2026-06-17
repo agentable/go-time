@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	ianazone "github.com/agentable/go-time/internal/zone"
 )
 
 func tryParseDateTime(input string, cfg *config) (ParseResult, bool) {
@@ -33,7 +31,7 @@ func tryParseDateTime(input string, cfg *config) (ParseResult, bool) {
 				"Use RFC 3339 format, e.g. 2026-03-27T13:00:00+09:00"), true
 		}
 	}
-	r := buildDateTimeResult(input, t, offsetPart, cfg)
+	r := buildDateTimeResult(input, t, cfg)
 	if truncated {
 		r.Warnings = append(r.Warnings, truncatedPrecisionWarning())
 	}
@@ -69,7 +67,32 @@ func tryParseDateTimeNoOffset(input string, cfg *config) (ParseResult, bool) {
 		return ParseResult{}, false
 	}
 
-	return resolveLocalDateTime(input, cfg, year, mon, day, hour, min, sec, ns, truncated)
+	return localDateTimeResult(input, cfg, year, mon, day, hour, min, sec, ns, truncated)
+}
+
+func localDateTimeResult(input string, cfg *config, year, mon, day, hour, min, sec, ns int, truncated bool) (ParseResult, bool) {
+	if msg := validateDateComponents(year, mon, day); msg != "" {
+		return invalidResult(input, ErrInvalidDate, msg,
+			"Provide a valid local calendar date"), true
+	}
+	if msg := validateTimeComponents(hour, min, sec, ns); msg != "" {
+		return invalidResult(input, ErrInvalidTime, msg,
+			"Provide a valid local clock time"), true
+	}
+
+	if !cfg.zone.IsZero() {
+		return resolveLocalDateTime(input, cfg, year, mon, day, hour, min, sec, ns, truncated)
+	}
+
+	r := resolvedResult(input, KindLocalDateTime, cfg)
+	r.localDateTime = NewLocalDateTime(
+		dateFromComponents(year, time.Month(mon), day),
+		timeFromComponents(hour, min, sec, ns),
+	)
+	if truncated {
+		r.Warnings = append(r.Warnings, truncatedPrecisionWarning())
+	}
+	return r, true
 }
 
 func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, sec, ns int, truncated bool) (ParseResult, bool) {
@@ -82,16 +105,16 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 			"Provide a valid local clock time"), true
 	}
 
-	z := cfg.zone
-	if z.IsZero() {
-		z = UTC
-	}
+	z := normalizeZone(cfg.zone)
 	loc := z.Location()
+	ldt := NewLocalDateTime(
+		dateFromComponents(year, time.Month(mon), day),
+		timeFromComponents(hour, min, sec, ns),
+	)
+	resolution := ldt.Resolve(z)
 
-	// Use ProjectLocalTime to detect DST spring-forward and fall-back.
-	res := ianazone.ProjectLocalTime(loc, year, time.Month(mon), day, hour, min, sec)
-	switch res.Status {
-	case ianazone.DSTNonexistent:
+	switch resolution.Status {
+	case LocalNonexistent:
 		// Compute the post-normalization time for the hint message.
 		tNorm := time.Date(year, time.Month(mon), day, hour, min, sec, 0, loc)
 		return ParseResult{
@@ -106,12 +129,11 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 					hour, tNorm.Hour(), z.ID(), hour-1, min, tNorm.Hour(), tNorm.Minute()),
 			),
 		}, true
-	case ianazone.DSTAmbiguous:
-		// Preserve nanosecond precision on both candidates.
-		t1 := res.Times[0].Add(time.Duration(ns))
-		t2 := res.Times[1].Add(time.Duration(ns))
-		r1 := duplicateTimeCandidate(input, cfg, z, t1, truncated)
-		r2 := duplicateTimeCandidate(input, cfg, z, t2, truncated)
+	case LocalAmbiguous:
+		candidates := make([]ParseResult, 0, len(resolution.Candidates))
+		for _, candidate := range resolution.Candidates {
+			candidates = append(candidates, duplicateTimeCandidate(input, cfg, z, candidate.Std(), truncated))
+		}
 
 		return ParseResult{
 			Status:     StatusAmbiguous,
@@ -119,17 +141,23 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 			Input:      input,
 			Zone:       cfg.zone,
 			Warnings:   localDateTimeWarnings(cfg, z, truncated),
-			Candidates: []ParseResult{r1, r2},
+			Candidates: candidates,
 		}, true
-	case ianazone.DSTNormal:
-		t := time.Date(year, time.Month(mon), day, hour, min, sec, ns, loc)
-		dt := DateTime{t: t, zone: z}
+	case LocalResolved:
+		dt := resolution.Candidates[0]
 		r := resolvedResult(input, KindDateTime, cfg)
 		r.dateTime = dt
 		r.Warnings = localDateTimeWarnings(cfg, z, truncated)
 		return r, true
+	case LocalInvalid:
+		return invalidResult(input, ErrInvalidTime,
+			fmt.Sprintf("invalid local datetime %q", input),
+			"Provide a valid local calendar date and clock time"), true
+	default:
+		return invalidResult(input, ErrInvalidTime,
+			fmt.Sprintf("cannot resolve local datetime %q", input),
+			"Provide a valid local calendar date, clock time, and zone"), true
 	}
-	return ParseResult{}, false
 }
 
 func duplicateTimeCandidate(input string, cfg *config, z Zone, t time.Time, truncated bool) ParseResult {
@@ -173,7 +201,7 @@ func tryParseCompactDateTime(input string, cfg *config) (ParseResult, bool) {
 	}
 	offsetPart := m[6]
 	if offsetPart == "" {
-		return resolveLocalDateTime(input, cfg, year, mon, day, hour, min, sec, nsec, truncated)
+		return localDateTimeResult(input, cfg, year, mon, day, hour, min, sec, nsec, truncated)
 	}
 
 	var loc *time.Location
@@ -189,34 +217,17 @@ func tryParseCompactDateTime(input string, cfg *config) (ParseResult, bool) {
 		}
 	}
 	t := time.Date(year, time.Month(mon), day, hour, min, sec, nsec, loc)
-	r := buildDateTimeResult(input, t, offsetPart, cfg)
+	r := buildDateTimeResult(input, t, cfg)
 	if truncated {
 		r.Warnings = append(r.Warnings, truncatedPrecisionWarning())
 	}
 	return r, true
 }
 
-func buildDateTimeResult(input string, t time.Time, offsetPart string, cfg *config) ParseResult {
-	// RFC 3339 UTC -> Instant
-	if strings.EqualFold(offsetPart, "Z") {
-		i := InstantFromTime(t)
-		r := resolvedResult(input, KindInstant, cfg)
-		r.Zone = Zone{}
-		r.instant = i
-		r.HasZone = true
-		return r
-	}
-	// Non-UTC offset -> DateTime with fixed-offset zone. WithZone only
-	// supplies a zone for floating datetimes; explicit offsets win.
-	_, offsetSec := t.Zone()
-	offsetID := formatOffset(offsetSec)
-	loc := time.FixedZone(offsetID, offsetSec)
-	t = t.In(loc)
-	z := Zone{id: offsetID, loc: loc}
-	dt := DateTime{t: t, zone: z}
-	r := resolvedResult(input, KindDateTime, cfg)
+func buildDateTimeResult(input string, t time.Time, cfg *config) ParseResult {
+	r := resolvedResult(input, KindInstant, cfg)
 	r.Zone = Zone{}
-	r.dateTime = dt
+	r.instant = InstantFromTime(t)
 	r.HasZone = true
 	return r
 }

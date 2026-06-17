@@ -1,7 +1,9 @@
 package gotime
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/go-json-experiment/json"
 )
@@ -27,6 +29,14 @@ func TestZoneMarshalJSON_UTC(t *testing.T) {
 	want := `{"kind":"zone","id":"UTC"}`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
+	}
+}
+
+func TestZoneMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
+	z := Zone{id: "+08:00", loc: time.FixedZone("+08:00", 8*3600)}
+	_, err := json.Marshal(z)
+	if !errors.Is(err, ErrInvalidZone) {
+		t.Fatalf("Marshal error = %v, want ErrInvalidZone", err)
 	}
 }
 

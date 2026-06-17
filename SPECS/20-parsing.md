@@ -6,8 +6,8 @@ Parsing converts standard time formats and controlled natural-language expressio
 
 There are two entry paths:
 
-- **Typed path**: `ParseInstant`, `ParseDateTime`, `ParseDate`, `ParseTime`, `ParseDuration`, `ParsePeriod`, `ParseInterval`. These return `(T, error)` and are the default choice when the caller knows the expected type.
-- **Inspection path**: `Parse` returns `ParseResult` with status, kind, candidates, warnings, `HasZone`, and error details. Use it when the input type is unknown or ambiguity metadata matters.
+- **Typed path**: `ParseInstant`, `ParseDateTime`, `ParseLocalDateTime`, `ParseDate`, `ParseTime`, `ParseDuration`, `ParsePeriod`, `ParseInterval`. These return `(T, error)` and are the default choice when the caller knows the expected type.
+- **Diagnostic path**: `Parse` returns `ParseResult` with status, kind, candidates, warnings, `HasZone`, and error details. Use it when the input type is unknown or ambiguity metadata matters.
 
 `Parse` never returns a Go `error`; semantic outcomes live in `ParseResult.Status`.
 
@@ -15,11 +15,9 @@ There are two entry paths:
 
 | Input | Example | Result kind |
 |---|---|---|
-| RFC 3339 UTC datetime | `2026-03-27T04:00:00Z` | `KindInstant` |
-| ISO datetime with non-UTC offset | `2026-03-27T13:00:00+09:00` | `KindDateTime` |
-| ISO local datetime | `2026-03-27T13:00:00` | `KindDateTime` |
-| Compact datetime | `20260327T130000`, `20260327T130000+0900` | `KindDateTime` |
-| Compact UTC datetime | `20260327T040000Z` | `KindInstant` |
+| RFC 3339 datetime with offset | `2026-03-27T13:00:00+09:00`, `2026-03-27T04:00:00Z` | `KindInstant` |
+| ISO local datetime | `2026-03-27T13:00:00` | `KindLocalDateTime`, or `KindDateTime` with `WithZone` |
+| Compact datetime | `20260327T130000`, `20260327T130000+0900`, `20260327T040000Z` | `KindLocalDateTime` without offset, `KindInstant` with offset |
 | ISO date | `2026-03-27` | `KindDate` |
 | Compact, ordinal, week date | `20260327`, `2026-086`, `2026-W13-5` | `KindDate` |
 | Year-month | `2026-03` | `KindDate` |
@@ -45,9 +43,9 @@ Current language families:
 - Latin-script European languages in `internal/natural/latin` (`fr`, `de`, `es`, `pt`, `ru`)
 - Chinese (`zh-Hans`, `zh-Hant`)
 
-Current coverage is intentionally small: relative dates, week expressions, basic date+time expressions, basic exact-duration expressions, and calendar period expressions for month/year units. Natural-language intervals are outside the current implementation.
+Current coverage is intentionally small: relative dates, week expressions, basic date+time expressions, basic exact-duration expressions, and calendar period expressions for day/week/month/year units. Natural-language intervals are outside the current implementation.
 
-Natural-language month and year units route to `KindPeriod`. They are never approximated as 30-day or 365-day `Duration` values.
+Natural-language day, week, month, and year units route to `KindPeriod`. They are never approximated as 24-hour, 7-day, 30-day, or 365-day `Duration` values. Natural-language second, minute, and hour units route to `KindDuration`.
 
 ## ParseResult
 
@@ -63,13 +61,14 @@ const (
 type Kind string
 
 const (
-    KindInstant  Kind = "instant"
-    KindDateTime Kind = "datetime"
-    KindDate     Kind = "date"
-    KindTime     Kind = "time"
-    KindDuration Kind = "duration"
-    KindPeriod   Kind = "period"
-    KindInterval Kind = "interval"
+    KindInstant       Kind = "instant"
+    KindDateTime      Kind = "datetime"
+    KindLocalDateTime Kind = "local_datetime"
+    KindDate          Kind = "date"
+    KindTime          Kind = "time"
+    KindDuration      Kind = "duration"
+    KindPeriod        Kind = "period"
+    KindInterval      Kind = "interval"
 )
 
 type ParseResult struct {
@@ -91,6 +90,8 @@ type ParseResult struct {
 switch v := result.Value().(type) {
 case gotime.DateTime:
     handle(v)
+case gotime.LocalDateTime:
+    handle(v)
 case gotime.Date:
     handle(v)
 case nil:
@@ -98,7 +99,7 @@ case nil:
 }
 ```
 
-`Value()` returns `nil` unless `Status == StatusResolved`. Accessors such as `DateTime() (DateTime, bool)` return `ok=false` when the kind does not match.
+`Value()` returns `nil` unless `Status == StatusResolved`. Accessors such as `DateTime() (DateTime, bool)` and `LocalDateTime() (LocalDateTime, bool)` return `ok=false` when the kind does not match.
 
 ## Options
 
@@ -109,18 +110,18 @@ func WithReference(t Instant) Option
 ```
 
 - `WithInputLocale` enables natural-language parsing and disambiguates slash dates.
-- `WithZone` supplies the zone for floating datetimes; zero means UTC.
+- `WithZone` supplies the zone for floating datetimes. Without it, local datetimes remain `KindLocalDateTime` instead of defaulting to UTC.
 - `WithReference` supplies the base instant for relative expressions.
 
 There is no `WithStrategy`. Ambiguity is surfaced through `Candidates`; callers decide.
 
-When `WithZone` resolves a floating datetime, `ParseResult.Warnings` includes `WarnAssumedZone`. When fractional seconds exceed nanosecond precision, `ParseResult.Warnings` includes `WarnTruncatedPrecision` and the value is truncated to nanoseconds. Slash-date candidates use `WarnInferredCalendar` to explain month-first vs day-first interpretation.
+When `WithZone` resolves a floating datetime, `ParseResult.Warnings` includes `WarnAssumedZone`. Without `WithZone`, the same input resolves to `KindLocalDateTime` and carries no zone assumption. When fractional seconds exceed nanosecond precision, `ParseResult.Warnings` includes `WarnTruncatedPrecision` and the value is truncated to nanoseconds. Slash-date candidates use `WarnInferredCalendar` to explain month-first vs day-first interpretation.
 
 ## Ambiguity
 
 Slash dates follow locale when provided. With no locale, they resolve only when one interpretation is valid; otherwise `Parse` returns `StatusAmbiguous`.
 
-DST fall-back local times return `StatusAmbiguous` with two `DateTime` candidates. Each candidate carries `WarnDuplicateTime` with its abbreviation and offset. DST spring-forward gaps return `StatusInvalid` with `CodeNonexistentTime`.
+Floating datetime parsing uses the same projection rule as `LocalDateTime.Resolve` only when `WithZone` is supplied. DST fall-back local times return `StatusAmbiguous` with `DateTime` candidates. Each candidate carries `WarnDuplicateTime` with its abbreviation and offset. DST spring-forward gaps return `StatusInvalid` with `CodeNonexistentTime`.
 
 `HasZone` reports whether the original input explicitly included a timezone or offset. It is the caller's hook for detecting floating time.
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-go-time has eight immutable value objects. Each represents exactly one time concept and exposes only the operations that make sense for that concept.
+go-time has nine immutable value objects. Each represents exactly one time concept and exposes only the operations that make sense for that concept.
 
 The most important split is `Duration` vs `Period`: exact elapsed time and calendar offsets are different types, so the compiler prevents accidental mixing.
 
@@ -24,7 +24,7 @@ Key API: `InstantFromTime`, `UnixSeconds`, `UnixMillis`, `UnixNanos`, `Std`, `Un
 
 ### DateTime
 
-A calendar date and clock time in a specific `Zone`.
+A calendar date and clock time resolved in a specific `Zone`.
 
 JSON:
 
@@ -34,9 +34,32 @@ JSON:
 
 Key API: `NewDateTime`, `DateTimeFromTime`, `Date`, `Clock`, `Std`, `Zone`, `Instant`, `In`, `Add(Duration)`, `AddPeriod(Period)`, `Sub(DateTime)`, `Compare`.
 
-`NewDateTime` validates the local wall-clock projection. DST gaps return `ErrNonexistentTime`; DST duplicates return `ErrDuplicateTime`. Use `DateTimeFromTime` when the caller already has a stdlib `time.Time` with the intended offset.
+`NewDateTime` is the convenience path for `NewLocalDateTime(d, t).Resolve(z).Only()`. DST gaps return `ErrNonexistentTime`; DST duplicates return `ErrDuplicateTime`. Use `DateTimeFromTime` when the caller already has a stdlib `time.Time` with the intended offset.
+
+When unmarshaling JSON, the offset embedded in `value` must match the IANA `zone` at that instant. A mismatch returns `ErrInvalidZone`; the wire format must not contain two conflicting sources of truth.
 
 `Add(Duration)` is exact arithmetic. `AddPeriod(Period)` is calendar arithmetic and preserves local wall-clock time across DST transitions.
+
+### LocalDateTime
+
+A calendar date and clock time without timezone or offset.
+
+JSON:
+
+```json
+{"kind":"local_datetime","value":"2026-03-27T13:00:00","calendar":"iso8601"}
+```
+
+Key API: `NewLocalDateTime`, `Resolve`, `String`.
+
+`LocalDateTime` cannot identify an instant until resolved in a `Zone`. `Resolve` returns a `LocalResolution`:
+
+- `LocalResolved` carries exactly one chronological `DateTime` candidate.
+- `LocalNonexistent` carries no candidates for DST gaps.
+- `LocalAmbiguous` carries multiple chronological candidates for DST overlaps.
+- `LocalInvalid` reports invalid zero or corrupted components.
+
+`LocalResolution.Only()` returns the single `DateTime` or a typed error (`ErrNonexistentTime`, `ErrDuplicateTime`, `ErrInvalidDate`, or `ErrInvalidTime`).
 
 ### Date
 
@@ -48,7 +71,7 @@ JSON:
 {"kind":"date","value":"2026-03-27","calendar":"iso8601"}
 ```
 
-Key API: `NewDate`, `DateFromTime`, `Year`, `Month`, `Day`, `Std(Zone)`, `Weekday`, `ISOWeek`, `YearDay`, `DaysInMonth`, `IsLeapYear`, `Add(Period)`, `Sub(Date)`, `Compare`.
+Key API: `NewDate`, `DateFromTime`, `Year`, `Month`, `Day`, `Std(Zone)`, `Weekday`, `ISOWeek`, `YearDay`, `DaysInMonth`, `IsLeapYear`, `Add(Period)`, `DaysUntil(Date)`, `PeriodUntil(Date)`, `Compare`.
 
 `NewDate` returns an error for invalid calendar components. It never normalizes values such as February 31.
 
@@ -111,7 +134,7 @@ JSON:
 {"kind":"period","iso":"P1Y3M7D"}
 ```
 
-Key API: exported `Years`, `Months`, `Days` fields, `Years`, `Months`, `Days` constructors, `Negate`, `Abs`, `Add`, `Sub`, `ISO8601`, `RFC5545`, `String`.
+Key API: exported `Years`, `Months`, `Days` fields, `NewPeriod`, `Years`, `Months`, `Days` constructors, `Negate`, `Abs`, `Add`, `Sub`, `ISO8601`, `RFC5545`, `String`.
 
 Month/year arithmetic clamps to the end of the target month. `Period` has no `Decompose`; callers read the exported fields directly.
 
@@ -125,7 +148,7 @@ JSON:
 {"kind":"interval","start":"2026-03-27T00:00:00Z","end":"2026-03-27T09:00:00Z"}
 ```
 
-Key API: `NewInterval`, `IntervalOf`, `Start`, `End`, `Length`, `StdRange`, `Contains`, `Overlaps`, `Adjacent`, `Intersect`, `Union`, `Shift`, `Expand`.
+Key API: `NewInterval`, `NewIntervalStartingAt`, `NewIntervalEndingAt`, `Start`, `End`, `Length`, `StdRange`, `Contains`, `Overlaps`, `Adjacent`, `Intersect`, `Union`, `Shift`, `Expand`.
 
 `Interval` carries no zone. Projection for display happens outside the package via `StdRange`.
 
@@ -152,12 +175,16 @@ Key API: `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ID`, `Location`, `
 | Relationship | Meaning |
 |---|---|
 | `Instant.In(Zone) -> DateTime` | Project an absolute moment into a zone. |
+| `NewLocalDateTime(Date, Time) -> LocalDateTime` | Combine calendar and clock without choosing a zone. |
+| `LocalDateTime.Resolve(Zone) -> LocalResolution` | Project local wall time into a zone, preserving DST ambiguity. |
+| `LocalResolution.Only() -> DateTime` | Demand exactly one resolved candidate. |
 | `DateTime.Instant() -> Instant` | Convert a zoned local time to the absolute timeline. |
 | `DateTime.In(Zone) -> DateTime` | Same moment, different zone. |
 | `Time.Std(Date, Zone) -> time.Time` | Combine date, clock, and zone for stdlib interop. |
 | `Date.Std(Zone) -> time.Time` | Project a date to midnight in a zone. |
 | `DateTime.Sub(DateTime) -> Duration` | Exact elapsed difference. |
-| `Date.Sub(Date) -> Period` | Calendar difference. |
+| `Date.DaysUntil(Date) -> int` | Signed calendar-day count. |
+| `Date.PeriodUntil(Date) -> Period` | Signed greedy calendar difference, preferring years, then months, then days. |
 | `Interval.Length() -> Duration` | Exact interval length. |
 
 ## Wire Format Invariance

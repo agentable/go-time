@@ -1,6 +1,6 @@
 package gotime
 
-// This file implements the seven typed parse helpers documented in
+// This file implements the typed parse helpers documented in
 // SPECS/20-parsing.md and SPECS/70-api-surface.md. Each function calls
 // Parse and then translates the ParseResult into a Go-idiomatic
 // (value, error) pair:
@@ -29,6 +29,15 @@ func ParseDateTime(input string, opts ...Option) (DateTime, error) {
 		return DateTime{}, err
 	}
 	return r.dateTime, nil
+}
+
+// ParseLocalDateTime parses input and returns a LocalDateTime or an error.
+func ParseLocalDateTime(input string, opts ...Option) (LocalDateTime, error) {
+	r := Parse(input, opts...)
+	if err := parseResultError(r, KindLocalDateTime); err != nil {
+		return LocalDateTime{}, err
+	}
+	return r.localDateTime, nil
 }
 
 // ParseDate parses input and returns a Date or an error.
@@ -93,7 +102,7 @@ func parseResultError(r ParseResult, want Kind) error {
 			ErrIncompatibleTypes,
 			"parsed value has a different kind than the typed parser expected",
 			r.Input,
-			"input parsed as "+string(r.Kind)+", call the matching Parse"+string(r.Kind)+" function instead",
+			"input parsed as "+string(r.Kind)+", call "+parseFunctionForKind(r.Kind)+" instead",
 		)
 	case StatusAmbiguous:
 		return newTimeError(
@@ -114,11 +123,34 @@ func parseResultError(r ParseResult, want Kind) error {
 
 func ambiguousSentinelForKind(k Kind) error {
 	switch k {
-	case KindDate, KindDateTime, KindInstant, KindInterval:
+	case KindDate, KindDateTime, KindLocalDateTime, KindInstant, KindInterval:
 		return ErrAmbiguousDate
 	case KindTime:
 		return ErrAmbiguousTime
 	default:
 		return ErrAmbiguousDate
+	}
+}
+
+func parseFunctionForKind(k Kind) string {
+	switch k {
+	case KindInstant:
+		return "ParseInstant"
+	case KindDateTime:
+		return "ParseDateTime"
+	case KindLocalDateTime:
+		return "ParseLocalDateTime"
+	case KindDate:
+		return "ParseDate"
+	case KindTime:
+		return "ParseTime"
+	case KindDuration:
+		return "ParseDuration"
+	case KindPeriod:
+		return "ParsePeriod"
+	case KindInterval:
+		return "ParseInterval"
+	default:
+		return "the matching typed parser"
 	}
 }

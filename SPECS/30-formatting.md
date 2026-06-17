@@ -61,7 +61,7 @@ Parsing may accept `language.Tag` through `WithInputLocale`. This is a parsing h
 
 - Return `time.Time`, `time.Duration`, `DurationComponents`, and exported `Period` fields.
 - Accept `golang.org/x/text/language.Tag` as an input parsing hint.
-- Let callers use stdlib `time.Format`, go-intl, logs, templates, or any other renderer outside this module.
+- Let callers use stdlib `time.Format`, external formatting packages, logs, templates, or any other renderer outside this module.
 
 ## Forbidden
 
@@ -69,4 +69,4 @@ Parsing may accept `language.Tag` through `WithInputLocale`. This is a parsing h
 - No `Locale`, `HourCycle`, `Calendar`, or `Style` types.
 - No methods like `dt.Format(f)` or `d.Render(locale)`.
 - No locale data files in this repository.
-- No `go-intl`, `go-i18n`, CLDR, message-format, or formatter dependency.
+- No i18n, CLDR, message-format, locale-data, or formatter dependency.

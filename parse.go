@@ -22,6 +22,8 @@ const (
 	KindInstant Kind = "instant"
 	// KindDateTime identifies a zoned local date-time.
 	KindDateTime Kind = "datetime"
+	// KindLocalDateTime identifies a local date-time without zone or offset.
+	KindLocalDateTime Kind = "local_datetime"
 	// KindDate identifies a calendar date.
 	KindDate Kind = "date"
 	// KindTime identifies a clock time.
@@ -87,13 +89,14 @@ type ParseResult struct {
 	Error *TimeError
 
 	// unexported value storage — populated when Status == StatusResolved
-	instant  Instant
-	dateTime DateTime
-	date     Date
-	timeVal  Time
-	duration Duration
-	period   Period
-	interval Interval
+	instant       Instant
+	dateTime      DateTime
+	localDateTime LocalDateTime
+	date          Date
+	timeVal       Time
+	duration      Duration
+	period        Period
+	interval      Interval
 }
 
 // Instant returns the parsed Instant. ok is false unless Status is Resolved and Kind == KindInstant.
@@ -110,6 +113,14 @@ func (r ParseResult) DateTime() (DateTime, bool) {
 		return DateTime{}, false
 	}
 	return r.dateTime, true
+}
+
+// LocalDateTime returns the parsed LocalDateTime. ok is false unless Status is Resolved and Kind == KindLocalDateTime.
+func (r ParseResult) LocalDateTime() (LocalDateTime, bool) {
+	if r.Status != StatusResolved || r.Kind != KindLocalDateTime {
+		return LocalDateTime{}, false
+	}
+	return r.localDateTime, true
 }
 
 // Date returns the parsed Date. ok is false unless Status is Resolved and Kind == KindDate.
@@ -158,8 +169,8 @@ func (r ParseResult) Interval() (Interval, bool) {
 // semantic states (ambiguous / invalid) live on [ParseResult.Status].
 //
 // When you already know which concrete type you expect, prefer the typed
-// helpers ([ParseInstant], [ParseDateTime], [ParseDate], [ParseTime],
-// [ParseDuration], [ParsePeriod], [ParseInterval]) — they return
+// helpers ([ParseInstant], [ParseDateTime], [ParseLocalDateTime], [ParseDate],
+// [ParseTime], [ParseDuration], [ParsePeriod], [ParseInterval]) — they return
 // (T, error) directly and skip the Status / Kind dispatch entirely.
 //
 // Reach for Parse when you need any of:
@@ -210,13 +221,14 @@ type parseResultWire struct {
 }
 
 // Value returns the parsed value as an untyped any so callers can dispatch via
-// a Go type switch. The concrete type is one of [Instant], [DateTime], [Date],
-// [Time], [Duration], [Period], or [Interval] — matching r.Kind. Returns nil
-// when r.Status is not [StatusResolved], so a type switch with a nil case (or
-// default) naturally handles ambiguous / invalid inputs.
+// a Go type switch. The concrete type is one of [Instant], [DateTime],
+// [LocalDateTime], [Date], [Time], [Duration], [Period], or [Interval] —
+// matching r.Kind. Returns nil when r.Status is not [StatusResolved], so a type
+// switch with a nil case (or default) naturally handles ambiguous / invalid inputs.
 //
 //	switch v := result.Value().(type) {
 //	case gotime.DateTime: handle(v)
+//	case gotime.LocalDateTime: handle(v)
 //	case gotime.Date:     handle(v)
 //	case nil:             // ambiguous or invalid — inspect result.Candidates / result.Error
 //	}
@@ -234,6 +246,8 @@ func (r ParseResult) Value() any {
 		return r.instant
 	case KindDateTime:
 		return r.dateTime
+	case KindLocalDateTime:
+		return r.localDateTime
 	case KindDate:
 		return r.date
 	case KindTime:

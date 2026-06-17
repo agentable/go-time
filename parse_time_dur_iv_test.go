@@ -98,11 +98,14 @@ func TestParse_DateTime_FractionalNanoseconds(t *testing.T) {
 			case KindDateTime:
 				dt, _ := r.DateTime()
 				got = dt.Clock().Nanosecond()
+			case KindLocalDateTime:
+				ldt, _ := r.LocalDateTime()
+				got = ldt.Time.Nanosecond()
 			case KindInstant:
 				i, _ := r.Instant()
 				got = i.Std().Nanosecond()
 			default:
-				t.Fatalf("kind = %v, want KindDateTime or KindInstant", r.Kind)
+				t.Fatalf("kind = %v, want KindDateTime, KindLocalDateTime, or KindInstant", r.Kind)
 			}
 			if got != tc.want {
 				t.Fatalf("nanosecond = %d, want %d", got, tc.want)

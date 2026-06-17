@@ -24,49 +24,51 @@ func TestParse_RFC3339_UTC(t *testing.T) {
 	}
 }
 
-func TestParse_DateTime_WithOffset(t *testing.T) {
+func TestParse_DateTime_WithOffsetReturnsInstant(t *testing.T) {
 	r := Parse("2026-03-27T13:00:00+09:00")
 	if r.Status != StatusResolved {
 		t.Fatalf("status = %v, want Resolved", r.Status)
 	}
-	if r.Kind != KindDateTime {
-		t.Fatalf("kind = %v, want KindDateTime", r.Kind)
+	if r.Kind != KindInstant {
+		t.Fatalf("kind = %v, want KindInstant", r.Kind)
 	}
-	dt, _ := r.DateTime()
-	if dt.Zone().ID() == "" {
-		t.Error("zone must not be empty")
+	if !r.HasZone {
+		t.Fatal("HasZone = false, want true")
 	}
-	// The UTC equivalent should be 04:00
-	if dt.Instant().Std().Hour() != 4 {
-		t.Errorf("UTC hour = %d, want 4", dt.Instant().Std().Hour())
+	i, ok := r.Instant()
+	if !ok {
+		t.Fatal("Instant() ok=false, want true")
+	}
+	want := time.Date(2026, time.March, 27, 4, 0, 0, 0, time.UTC)
+	if got := i.Std(); !got.Equal(want) {
+		t.Errorf("Instant() = %v, want %v", got, want)
 	}
 }
 
-func TestParse_DateTime_SubSecond(t *testing.T) {
+func TestParse_DateTime_OffsetSubSecondReturnsInstant(t *testing.T) {
 	r := Parse("2026-03-27T13:00:00.123456+09:00")
 	if r.Status != StatusResolved {
 		t.Fatalf("status = %v, want Resolved", r.Status)
 	}
-	if r.Kind != KindDateTime {
-		t.Fatalf("kind = %v, want KindDateTime", r.Kind)
+	if r.Kind != KindInstant {
+		t.Fatalf("kind = %v, want KindInstant", r.Kind)
 	}
-	dt, _ := r.DateTime()
-	ns := dt.Instant().Std().Nanosecond()
-	if ns != 123456000 {
-		t.Errorf("nanoseconds = %d, want 123456000", ns)
+	i, _ := r.Instant()
+	if got := i.Std().Nanosecond(); got != 123456000 {
+		t.Errorf("nanoseconds = %d, want 123456000", got)
 	}
 }
 
-func TestParse_DateTime_CompactFormat(t *testing.T) {
+func TestParse_DateTime_CompactOffsetReturnsInstant(t *testing.T) {
 	r := Parse("20260327T130000+0900")
 	if r.Status != StatusResolved {
 		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
 	}
-	if r.Kind != KindDateTime {
-		t.Fatalf("kind = %v, want KindDateTime", r.Kind)
+	if r.Kind != KindInstant {
+		t.Fatalf("kind = %v, want KindInstant", r.Kind)
 	}
-	dt, _ := r.DateTime()
-	utc := dt.Instant().Std()
+	i, _ := r.Instant()
+	utc := i.Std()
 	if utc.Hour() != 4 {
 		t.Errorf("UTC hour = %d, want 4", utc.Hour())
 	}
@@ -77,29 +79,35 @@ func TestParse_DateTime_CompactLocal(t *testing.T) {
 	if r.Status != StatusResolved {
 		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
 	}
-	if r.Kind != KindDateTime {
-		t.Fatalf("kind = %v, want KindDateTime", r.Kind)
+	if r.Kind != KindLocalDateTime {
+		t.Fatalf("kind = %v, want KindLocalDateTime", r.Kind)
 	}
 	if r.HasZone {
 		t.Fatal("HasZone = true, want false")
 	}
-	dt, _ := r.DateTime()
-	if dt.Clock().Hour() != 13 {
-		t.Errorf("hour = %d, want 13", dt.Clock().Hour())
+	ldt, _ := r.LocalDateTime()
+	if ldt.Time.Hour() != 13 {
+		t.Errorf("hour = %d, want 13", ldt.Time.Hour())
 	}
 }
 
-func TestParse_DateTime_NoOffset_DefaultsUTC(t *testing.T) {
+func TestParse_DateTime_NoOffset_ReturnsLocalDateTime(t *testing.T) {
 	r := Parse("2026-03-27T13:00:00")
 	if r.Status != StatusResolved {
 		t.Fatalf("status = %v, want Resolved", r.Status)
 	}
-	if r.Kind != KindDateTime {
-		t.Fatalf("kind = %v, want KindDateTime", r.Kind)
+	if r.Kind != KindLocalDateTime {
+		t.Fatalf("kind = %v, want KindLocalDateTime", r.Kind)
 	}
-	dt, _ := r.DateTime()
-	if dt.Zone().ID() != "UTC" {
-		t.Errorf("zone = %q, want UTC", dt.Zone().ID())
+	ldt, ok := r.LocalDateTime()
+	if !ok {
+		t.Fatal("LocalDateTime() ok=false, want true")
+	}
+	if got := ldt.String(); got != "2026-03-27T13:00:00" {
+		t.Errorf("LocalDateTime() = %s, want 2026-03-27T13:00:00", got)
+	}
+	if _, ok := r.DateTime(); ok {
+		t.Fatal("DateTime() ok=true, want false")
 	}
 }
 
@@ -121,7 +129,7 @@ func TestParse_DateTime_NoOffset_WithZoneOption(t *testing.T) {
 	}
 }
 
-func TestParse_DateTime_ExplicitOffsetIgnoresZoneOption(t *testing.T) {
+func TestParse_DateTime_ExplicitOffsetIsInstantAndIgnoresZoneOption(t *testing.T) {
 	t.Parallel()
 
 	r := Parse("2026-03-27T13:00:00+09:00", WithZone(MustLoadZone("America/New_York")))
@@ -137,37 +145,13 @@ func TestParse_DateTime_ExplicitOffsetIgnoresZoneOption(t *testing.T) {
 	if hasWarning(r.Warnings, WarnAssumedZone) {
 		t.Fatalf("warnings = %v, do not want WarnAssumedZone", r.Warnings)
 	}
-	dt, ok := r.DateTime()
+	i, ok := r.Instant()
 	if !ok {
-		t.Fatal("DateTime() ok=false, want true")
-	}
-	if dt.Zone().ID() != "+09:00" {
-		t.Fatalf("zone = %q, want +09:00", dt.Zone().ID())
-	}
-	if dt.Clock().Hour() != 13 {
-		t.Fatalf("clock hour = %d, want 13", dt.Clock().Hour())
+		t.Fatal("Instant() ok=false, want true")
 	}
 	want := time.Date(2026, time.March, 27, 4, 0, 0, 0, time.UTC)
-	if got := dt.Instant().Std(); !got.Equal(want) {
+	if got := i.Std(); !got.Equal(want) {
 		t.Fatalf("instant = %v, want %v", got, want)
-	}
-}
-
-func TestParse_DateTime_NoOffset_WithFixedOffsetZoneOption(t *testing.T) {
-	z, err := ResolveZone("UTC+8")
-	if err != nil {
-		t.Fatalf("ResolveZone(UTC+8): %v", err)
-	}
-	r := Parse("2026-03-27T13:00:00", WithZone(z))
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
-	}
-	dt, _ := r.DateTime()
-	if dt.Zone().ID() != "+08:00" {
-		t.Errorf("zone = %q, want +08:00", dt.Zone().ID())
-	}
-	if dt.Clock().Hour() != 13 {
-		t.Errorf("hour = %d, want 13", dt.Clock().Hour())
 	}
 }
 
@@ -179,8 +163,8 @@ func TestParse_DateTime_TruncatedPrecisionWarning(t *testing.T) {
 	if !hasWarning(r.Warnings, WarnTruncatedPrecision) {
 		t.Fatalf("warnings = %v, want WarnTruncatedPrecision", r.Warnings)
 	}
-	dt, _ := r.DateTime()
-	if got := dt.Instant().Std().Nanosecond(); got != 123456789 {
+	i, _ := r.Instant()
+	if got := i.Std().Nanosecond(); got != 123456789 {
 		t.Errorf("nanosecond = %d, want 123456789", got)
 	}
 }

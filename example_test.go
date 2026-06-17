@@ -44,11 +44,11 @@ func ExampleParse() {
 		fmt.Println("unexpected status:", r.Status)
 		return
 	}
-	dt, _ := r.DateTime()
-	fmt.Println(dt)
+	i, _ := r.Instant()
+	fmt.Println(i)
 
 	// Output:
-	// 2026-03-27T13:00:00+09:00
+	// 2026-03-27T04:00:00Z
 }
 
 // WithInputLocale enables natural-language parsing in the given language.

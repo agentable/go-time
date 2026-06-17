@@ -51,10 +51,40 @@ func TestNewInterval_SameStartEnd(t *testing.T) {
 	}
 }
 
-func TestIntervalOf(t *testing.T) {
-	iv := IntervalOf(ivStart, (9 * Hour))
+func TestNewIntervalStartingAt(t *testing.T) {
+	iv, err := NewIntervalStartingAt(ivStart, 9*Hour)
+	if err != nil {
+		t.Fatalf("NewIntervalStartingAt() error = %v", err)
+	}
 	if iv.Length().InHours() != 9.0 {
 		t.Errorf("Length() = %v hours, want 9.0", iv.Length().InHours())
+	}
+}
+
+func TestNewIntervalStartingAt_NegativeLength(t *testing.T) {
+	_, err := NewIntervalStartingAt(ivStart, -1*Hour)
+	if !errors.Is(err, ErrInvalidDuration) {
+		t.Errorf("NewIntervalStartingAt() error = %v, want ErrInvalidDuration", err)
+	}
+}
+
+func TestNewIntervalEndingAt(t *testing.T) {
+	iv, err := NewIntervalEndingAt(ivEnd, 9*Hour)
+	if err != nil {
+		t.Fatalf("NewIntervalEndingAt() error = %v", err)
+	}
+	if !iv.Start().Equal(ivStart) {
+		t.Errorf("Start() = %v, want %v", iv.Start(), ivStart)
+	}
+	if !iv.End().Equal(ivEnd) {
+		t.Errorf("End() = %v, want %v", iv.End(), ivEnd)
+	}
+}
+
+func TestNewIntervalEndingAt_NegativeLength(t *testing.T) {
+	_, err := NewIntervalEndingAt(ivEnd, -1*Hour)
+	if !errors.Is(err, ErrInvalidDuration) {
+		t.Errorf("NewIntervalEndingAt() error = %v, want ErrInvalidDuration", err)
 	}
 }
 

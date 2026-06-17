@@ -31,7 +31,33 @@ func TestDate_Add_NegatedPeriod(t *testing.T) {
 	}
 }
 
-func TestDate_Sub(t *testing.T) {
+func TestDate_DaysUntil(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		d     Date
+		other Date
+		want  int
+	}{
+		{name: "same date", d: mustDate(2026, time.March, 27), other: mustDate(2026, time.March, 27), want: 0},
+		{name: "end of month to clamp target", d: mustDate(2026, time.January, 31), other: mustDate(2026, time.February, 28), want: 28},
+		{name: "across leap day", d: mustDate(2024, time.February, 28), other: mustDate(2024, time.March, 1), want: 2},
+		{name: "negative", d: mustDate(2026, time.March, 1), other: mustDate(2026, time.January, 31), want: -29},
+		{name: "large civil range", d: mustDate(1, time.January, 1), other: mustDate(9999, time.December, 31), want: 3652058},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tc.d.DaysUntil(tc.other); got != tc.want {
+				t.Errorf("DaysUntil() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDate_PeriodUntil(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -41,17 +67,18 @@ func TestDate_Sub(t *testing.T) {
 		want  Period
 	}{
 		{name: "same date", d: mustDate(2026, time.March, 27), other: mustDate(2026, time.March, 27), want: Period{}},
-		{name: "borrows days", d: mustDate(2026, time.March, 1), other: mustDate(2026, time.January, 31), want: Period{Months: 1, Days: 1}},
-		{name: "negative", d: mustDate(2026, time.January, 31), other: mustDate(2026, time.March, 1), want: Period{Months: -1, Days: -1}},
-		{name: "across years", d: mustDate(2026, time.March, 2), other: mustDate(2024, time.December, 31), want: Period{Years: 1, Months: 2, Days: 2}},
+		{name: "end of month clamp target", d: mustDate(2026, time.January, 31), other: mustDate(2026, time.February, 28), want: Period{Months: 1}},
+		{name: "borrows days", d: mustDate(2026, time.January, 31), other: mustDate(2026, time.March, 1), want: Period{Months: 1, Days: 1}},
+		{name: "negative", d: mustDate(2026, time.March, 1), other: mustDate(2026, time.January, 31), want: Period{Months: -1, Days: -1}},
+		{name: "across years", d: mustDate(2024, time.December, 31), other: mustDate(2026, time.March, 2), want: Period{Years: 1, Months: 2, Days: 2}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := tc.d.Sub(tc.other)
+			got := tc.d.PeriodUntil(tc.other)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("Sub() mismatch (-want +got):\n%s", diff)
+				t.Errorf("PeriodUntil() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

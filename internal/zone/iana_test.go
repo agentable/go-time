@@ -202,45 +202,22 @@ func TestResolveLocation_ExactCaseInsensitiveAndWindows(t *testing.T) {
 	}
 }
 
-func TestResolveLocation_FixedOffsets(t *testing.T) {
+func TestResolveLocation_RejectsFixedOffsets(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name          string
-		input         string
-		wantCanonical string
-		wantOffset    int
-	}{
-		{name: "positive offset with colon", input: "+08:30", wantCanonical: "+08:30", wantOffset: 8*3600 + 30*60},
-		{name: "negative offset without colon", input: "-0530", wantCanonical: "-05:30", wantOffset: -(5*3600 + 30*60)},
-		{name: "utc positive offset", input: "UTC+8", wantCanonical: "+08:00", wantOffset: 8 * 3600},
-		{name: "utc negative offset", input: "UTC-11", wantCanonical: "Etc/GMT+11", wantOffset: -11 * 3600},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, input := range []string{"+08:30", "-0530", "UTC+8"} {
+		input := input
+		t.Run(input, func(t *testing.T) {
 			t.Parallel()
 
-			canonical, loc, ok := ResolveLocation(tt.input)
-			if !ok {
-				t.Fatalf("ResolveLocation(%q) returned ok=false", tt.input)
-			}
-			if canonical != tt.wantCanonical {
-				t.Fatalf("ResolveLocation(%q) canonical = %q, want %q", tt.input, canonical, tt.wantCanonical)
-			}
-			if loc == nil {
-				t.Fatalf("ResolveLocation(%q) returned nil location", tt.input)
-			}
-			_, gotOffset := time.Date(2026, time.January, 1, 0, 0, 0, 0, loc).Zone()
-			if gotOffset != tt.wantOffset {
-				t.Errorf("ResolveLocation(%q) offset = %d, want %d", tt.input, gotOffset, tt.wantOffset)
+			if canonical, loc, ok := ResolveLocation(input); ok || canonical != "" || loc != nil {
+				t.Fatalf("ResolveLocation(%q) = (%q, %v, %v), want no match", input, canonical, loc, ok)
 			}
 		})
 	}
 }
 
-func TestResolveLocation_InvalidFixedOffsets(t *testing.T) {
+func TestResolveLocation_InvalidOffsets(t *testing.T) {
 	t.Parallel()
 
 	for _, input := range []string{"+24:00", "+99:99", "UTC+24"} {

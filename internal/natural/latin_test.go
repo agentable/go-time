@@ -44,8 +44,6 @@ func TestFrenchFutureDuration(t *testing.T) {
 	}{
 		{"dans 2 heures", 2 * int64(time.Hour)},
 		{"dans 1 minute", int64(time.Minute)},
-		{"dans 3 jours", 3 * 24 * int64(time.Hour)},
-		{"dans 1 semaine", 7 * 24 * int64(time.Hour)},
 	}
 	for _, tt := range tests {
 		r, ok := Parse(tt.input, ctx)
@@ -63,13 +61,37 @@ func TestFrenchFutureDuration(t *testing.T) {
 	}
 }
 
+func TestFrenchFuturePeriod(t *testing.T) {
+	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
+	tests := []struct {
+		input    string
+		wantDays int32
+	}{
+		{"dans 3 jours", 3},
+		{"dans 1 semaine", 7},
+	}
+	for _, tt := range tests {
+		r, ok := Parse(tt.input, ctx)
+		if !ok {
+			t.Errorf("Parse(%q) not ok", tt.input)
+			continue
+		}
+		if r.Kind != KindPeriod {
+			t.Errorf("Parse(%q) kind=%v want KindPeriod", tt.input, r.Kind)
+			continue
+		}
+		if r.PeriodDays != tt.wantDays {
+			t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
+		}
+	}
+}
+
 func TestFrenchPastDuration(t *testing.T) {
 	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
 	}{
-		{"il y a 3 jours", -3 * 24 * int64(time.Hour)},
 		{"il y a 1 heure", -int64(time.Hour)},
 	}
 	for _, tt := range tests {
@@ -88,6 +110,20 @@ func TestFrenchPastDuration(t *testing.T) {
 	}
 }
 
+func TestFrenchPastPeriod(t *testing.T) {
+	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
+	r, ok := Parse("il y a 3 jours", ctx)
+	if !ok {
+		t.Fatal("Parse returned ok=false")
+	}
+	if r.Kind != KindPeriod {
+		t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
+	}
+	if r.PeriodDays != -3 {
+		t.Errorf("PeriodDays = %d, want -3", r.PeriodDays)
+	}
+}
+
 // ── German ───────────────────────────────────────────────────────────────────
 
 func TestGermanTier2(t *testing.T) {
@@ -103,7 +139,7 @@ func TestGermanTier2(t *testing.T) {
 		{"gestern", KindDate, -1, 0},
 		{"in 2 Stunden", KindDuration, 0, 2 * int64(time.Hour)},
 		{"in 1 Minute", KindDuration, 0, int64(time.Minute)},
-		{"vor 3 Tagen", KindDuration, 0, -3 * 24 * int64(time.Hour)},
+		{"vor 3 Tagen", KindPeriod, -3, 0},
 		{"vor 1 Stunde", KindDuration, 0, -int64(time.Hour)},
 	}
 	for _, tt := range tests {
@@ -116,13 +152,22 @@ func TestGermanTier2(t *testing.T) {
 			t.Errorf("Parse(%q) kind=%v want %v", tt.input, r.Kind, tt.wantKind)
 			continue
 		}
-		if tt.wantKind == KindDate {
+		switch tt.wantKind {
+		case KindDate:
 			wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
 			if !r.Time.Equal(wantDate) {
 				t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
 			}
-		} else if r.DurNanos != tt.wantNanos {
-			t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+		case KindPeriod:
+			if r.PeriodDays != int32(tt.wantDays) {
+				t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
+			}
+		case KindDuration:
+			if r.DurNanos != tt.wantNanos {
+				t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+			}
+		default:
+			t.Fatalf("unhandled wantKind %v", tt.wantKind)
 		}
 	}
 }
@@ -142,7 +187,7 @@ func TestSpanishTier2(t *testing.T) {
 		{"ayer", KindDate, -1, 0},
 		{"en 2 horas", KindDuration, 0, 2 * int64(time.Hour)},
 		{"en 1 minuto", KindDuration, 0, int64(time.Minute)},
-		{"hace 3 días", KindDuration, 0, -3 * 24 * int64(time.Hour)},
+		{"hace 3 días", KindPeriod, -3, 0},
 		{"hace 1 hora", KindDuration, 0, -int64(time.Hour)},
 	}
 	for _, tt := range tests {
@@ -155,13 +200,22 @@ func TestSpanishTier2(t *testing.T) {
 			t.Errorf("Parse(%q) kind=%v want %v", tt.input, r.Kind, tt.wantKind)
 			continue
 		}
-		if tt.wantKind == KindDate {
+		switch tt.wantKind {
+		case KindDate:
 			wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
 			if !r.Time.Equal(wantDate) {
 				t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
 			}
-		} else if r.DurNanos != tt.wantNanos {
-			t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+		case KindPeriod:
+			if r.PeriodDays != int32(tt.wantDays) {
+				t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
+			}
+		case KindDuration:
+			if r.DurNanos != tt.wantNanos {
+				t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+			}
+		default:
+			t.Fatalf("unhandled wantKind %v", tt.wantKind)
 		}
 	}
 }
@@ -181,7 +235,7 @@ func TestPortugueseTier2(t *testing.T) {
 		{"ontem", KindDate, -1, 0},
 		{"em 2 horas", KindDuration, 0, 2 * int64(time.Hour)},
 		{"em 1 minuto", KindDuration, 0, int64(time.Minute)},
-		{"há 3 dias", KindDuration, 0, -3 * 24 * int64(time.Hour)},
+		{"há 3 dias", KindPeriod, -3, 0},
 		{"ha 1 hora", KindDuration, 0, -int64(time.Hour)},
 	}
 	for _, tt := range tests {
@@ -194,13 +248,22 @@ func TestPortugueseTier2(t *testing.T) {
 			t.Errorf("Parse(%q) kind=%v want %v", tt.input, r.Kind, tt.wantKind)
 			continue
 		}
-		if tt.wantKind == KindDate {
+		switch tt.wantKind {
+		case KindDate:
 			wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
 			if !r.Time.Equal(wantDate) {
 				t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
 			}
-		} else if r.DurNanos != tt.wantNanos {
-			t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+		case KindPeriod:
+			if r.PeriodDays != int32(tt.wantDays) {
+				t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
+			}
+		case KindDuration:
+			if r.DurNanos != tt.wantNanos {
+				t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+			}
+		default:
+			t.Fatalf("unhandled wantKind %v", tt.wantKind)
 		}
 	}
 }
@@ -220,7 +283,7 @@ func TestRussianTier2(t *testing.T) {
 		{"вчера", KindDate, -1, 0},
 		{"через 2 часа", KindDuration, 0, 2 * int64(time.Hour)},
 		{"через 1 минуту", KindDuration, 0, int64(time.Minute)},
-		{"3 дня назад", KindDuration, 0, -3 * 24 * int64(time.Hour)},
+		{"3 дня назад", KindPeriod, -3, 0},
 		{"1 час назад", KindDuration, 0, -int64(time.Hour)},
 	}
 	for _, tt := range tests {
@@ -233,13 +296,22 @@ func TestRussianTier2(t *testing.T) {
 			t.Errorf("Parse(%q) kind=%v want %v", tt.input, r.Kind, tt.wantKind)
 			continue
 		}
-		if tt.wantKind == KindDate {
+		switch tt.wantKind {
+		case KindDate:
 			wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
 			if !r.Time.Equal(wantDate) {
 				t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
 			}
-		} else if r.DurNanos != tt.wantNanos {
-			t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+		case KindPeriod:
+			if r.PeriodDays != int32(tt.wantDays) {
+				t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
+			}
+		case KindDuration:
+			if r.DurNanos != tt.wantNanos {
+				t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+			}
+		default:
+			t.Fatalf("unhandled wantKind %v", tt.wantKind)
 		}
 	}
 }
@@ -301,13 +373,14 @@ func TestRussianUnitPrefixes(t *testing.T) {
 		input      string
 		wantNanos  int64
 		wantMonths int32
+		wantDays   int32
 	}{
 		// недели/недель covers prefix "недел"
-		{input: "через 2 недели", wantNanos: 2 * 7 * 24 * int64(time.Hour)},
-		{input: "1 неделю назад", wantNanos: -7 * 24 * int64(time.Hour)},
+		{input: "через 2 недели", wantDays: 14},
+		{input: "1 неделю назад", wantDays: -7},
 		// дней/дня covers prefix "ден" and "дн"
-		{input: "5 дней назад", wantNanos: -5 * 24 * int64(time.Hour)},
-		{input: "через 1 день", wantNanos: 24 * int64(time.Hour)},
+		{input: "5 дней назад", wantDays: -5},
+		{input: "через 1 день", wantDays: 1},
 		// месяца/месяцев covers prefix "месяц"
 		{input: "через 2 месяца", wantMonths: 2},
 		{input: "3 месяца назад", wantMonths: -3},
@@ -329,6 +402,16 @@ func TestRussianUnitPrefixes(t *testing.T) {
 			}
 			if r.PeriodMonths != tt.wantMonths {
 				t.Errorf("Parse(%q) months=%d want %d", tt.input, r.PeriodMonths, tt.wantMonths)
+			}
+			continue
+		}
+		if tt.wantDays != 0 {
+			if r.Kind != KindPeriod {
+				t.Errorf("Parse(%q) kind=%v want KindPeriod", tt.input, r.Kind)
+				continue
+			}
+			if r.PeriodDays != tt.wantDays {
+				t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
 			}
 			continue
 		}

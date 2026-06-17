@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseInstant_Resolves(t *testing.T) {
-	i, err := ParseInstant("2026-03-27T04:00:00Z")
+	i, err := ParseInstant("2026-03-27T13:00:00+09:00")
 	if err != nil {
 		t.Fatalf("ParseInstant error: %v", err)
 	}
@@ -29,12 +29,42 @@ func TestParseInstant_KindMismatch(t *testing.T) {
 }
 
 func TestParseDateTime_Resolves(t *testing.T) {
-	dt, err := ParseDateTime("2026-03-27T13:00:00+09:00")
+	dt, err := ParseDateTime("2026-03-27T13:00:00", WithZone(MustLoadZone("Asia/Tokyo")))
 	if err != nil {
 		t.Fatalf("ParseDateTime error: %v", err)
 	}
 	if dt.IsZero() {
 		t.Error("ParseDateTime returned zero DateTime")
+	}
+}
+
+func TestParseDateTime_RejectsLocalDateTimeWithoutZone(t *testing.T) {
+	_, err := ParseDateTime("2026-03-27T13:00:00")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrIncompatibleTypes) {
+		t.Errorf("ParseDateTime() error = %v, want ErrIncompatibleTypes", err)
+	}
+}
+
+func TestParseLocalDateTime_Resolves(t *testing.T) {
+	ldt, err := ParseLocalDateTime("2026-03-27T13:00:00.12345")
+	if err != nil {
+		t.Fatalf("ParseLocalDateTime error: %v", err)
+	}
+	if got := ldt.String(); got != "2026-03-27T13:00:00.12345" {
+		t.Errorf("ParseLocalDateTime() = %s, want 2026-03-27T13:00:00.12345", got)
+	}
+}
+
+func TestParseLocalDateTime_RejectsExplicitOffset(t *testing.T) {
+	_, err := ParseLocalDateTime("2026-03-27T13:00:00+09:00")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrIncompatibleTypes) {
+		t.Errorf("ParseLocalDateTime() error = %v, want ErrIncompatibleTypes", err)
 	}
 }
 

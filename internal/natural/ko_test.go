@@ -127,7 +127,6 @@ func TestKo_Duration(t *testing.T) {
 		{"2시간 후", 2 * hour},
 		{"30분 전", -30 * minute},
 		{"1시간 후", hour},
-		{"3일 후", 3 * int64(24*time.Hour)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
@@ -147,15 +146,30 @@ func TestKo_Duration(t *testing.T) {
 
 func TestKo_Period(t *testing.T) {
 	ctx := koCtx("")
-	r, ok := Parse("1년 후", ctx)
-	if !ok {
-		t.Fatal("Parse returned ok=false")
+	tests := []struct {
+		input     string
+		wantYears int32
+		wantDays  int32
+	}{
+		{input: "1년 후", wantYears: 1},
+		{input: "3일 후", wantDays: 3},
 	}
-	if r.Kind != KindPeriod {
-		t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
-	}
-	if r.PeriodYears != 1 {
-		t.Errorf("PeriodYears = %d, want 1", r.PeriodYears)
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, ok := Parse(tt.input, ctx)
+			if !ok {
+				t.Fatal("Parse returned ok=false")
+			}
+			if r.Kind != KindPeriod {
+				t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
+			}
+			if r.PeriodYears != tt.wantYears {
+				t.Errorf("PeriodYears = %d, want %d", r.PeriodYears, tt.wantYears)
+			}
+			if r.PeriodDays != tt.wantDays {
+				t.Errorf("PeriodDays = %d, want %d", r.PeriodDays, tt.wantDays)
+			}
+		})
 	}
 }
 

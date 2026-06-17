@@ -278,6 +278,25 @@ func TestZones_NewSlice(t *testing.T) {
 	}
 }
 
+func TestZoneCatalogVersion(t *testing.T) {
+	if got := ZoneCatalogVersion(); got != "2025b" {
+		t.Errorf("ZoneCatalogVersion() = %q, want 2025b", got)
+	}
+}
+
+func TestZones_TracksCatalogVersion(t *testing.T) {
+	zones := Zones()
+	set := make(map[string]bool, len(zones))
+	for _, z := range zones {
+		set[z] = true
+	}
+	for _, want := range []string{"America/Coyhaique", "America/Ciudad_Juarez", "Pacific/Midway"} {
+		if !set[want] {
+			t.Errorf("Zones() missing %q from %s catalog", want, ZoneCatalogVersion())
+		}
+	}
+}
+
 // TestLoadZone_SpecExample verifies the spec usage pattern: MustLoadZone used with In.
 func TestLoadZone_SpecExample(t *testing.T) {
 	tokyo := MustLoadZone("Asia/Tokyo")
@@ -336,27 +355,12 @@ func TestResolveZone_Windows(t *testing.T) {
 	}
 }
 
-func TestResolveZone_FixedOffset(t *testing.T) {
-	tests := []struct {
-		input      string
-		wantOffset string
-	}{
-		{"+08:00", "+08:00"},
-		{"-05:00", "-05:00"},
-		{"+0800", "+08:00"},
-		{"-0530", "-05:30"},
-		{"UTC+8", "+08:00"},
-		{"UTC-5", "-05:00"},
-	}
+func TestResolveZone_RejectsFixedOffset(t *testing.T) {
+	tests := []string{"+08:00", "-05:00", "+0800", "-0530", "UTC+8", "UTC-5"}
 	for _, tc := range tests {
-		z, err := ResolveZone(tc.input)
-		if err != nil {
-			t.Errorf("ResolveZone(%q): %v", tc.input, err)
-			continue
-		}
-		got := z.OffsetAt(summerInstant)
-		if got != tc.wantOffset {
-			t.Errorf("ResolveZone(%q).OffsetAt = %q, want %q", tc.input, got, tc.wantOffset)
+		_, err := ResolveZone(tc)
+		if !errors.Is(err, ErrInvalidZone) {
+			t.Errorf("ResolveZone(%q) error = %v, want ErrInvalidZone", tc, err)
 		}
 	}
 }

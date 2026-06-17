@@ -24,7 +24,7 @@ func init() {
 	Local = Zone{id: time.Local.String(), loc: time.Local}
 }
 
-// Zone represents an IANA timezone or fixed offset.
+// Zone represents an IANA timezone identity.
 type Zone struct {
 	id  string
 	loc *time.Location
@@ -96,6 +96,14 @@ func (z Zone) IsZero() bool { return z.id == "" && z.loc == nil }
 // The output is deterministic and never depends on time.Now() —
 // time-dependent display data lives in Zone.Snapshot(at).
 func (z Zone) MarshalJSON() ([]byte, error) {
+	if isFixedOffsetID(z.ID()) {
+		return nil, newTimeError(
+			ErrInvalidZone,
+			"fixed UTC offsets are not IANA zones",
+			z.ID(),
+			"represent numeric offsets as instant syntax, not as zone identity",
+		)
+	}
 	return json.Marshal(struct {
 		Kind string `json:"kind"`
 		ID   string `json:"id"`
@@ -103,6 +111,11 @@ func (z Zone) MarshalJSON() ([]byte, error) {
 		Kind: "zone",
 		ID:   z.ID(),
 	})
+}
+
+func isFixedOffsetID(id string) bool {
+	_, err := parseOffsetLocation(id)
+	return err == nil
 }
 
 // UnmarshalJSON decodes z from {"kind":"zone","id":"<IANA id>",...}.
@@ -190,7 +203,7 @@ func (z Zone) Snapshot(i Instant) ZoneSnapshot {
 }
 
 // ResolveZone resolves a timezone identifier by trying exact IANA names,
-// case-insensitive IANA matches, Windows timezone names, and fixed UTC offsets.
+// case-insensitive IANA matches, and Windows timezone names.
 // Legacy IANA aliases such as "US/Eastern" are handled by Go's time.LoadLocation.
 func ResolveZone(id string) (Zone, error) {
 	if id == "" {
@@ -198,7 +211,7 @@ func ResolveZone(id string) (Zone, error) {
 			ErrInvalidZone,
 			"zone id must not be empty",
 			"",
-			"provide a non-empty IANA id, Windows zone name, or fixed offset like UTC+8",
+			"provide a non-empty IANA id or Windows zone name",
 		)
 	}
 	if canonical, loc, ok := ianazone.ResolveLocation(id); ok {
@@ -215,4 +228,10 @@ func ResolveZone(id string) (Zone, error) {
 // Zones returns a sorted copy of all known IANA timezone identifiers.
 func Zones() []string {
 	return slices.Clone(ianazone.Zones)
+}
+
+// ZoneCatalogVersion returns the IANA tzdb version used to generate Zones.
+// It does not describe the transition-rule data used by time.LoadLocation.
+func ZoneCatalogVersion() string {
+	return ianazone.CatalogVersion
 }

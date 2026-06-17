@@ -31,7 +31,7 @@ const (
 type Context struct {
 	// Locale is the BCP 47 locale tag used to select a parser.
 	Locale string
-	// ZoneID is the IANA zone ID or fixed offset used for relative expressions.
+	// ZoneID is the IANA zone ID used for relative expressions.
 	ZoneID string
 	// RelativeTo is the reference time for relative expressions.
 	RelativeTo time.Time
@@ -226,25 +226,38 @@ func applyHourPeriod(hour int, marker, amMark, pmMark string) int {
 }
 
 // relativeUnitResult returns Duration for exact units and Period for calendar units.
+const (
+	minInt32 = -1 << 31
+	maxInt32 = 1<<31 - 1
+)
+
 func relativeUnitResult(unit string, n int64) Result {
 	switch unit {
+	case "day":
+		return checkedPeriodDays(n)
+	case "week":
+		days, ok := checkedMulInt64(n, 7)
+		if !ok {
+			return invalidResult("OVERFLOW", "calendar week count overflows int32 days", "use a smaller week count")
+		}
+		return checkedPeriodDays(days)
 	case "month":
-		if n < -2147483648 || n > 2147483647 {
-			return invalidResult("OVERFLOW", "calendar month count overflows int32", "use a smaller month count")
-		}
-		return periodResult(0, int32(n), 0)
+		return checkedPeriodMonths(n)
 	case "year":
-		if n < -2147483648 || n > 2147483647 {
-			return invalidResult("OVERFLOW", "calendar year count overflows int32", "use a smaller year count")
+		return checkedPeriodYears(n)
+	case "second", "minute", "hour":
+		nanos, ok := checkedMulInt64(canonicalNanos(unit), n)
+		if !ok {
+			return invalidResult("OVERFLOW", "duration overflows nanoseconds", "use a smaller duration")
 		}
-		return periodResult(int32(n), 0, 0)
+		return durationResult(nanos)
 	default:
-		return durationResult(canonicalNanos(unit) * n)
+		return invalidResult("INVALID_DURATION", "unknown relative unit", "use second, minute, hour, day, week, month, or year")
 	}
 }
 
 // canonicalNanos returns the nanosecond value for a canonical exact unit name.
-// Recognized units are "second", "minute", "hour", "day", and "week".
+// Recognized units are "second", "minute", and "hour".
 func canonicalNanos(unit string) int64 {
 	switch unit {
 	case "second":
@@ -253,11 +266,36 @@ func canonicalNanos(unit string) int64 {
 		return int64(time.Minute)
 	case "hour":
 		return int64(time.Hour)
-	case "day":
-		return int64(24 * time.Hour)
-	case "week":
-		return int64(7 * 24 * time.Hour)
 	default:
 		return int64(time.Second)
 	}
+}
+
+func checkedPeriodYears(n int64) Result {
+	if n < minInt32 || n > maxInt32 {
+		return invalidResult("OVERFLOW", "calendar year count overflows int32", "use a smaller year count")
+	}
+	return periodResult(int32(n), 0, 0)
+}
+
+func checkedPeriodMonths(n int64) Result {
+	if n < minInt32 || n > maxInt32 {
+		return invalidResult("OVERFLOW", "calendar month count overflows int32", "use a smaller month count")
+	}
+	return periodResult(0, int32(n), 0)
+}
+
+func checkedPeriodDays(n int64) Result {
+	if n < minInt32 || n > maxInt32 {
+		return invalidResult("OVERFLOW", "calendar day count overflows int32", "use a smaller day count")
+	}
+	return periodResult(0, 0, int32(n))
+}
+
+func checkedMulInt64(a, b int64) (int64, bool) {
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	result := a * b
+	return result, result/b == a
 }

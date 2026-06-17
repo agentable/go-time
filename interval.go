@@ -33,10 +33,30 @@ func NewInterval(start, end Instant) (Interval, error) {
 	return Interval{start: start, end: end}, nil
 }
 
-// IntervalOf creates an Interval from a start Instant and a non-negative Duration.
-// Negative durations are treated as their absolute value.
-func IntervalOf(start Instant, d Duration) Interval {
-	return Interval{start: start, end: start.Add(d.Abs())}
+// NewIntervalStartingAt creates an Interval from a start Instant and non-negative length.
+func NewIntervalStartingAt(start Instant, length Duration) (Interval, error) {
+	if length.IsNegative() {
+		return Interval{}, newTimeError(
+			ErrInvalidDuration,
+			"interval length must not be negative",
+			length.String(),
+			"provide a non-negative length or use NewIntervalEndingAt for an interval ending at a known instant",
+		)
+	}
+	return NewInterval(start, start.Add(length))
+}
+
+// NewIntervalEndingAt creates an Interval from an end Instant and non-negative length.
+func NewIntervalEndingAt(end Instant, length Duration) (Interval, error) {
+	if length.IsNegative() {
+		return Interval{}, newTimeError(
+			ErrInvalidDuration,
+			"interval length must not be negative",
+			length.String(),
+			"provide a non-negative length or use NewIntervalStartingAt for an interval starting at a known instant",
+		)
+	}
+	return NewInterval(end.Add(-length), end)
 }
 
 // Start returns the start instant (inclusive).

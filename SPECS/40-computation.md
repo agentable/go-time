@@ -29,7 +29,7 @@ Move backward by passing a negative duration:
 dt.Add(-30 * gotime.Minute)
 ```
 
-There is no `Sub(Duration)` form. `Sub` means difference between two values.
+There is no `Sub(Duration)` form. `Sub` means exact difference between two timeline values.
 
 ## Calendar Arithmetic
 
@@ -61,11 +61,12 @@ leap.Add(gotime.Years(1))   // 2025-02-28
 ```go
 func (i Instant) Sub(other Instant) Duration
 func (dt DateTime) Sub(other DateTime) Duration
-func (d Date) Sub(other Date) Period
+func (d Date) DaysUntil(other Date) int
+func (d Date) PeriodUntil(other Date) Period
 func (p Period) Sub(other Period) Period
 ```
 
-`Sub` is the one verb for difference. There is no parallel `Diff`.
+Date differences are named by policy: `DaysUntil` returns a signed calendar-day count, while `PeriodUntil` returns a signed greedy years/months/days period. Between January 31 and February 28, `DaysUntil` is 28 and `PeriodUntil` is `Period{Months: 1}`.
 
 ## Comparison
 
@@ -97,8 +98,11 @@ Intervals are half-open: `[start, end)`.
 
 ```go
 iv, err := gotime.NewInterval(start, end)
-iv := gotime.IntervalOf(start, 9 * gotime.Hour)
+iv, err := gotime.NewIntervalStartingAt(start, 9 * gotime.Hour)
+iv, err := gotime.NewIntervalEndingAt(end, 9 * gotime.Hour)
 ```
+
+Length-based interval constructors reject negative durations with `ErrInvalidDuration`.
 
 Current interval operations:
 

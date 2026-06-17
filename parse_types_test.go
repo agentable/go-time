@@ -32,6 +32,9 @@ func TestParseResult_Accessors_ZeroValue(t *testing.T) {
 	if _, ok := r.DateTime(); ok {
 		t.Error("zero ParseResult.DateTime() should report ok=false")
 	}
+	if _, ok := r.LocalDateTime(); ok {
+		t.Error("zero ParseResult.LocalDateTime() should report ok=false")
+	}
 	if _, ok := r.Date(); ok {
 		t.Error("zero ParseResult.Date() should report ok=false")
 	}
@@ -61,6 +64,7 @@ func TestParseResult_Value_ByKind(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
+		opts  []Option
 		want  any
 	}{
 		{
@@ -70,8 +74,14 @@ func TestParseResult_Value_ByKind(t *testing.T) {
 		},
 		{
 			name:  "datetime",
-			input: "2026-03-27T13:00:00+09:00",
+			input: "2026-03-27T13:00:00",
+			opts:  []Option{WithZone(MustLoadZone("Asia/Tokyo"))},
 			want:  DateTime{},
+		},
+		{
+			name:  "local datetime",
+			input: "2026-03-27T13:00:00",
+			want:  LocalDateTime{},
 		},
 		{
 			name:  "date",
@@ -103,7 +113,7 @@ func TestParseResult_Value_ByKind(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := Parse(tc.input)
+			r := Parse(tc.input, tc.opts...)
 			if r.Status != StatusResolved {
 				t.Fatalf("Parse(%q).Status = %q, want resolved", tc.input, r.Status)
 			}
@@ -150,6 +160,8 @@ func typeName(v any) string {
 		return "Instant"
 	case DateTime:
 		return "DateTime"
+	case LocalDateTime:
+		return "LocalDateTime"
 	case Date:
 		return "Date"
 	case Time:

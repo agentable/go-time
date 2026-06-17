@@ -46,6 +46,12 @@ func naturalResultToParseResult(input string, r *natural.Result, cfg *config) Pa
 	case natural.KindDateTime:
 		z := configuredZoneIDOrUTC(r.ZoneID)
 		loc := z.Location()
+		if cfg.zone.IsZero() {
+			t := r.Time.In(loc)
+			pr := resolvedResult(input, KindLocalDateTime, cfg)
+			pr.localDateTime = NewLocalDateTime(DateFromTime(t), TimeFromTime(t))
+			return pr
+		}
 		dt := DateTimeFromTime(r.Time.In(loc), z)
 		pr := resolvedResult(input, KindDateTime, cfg)
 		pr.dateTime = dt

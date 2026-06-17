@@ -14,13 +14,14 @@ func LoadZone(id string) (Zone, error)
 func MustLoadZone(id string) Zone
 func ResolveZone(id string) (Zone, error)
 func Zones() []string
+func ZoneCatalogVersion() string
 ```
 
 - `LoadZone` is strict IANA lookup through `time.LoadLocation`.
 - `MustLoadZone` is only for source-code constants in `var` or `init` paths.
-- `ResolveZone` accepts real-world input: exact IANA, case-insensitive IANA, Windows names, fixed UTC offsets, and legacy aliases handled by Go's `time.LoadLocation`.
+- `ResolveZone` accepts real-world zone names: exact IANA, case-insensitive IANA, Windows names, and legacy aliases handled by Go's `time.LoadLocation`.
 - `ResolveZone` does not resolve timezone abbreviations. Abbreviations are point-in-time display metadata available through `Snapshot` and `Abbreviation`.
-- `Zones` returns known IANA identifiers.
+- `Zones` returns the generated IANA identifier catalog. `ZoneCatalogVersion` returns the IANA tzdb version used to generate that catalog; it does not describe the transition-rule data used by `time.LoadLocation`.
 - `UTC` and `Local` mirror stdlib style; `Local` is captured from `time.Local` at init.
 
 Use `LoadZone` for stable configuration and persisted canonical IDs. Use `ResolveZone` for CLI args, forms, migration input, and compatibility paths.
@@ -43,7 +44,9 @@ zone.IsZero()
 {"kind":"zone","id":"Asia/Tokyo"}
 ```
 
-It never emits current offset, DST state, abbreviation, or any field that would require `time.Now()`.
+It never emits current offset, DST state, abbreviation, or any field that would require `time.Now()`. Fixed UTC offsets are not zone identities; `ResolveZone("+08:00")` and `ResolveZone("UTC+8")` return `ErrInvalidZone`, and marshaling an internally malformed fixed-offset `Zone` returns `ErrInvalidZone` instead of emitting `{"kind":"zone","id":"+08:00"}`.
+
+RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax for an absolute moment, not a persisted zone identity.
 
 ## Snapshot
 
@@ -79,10 +82,16 @@ nyDT := tokyoDT.In(ny)
 
 ## DST
 
-Parsing a local datetime with `WithZone`, and constructing a `DateTime` with `NewDateTime`, detects DST gaps and overlaps.
+`LocalDateTime.Resolve(z)` is the primitive DST projection API. It resolves a date plus clock time into a zone without hiding gaps or overlaps.
 
-- Spring-forward nonexistent local times return `StatusInvalid` and `CodeNonexistentTime`.
-- Fall-back duplicate local times return `StatusAmbiguous` with two resolved candidates.
+- Normal local times return `LocalResolved` with exactly one `DateTime` candidate.
+- Spring-forward nonexistent local times return `LocalNonexistent` with no candidates. Calling `Only()` returns `ErrNonexistentTime`.
+- Fall-back duplicate local times return `LocalAmbiguous` with chronological `DateTime` candidates. Calling `Only()` returns `ErrDuplicateTime`.
+
+`NewDateTime(d, t, z)` is the convenience path for callers that require exactly one candidate. Parsing a local datetime with `WithZone` uses the same resolution rule:
+
+- Spring-forward nonexistent parse results return `StatusInvalid` and `CodeNonexistentTime`.
+- Fall-back duplicate parse results return `StatusAmbiguous` with resolved candidates.
 
 The foundation library reports ambiguity; product code decides how to resolve it.
 

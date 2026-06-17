@@ -130,7 +130,6 @@ func TestJa_Duration(t *testing.T) {
 		{"2時間後", 2 * hour},
 		{"30分前", -30 * minute},
 		{"1時間後", hour},
-		{"3日後", 3 * int64(24*time.Hour)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
@@ -150,15 +149,30 @@ func TestJa_Duration(t *testing.T) {
 
 func TestJa_Period(t *testing.T) {
 	ctx := jaCtx("")
-	r, ok := Parse("1年後", ctx)
-	if !ok {
-		t.Fatal("Parse returned ok=false")
+	tests := []struct {
+		input     string
+		wantYears int32
+		wantDays  int32
+	}{
+		{input: "1年後", wantYears: 1},
+		{input: "3日後", wantDays: 3},
 	}
-	if r.Kind != KindPeriod {
-		t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
-	}
-	if r.PeriodYears != 1 {
-		t.Errorf("PeriodYears = %d, want 1", r.PeriodYears)
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, ok := Parse(tt.input, ctx)
+			if !ok {
+				t.Fatal("Parse returned ok=false")
+			}
+			if r.Kind != KindPeriod {
+				t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
+			}
+			if r.PeriodYears != tt.wantYears {
+				t.Errorf("PeriodYears = %d, want %d", r.PeriodYears, tt.wantYears)
+			}
+			if r.PeriodDays != tt.wantDays {
+				t.Errorf("PeriodDays = %d, want %d", r.PeriodDays, tt.wantDays)
+			}
+		})
 	}
 }
 

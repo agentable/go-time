@@ -7,14 +7,14 @@ A Go time semantics library for parsing, computing, and serializing precise time
 
 ## Features
 
-- **Typed value objects**: Work with `Instant`, `DateTime`, `Date`, `Time`, `Duration`, `Period`, `Interval`, `Zone`
-- **Two parse entry points**: `Parse` returns a tagged-sum `ParseResult`; seven `ParseInstant` / `ParseDateTime` / … helpers return a typed `(value, error)` pair
+- **Typed value objects**: Work with `Instant`, `DateTime`, `LocalDateTime`, `Date`, `Time`, `Duration`, `Period`, `Interval`, `Zone`
+- **Two parse entry points**: `Parse` returns a tagged-sum `ParseResult`; typed `ParseInstant` / `ParseDateTime` / `ParseLocalDateTime` / … helpers return a typed `(value, error)` pair
 - **One concept per type**: `Duration` is exact nanoseconds, `Period` is calendar Y/M/D — `P1Y` parses as Period, `PT1H` as Duration, mixed inputs are rejected
 - **Stdlib bridges**: `.Std()`, `.Clock()`, `Duration.Decompose()` send values back to `time.Time` / `time.Duration` / structured clock slots so any formatter can consume them
-- **Timezone-aware semantics**: Strict IANA zones, fuzzy zone resolution, DST detection, floating-time detection (`ParseResult.HasZone`)
+- **Timezone-aware semantics**: Strict IANA zones, fuzzy zone resolution, explicit local-time resolution, floating-time detection (`ParseResult.HasZone`)
 - **Calendar-safe computation**: `Duration.Add` is exact; `AddPeriod` is calendar-aware with end-of-month clamping and DST-stable wall-clock preservation
 - **Stable JSON schemas**: Each value object has a single-source-of-truth wire format that never depends on `time.Now()` or runtime locale
-- **Zero i18n footprint**: This package ships no locale data, no formatter types — display is the caller's choice (stdlib `time.Format`, `github.com/agentable/go-intl`, logging libraries, …)
+- **Zero i18n footprint**: This package ships no locale data, no formatter types — display is the caller's choice (stdlib `time.Format`, logging libraries, templates, or app-owned renderers)
 
 ## Installation
 
@@ -27,7 +27,7 @@ Requires Go 1.26.3 or newer.
 ## Quick Start
 
 Most code knows what type it expects — reach for the typed helpers
-(`ParseDateTime`, `ParseInstant`, `ParseDate`, …). They return `(value, error)`
+(`ParseDateTime`, `ParseLocalDateTime`, `ParseInstant`, `ParseDate`, …). They return `(value, error)`
 and hide the tagged-sum dispatch:
 
 ```go
@@ -41,7 +41,9 @@ import (
 )
 
 func main() {
-	dt, err := gotime.ParseDateTime("2026-03-27T13:00:00+09:00")
+	dt, err := gotime.ParseDateTime("2026-03-27T13:00:00",
+		gotime.WithZone(gotime.MustLoadZone("Asia/Tokyo")),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,7 +89,8 @@ translate `StatusAmbiguous` / `StatusInvalid` / `Kind` mismatch into a `*TimeErr
 
 ```go
 i,  err := gotime.ParseInstant("2026-03-27T04:00:00Z")
-dt, err := gotime.ParseDateTime("2026-03-27T13:00:00+09:00")
+dt, err := gotime.ParseDateTime("2026-03-27T13:00:00", gotime.WithZone(gotime.MustLoadZone("Asia/Tokyo")))
+ldt, err := gotime.ParseLocalDateTime("2026-03-27T13:00:00")
 d,  err := gotime.ParseDate("2026-03-27")
 t,  err := gotime.ParseTime("15:00")
 du, err := gotime.ParseDuration("PT1H30M")
@@ -110,6 +113,8 @@ r := gotime.Parse(input, opts...)
 switch v := r.Value().(type) {
 case gotime.DateTime:
 	fmt.Println(v)
+case gotime.LocalDateTime:
+	fmt.Println(v)
 case gotime.Date:
 	fmt.Println(v)
 case gotime.Duration:
@@ -127,7 +132,7 @@ case nil:
 }
 ```
 
-The comma-ok accessors (`r.DateTime()`, `r.Date()`, …) are still available for
+The comma-ok accessors (`r.DateTime()`, `r.LocalDateTime()`, `r.Date()`, …) are still available for
 callers that use `Parse` for metadata but already know the target `Kind`
 statically.
 
@@ -135,9 +140,8 @@ statically.
 
 | Input kind | Examples | Routes to |
 |------------|----------|-----------|
-| ISO datetime | `2026-03-27T13:00:00+09:00`, `20260327T130000+0900` | `KindDateTime` |
-| RFC 3339 UTC | `2026-03-27T04:00:00Z` | `KindInstant` |
-| Local datetime | `2026-03-27T13:00:00`, `20260327T130000` | `KindDateTime`, `HasZone=false` |
+| RFC 3339 datetime with offset | `2026-03-27T13:00:00+09:00`, `20260327T130000+0900`, `2026-03-27T04:00:00Z` | `KindInstant` |
+| Local datetime | `2026-03-27T13:00:00`, `20260327T130000` | `KindLocalDateTime`; `KindDateTime` only with `WithZone` |
 | Date | `2026-03-27`, `2026-W13-5`, `2026-086`, `04/05/2026` (locale-disambiguated) | `KindDate` |
 | Time | `15:00`, `08:30:45`, `3:30 PM` | `KindTime` |
 | ISO duration (clock only) | `PT1H30M`, `PT0S` | `KindDuration` |
@@ -153,14 +157,14 @@ statically.
 | Option | Purpose |
 |--------|---------|
 | `WithInputLocale(tag language.Tag)` | Language hint for natural-language input. Also disambiguates slash-date order (e.g. `04/05/2026` is May 4 in `en-GB`, April 5 in `en-US`). |
-| `WithZone(zone)` | Supply the typed zone applied when input has no explicit offset |
+| `WithZone(zone)` | Resolve floating datetimes into `DateTime`; without it they remain `LocalDateTime` |
 | `WithReference(instant)` | Anchor relative expressions such as `tomorrow` or `in 2 hours` |
 
 Ambiguity is surfaced through `ParseResult.Candidates`, not pre-selected by an option — callers decide. There is no `WithStrategy` knob.
 
 `WithInputLocale` takes [`golang.org/x/text/language.Tag`](https://pkg.go.dev/golang.org/x/text/language#Tag) — the de facto Go BCP-47 type. Only the language subtag is used; Unicode `-u-` extensions (hour cycle, calendar) belong to the rendering layer, not the parser.
 
-`ParseResult.HasZone` reports whether the input itself included an explicit zone or offset.
+`ParseResult.HasZone` reports whether the input itself included an explicit zone or offset. Floating datetime input without `WithZone` stays as `KindLocalDateTime`; adding `WithZone` resolves it into a zoned `DateTime`.
 
 When the zone identifier comes from user input, resolve it at the call site:
 
@@ -183,44 +187,46 @@ fmt.Println(dt.Std().Format("2006-01-02 15:04 MST"))
 // 2026-03-27 13:00 JST
 ```
 
-### A localized formatter (e.g. `go-intl`)
+### External renderers
 
 ```go
-import (
-    "github.com/agentable/go-intl/datetimeformat"
-    "github.com/agentable/go-intl/locale"
-)
+type DateTimeRenderer interface {
+	Format(time.Time) string
+}
 
-f, _ := datetimeformat.New(locale.MustParse("zh-Hans"), datetimeformat.Options{
-    DateStyle: datetimeformat.LongDateTimeStyle,
-    TimeStyle: datetimeformat.ShortDateTimeStyle,
-    TimeZone:  "Asia/Tokyo",
-})
-fmt.Println(f.Format(dt.Std()))
+func render(dt gotime.DateTime, renderer DateTimeRenderer) string {
+	return renderer.Format(dt.Std())
+}
 ```
 
 ### Duration → clock slots, Period → exported fields
 
 ```go
-import "github.com/agentable/go-intl/durationformat"
-
 // Duration: modular arithmetic is non-trivial, so a helper does it for you.
-c := d.Decompose() // DurationComponents{Hours, Minutes, Seconds, …}
+c := d.Decompose() // DurationComponents{Hours, Minutes, Seconds, ...}
 
-f, _ := durationformat.New(loc, durationformat.Options{Style: durationformat.LongStyle})
-s, _ := f.Format(durationformat.Duration{
-    Hours:        c.Hours,
-    Minutes:      c.Minutes,
-    Seconds:      c.Seconds,
-    Milliseconds: c.Milliseconds,
-})
+clockSlots := struct {
+	Hours        int64
+	Minutes      int64
+	Seconds      int64
+	Milliseconds int64
+}{
+	Hours:        c.Hours,
+	Minutes:      c.Minutes,
+	Seconds:      c.Seconds,
+	Milliseconds: c.Milliseconds,
+}
 
 // Period: fields are already exported — no Decompose, no parallel struct.
-s2, _ := f.Format(durationformat.Duration{
-    Years:  int64(p.Years),
-    Months: int64(p.Months),
-    Days:   int64(p.Days),
-})
+calendarSlots := struct {
+	Years  int32
+	Months int32
+	Days   int32
+}{
+	Years:  p.Years,
+	Months: p.Months,
+	Days:   p.Days,
+}
 ```
 
 ### Bridge methods
@@ -245,12 +251,13 @@ See [`SPECS/30-formatting.md`](SPECS/30-formatting.md) for the full contract.
 |------|---------|
 | `Instant` | Absolute UTC moment |
 | `DateTime` | Zoned local date and time |
+| `LocalDateTime` | Date plus clock time before zone resolution |
 | `Date` | Calendar date without time |
 | `Time` | Clock time without date |
 | `Duration` | Exact elapsed nanoseconds (`type Duration time.Duration`) |
 | `Period` | Calendar offset of `Years`/`Months`/`Days` |
 | `Interval` | Half-open range `[start, end)` |
-| `Zone` | IANA timezone or resolved fixed offset |
+| `Zone` | IANA timezone identity for persisted zones |
 | `DurationComponents` | Clock-slot decomposition of `Duration` (Hours…Nanoseconds) — bridge to external duration formatters |
 
 ## Duration vs Period
@@ -278,7 +285,7 @@ There is intentionally no `gotime.Day` constant. `24 * gotime.Hour` is exact 24 
 - `dt.AddPeriod(p Period)` — calendar arithmetic with end-of-month clamping; pass `p.Negate()` to move back
 - `dt.Sub(other DateTime) Duration` — difference between two DateTimes (mirrors `time.Time.Sub`)
 
-`Date.Add(p Period) Date` and `Date.Sub(other Date) Period` follow the same convention. `Instant.Add(d Duration) Instant` and `Instant.Sub(other Instant) Duration` round out the trio. The compiler enforces the distinction between Duration and Period — `dt.Add(gotime.Months(1))` is a compile error.
+`Date.Add(p Period) Date` handles calendar arithmetic. For differences, use the name that matches your intent: `d.DaysUntil(other)` for signed calendar-day counts, or `d.PeriodUntil(other)` for a greedy years/months/days period. `Instant.Add(d Duration) Instant` and `Instant.Sub(other Instant) Duration` round out the exact-time trio. The compiler enforces the distinction between Duration and Period — `dt.Add(gotime.Months(1))` is a compile error.
 
 ## Common Operations
 
@@ -304,6 +311,12 @@ dt, err := gotime.NewDateTime(date, clock, zone)
 if err != nil {
 	fmt.Println("datetime error:", err)
 	return
+}
+
+local := gotime.NewLocalDateTime(date, clock)
+resolution := local.Resolve(zone)
+if resolution.Status == gotime.LocalAmbiguous {
+	fmt.Println("choose between", resolution.Candidates)
 }
 
 exact := dt.Add(24 * gotime.Hour)      // exact 24-hour span (Duration)
@@ -338,7 +351,6 @@ Use `ResolveZone` only when you accept messy real-world input and need to normal
 | `MustLoadZone("Asia/Tokyo")` | Constant zones in `var` blocks |
 | `ResolveZone("asia/tokyo")` | Forgiving case normalization |
 | `ResolveZone("Eastern Standard Time")` | Windows zone names |
-| `ResolveZone("UTC+8")` | Fixed-offset input |
 | `Zone{}` | Zero value, treated as UTC for stdlib interop |
 
 ```go
@@ -347,10 +359,20 @@ if err != nil {
 	return err
 }
 fmt.Println(tokyo.ID(), tokyo.OffsetAt(gotime.Now()))
-fmt.Println(len(gotime.Zones()))
+fmt.Println(len(gotime.Zones()), gotime.ZoneCatalogVersion())
 ```
 
+`ZoneCatalogVersion()` identifies the tzdb version used to generate the `Zones()` catalog. It is catalog provenance, not a claim about the transition-rule data used by the Go runtime.
+
 For interval rendering, project explicitly: `start, end := iv.StdRange()` returns two `time.Time` values you can pass to any range-formatter.
+
+When a date plus clock time may cross a DST transition, resolve it explicitly:
+
+```go
+local := gotime.NewLocalDateTime(date, clock)
+resolution := local.Resolve(zone)
+dt, err := resolution.Only() // ErrNonexistentTime or ErrDuplicateTime if not unique
+```
 
 ## Errors
 
@@ -386,6 +408,7 @@ Representative shapes:
 
 ```json
 {"kind":"datetime","value":"2026-03-27T09:00:00-04:00","zone":"America/New_York","calendar":"iso8601"}
+{"kind":"local_datetime","value":"2026-03-27T09:00:00","calendar":"iso8601"}
 {"kind":"duration","iso":"PT1H30M"}
 {"kind":"period","iso":"P1Y3M7D"}
 {"kind":"zone","id":"America/New_York"}

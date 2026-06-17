@@ -1,6 +1,6 @@
 # go-time
 
-Time semantics foundation library for Agent OS. Converts ambiguous human time expressions into precise, computable value objects. Hands off to stdlib `time.Time` / `time.Duration` for any formatting / display concern. Powers `agenttime` CLI and upstream agent systems (agentcalendar, agentreminder, agenttask).
+Time semantics foundation library for Agent OS. Converts ambiguous human time expressions into precise, computable value objects. Hands off to stdlib `time.Time` / `time.Duration` for any formatting / display concern. Powers CLIs, services, and upstream agent systems.
 
 **Module path**: `github.com/agentable/go-time`
 
@@ -44,6 +44,7 @@ github.com/agentable/go-time/
 ├── options.go          # Parse options: WithInputLocale(language.Tag), WithZone, WithReference
 ├── instant.go          # Instant (absolute UTC; UnixSeconds/Millis/Nanos short forms; Add(Duration) only)
 ├── datetime.go         # DateTime (zoned local time; Add(Duration)+AddPeriod(Period); .Clock()→Time)
+├── local_datetime.go   # LocalDateTime (date + clock before zone resolution; Resolve(Zone)→candidates)
 ├── date.go             # Date (calendar date; Add(Period) only; .Std(z)→time.Time)
 ├── time.go             # Time (clock time; .Std(on, z)→time.Time)
 ├── duration.go         # Duration = type Duration time.Duration (no Day constant); .Decompose()→DurationComponents
@@ -52,7 +53,7 @@ github.com/agentable/go-time/
 ├── zone.go             # Zone (IANA only in JSON; Snapshot(at) for offset/dst/abbr)
 ├── duration_components.go # DurationComponents struct — Hours…Nanoseconds slots for external formatters
 ├── parse.go            # Layer 2: ISO 8601 / RFC 3339 parsing + ParseResult tagged-sum
-├── parse_typed.go      # Layer 2: ParseInstant/ParseDateTime/ParseDate/.../ParseInterval (7 typed parsers)
+├── parse_typed.go      # Layer 2: ParseInstant/ParseDateTime/ParseLocalDateTime/.../ParseInterval (8 typed parsers)
 ├── parse_impl.go       # Layer 2/3: parse dispatch — P{date}→Period, PT{time}→Duration, mixed→Invalid
 ├── parse_slash.go      # Layer 2: slash-date routing — locale-first, infer when unambiguous, else Ambiguous
 ├── errors.go           # ErrorCode + *TimeError + sentinel Err* instances
@@ -84,11 +85,11 @@ Before designing or modifying any code, **read the relevant `SPECS/` documents f
 
 ### Implementation Phase — Find 2 References First
 
-Before writing implementation code, **find at least 2 relevant reference projects in `.references/`** to study their patterns, API design, and conventions. Browse the reference directories, read their source code, and adapt proven patterns rather than inventing from scratch.
+Before writing implementation code, **find at least 2 relevant exemplars in `.references/`** to study their patterns, API design, and conventions. Browse the reference directories, read their source code, and adapt proven patterns rather than inventing from scratch.
 
 **Workflow**:
 
-1. Browse `.references/` (see References Index below)
+1. Browse `.references/` (see References Guidance below)
 2. Find 2+ projects relevant to your task
 3. Study their implementation patterns
 4. Adapt patterns to this project's conventions
@@ -102,28 +103,28 @@ Specification documents in [`SPECS/`](SPECS/) — system contracts, data formats
 |------|-------|
 | [`00-overview.md`](SPECS/00-overview.md) | Project positioning, design principles, architecture layers, **Permanent Non-Goals** |
 | [`10-domain-model.md`](SPECS/10-domain-model.md) | Core value objects (Duration/Period split), JSON schemas, **Wire Format Invariance** |
-| [`20-parsing.md`](SPECS/20-parsing.md) | `Parse` + 7 typed `Parse*` functions, tagged-sum result, P/PT dispatch, ambiguity via Candidates |
+| [`20-parsing.md`](SPECS/20-parsing.md) | `Parse` + 8 typed `Parse*` functions, tagged-sum result, P/PT dispatch, ambiguity via Candidates |
 | [`30-formatting.md`](SPECS/30-formatting.md) | Why this library doesn't format — stdlib bridge contract (`.Std()` / `.Decompose()`) |
 | [`40-computation.md`](SPECS/40-computation.md) | `Add(Duration)` vs `AddPeriod(Period)`, EOM clamp, half-open intervals, iter.Seq |
 | [`50-timezone.md`](SPECS/50-timezone.md) | IANA zones, deterministic JSON, DST nonexistent/duplicate handling |
 | [`60-errors.md`](SPECS/60-errors.md) | Sentinel `Err*` + typed `*TimeError`, `ErrorCode` JSON metadata |
 | [`70-api-surface.md`](SPECS/70-api-surface.md) | Public API surface, factory naming, short `Unix*` forms, `var UTC`/`Local`, single `MustLoadZone` |
-| [`80-integration.md`](SPECS/80-integration.md) | Integration with agenttime CLI and upstream agent systems |
+| [`80-integration.md`](SPECS/80-integration.md) | Integration boundaries for CLIs, services, and upstream systems |
 
 When public behavior changes, update the relevant spec in the same work cycle.
 If code and a spec disagree, treat the spec as stale and bring it back into sync immediately.
 
-## References Index
+## References Guidance
 
-Reference projects in [`.references/`](.references/) — 5 high-signal time libraries across languages:
+Reference projects live in [`.references/`](.references/). Treat them as private study material, not public rationale. Pick relevant examples by capability:
 
-| Reference | Language | Key Patterns |
-|-----------|----------|-------------|
-| `date-fns` | JavaScript | Functional API, tree-shaking, locale modules |
-| `dayjs` | JavaScript | Immutable, plugin architecture, lightweight |
-| `moment-timezone` | JavaScript | Timezone data bundling, IANA zone handling |
-| `pendulum` | Python | Rich datetime with timezone, Duration/Period types |
-| `time-rs` | Rust | Type-safe time handling, compile-time format strings |
+- Functional API shape and tree-shakable organization
+- Immutable value-object design
+- Timezone data bundling and IANA rule handling
+- Rich datetime semantics with duration/period separation
+- Type-safe time handling and compile-time-friendly contracts
+
+Do not cite exemplar names in SPECS, README, package docs, or public rationale.
 
 ## Design Philosophy
 
@@ -167,7 +168,7 @@ Operational corollaries:
 - `Period` month/year add applies end-of-month clamping (Jan 31 + Months(1) = Feb 28/29). Never overflow.
 - Intervals are half-open `[start, end)` — `Contains` excludes end, `Overlaps` excludes touching endpoints, use `Adjacent` for boundary detection
 - `Interval` carries no zone field — projection zone belongs to the rendering layer (which is outside this module)
-- Use `ResolveZone` for fuzzy timezone resolution (Windows names, case-insensitive, fixed offsets) — use `LoadZone` for strict IANA-only
+- Use `ResolveZone` for fuzzy timezone resolution (Windows names and case-insensitive IANA names) — use `LoadZone` for strict IANA-only. Fixed offsets are not zones; RFC3339 numeric offsets parse to `Instant`.
 - `.Std()` returns stdlib types (`time.Time` / `time.Duration`); `.Clock()` returns a `Time`; `Duration.Decompose()` returns `DurationComponents` (clock slots only). Naming is load-bearing: stdlib vs. clock vs. structured slot. `Period` has no `Decompose` — read `p.Years` / `p.Months` / `p.Days` directly (exported fields), no parallel struct.
 - `Zone.Location()` is total — the zero `Zone` falls back to `UTC`; do not reintroduce parallel fallback helpers
 - `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` — never call `time.Now()` during marshal. Time-dependent display uses `Zone.Snapshot(at Instant)`.
@@ -186,7 +187,7 @@ Operational corollaries:
 
 **Top directive — the 10-year contract:**
 
-- **go-time MUST NEVER import any i18n / CLDR / message-format / locale-data / formatting package.** Not `go-intl`, not `go-i18n`, not `messageformat-go`, not any successor. The only language-related dependency permitted is `golang.org/x/text/language` (BCP-47 tag type, no data).
+- **go-time MUST NEVER import any i18n / CLDR / message-format / locale-data / formatting package.** No specific implementation or successor is exempt. The only language-related dependency permitted is `golang.org/x/text/language` (BCP-47 tag type, no data).
 - **go-time MUST NEVER expose a formatter type** (`DateTimeFormat`, `RelativeTimeFormat`, `DurationFormat`), a `Locale` type, a `HourCycle` / `Calendar` enum, or a `Style` enum.
 - **go-time MUST NEVER ship locale JSON / YAML / template / CLDR data** in this repository.
 - **No value-object method takes a formatter parameter.** `dt.Format(f)`, `d.Render(loc)`, etc. are banned. Rendering happens via `f.Format(dt.Std())` at the call site, in code the caller wrote.

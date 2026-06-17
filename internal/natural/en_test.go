@@ -121,7 +121,6 @@ func TestEn_Duration(t *testing.T) {
 	ctx := enCtx("")
 	hour := int64(time.Hour)
 	minute := int64(time.Minute)
-	day := int64(24 * time.Hour)
 
 	tests := []struct {
 		input     string
@@ -130,8 +129,6 @@ func TestEn_Duration(t *testing.T) {
 		{"in 2 hours", 2 * hour},
 		{"in 1 hour", hour},
 		{"30 minutes ago", -30 * minute},
-		{"in 3 days", 3 * day},
-		{"1 day ago", -day},
 		{"in 1 minute", minute},
 	}
 	for _, tt := range tests {
@@ -145,6 +142,33 @@ func TestEn_Duration(t *testing.T) {
 			}
 			if r.DurNanos != tt.wantNanos {
 				t.Errorf("DurNanos = %d, want %d", r.DurNanos, tt.wantNanos)
+			}
+		})
+	}
+}
+
+func TestEn_Period(t *testing.T) {
+	ctx := enCtx("")
+	tests := []struct {
+		input    string
+		wantDays int32
+	}{
+		{"in 3 days", 3},
+		{"1 day ago", -1},
+		{"in 2 weeks", 14},
+		{"3 weeks ago", -21},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, ok := Parse(tt.input, ctx)
+			if !ok {
+				t.Fatalf("Parse(%q) returned ok=false", tt.input)
+			}
+			if r.Kind != KindPeriod {
+				t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
+			}
+			if r.PeriodDays != tt.wantDays {
+				t.Errorf("PeriodDays = %d, want %d", r.PeriodDays, tt.wantDays)
 			}
 		})
 	}

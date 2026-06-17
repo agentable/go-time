@@ -118,6 +118,25 @@ func TestTime_String(t *testing.T) {
 	}
 }
 
+func TestTime_StringFractional(t *testing.T) {
+	tests := []struct {
+		name string
+		tm   Time
+		want string
+	}{
+		{name: "tenths trimmed", tm: mustTimeNanos(12, 30, 0, 120_000_000), want: "12:30:00.12"},
+		{name: "microsecond precision", tm: mustTimeNanos(12, 30, 0, 1_000), want: "12:30:00.000001"},
+		{name: "nanosecond precision", tm: mustTimeNanos(12, 30, 0, 123_456_789), want: "12:30:00.123456789"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.tm.String(); got != tc.want {
+				t.Errorf("String() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestTime_StringLeadingZeros(t *testing.T) {
 	ct := mustTime(9, 5, 3)
 	if ct.String() != "09:05:03" {

@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -56,6 +57,18 @@ func TestDateTimeJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDateTimeMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
+	loc := time.FixedZone("+09:00", 9*3600)
+	dt := DateTime{
+		t:    time.Date(2026, time.March, 27, 13, 0, 0, 0, loc),
+		zone: Zone{id: "+09:00", loc: loc},
+	}
+	_, err := json.Marshal(dt)
+	if !errors.Is(err, ErrInvalidZone) {
+		t.Fatalf("Marshal error = %v, want ErrInvalidZone", err)
+	}
+}
+
 func TestDateTimeMarshalJSON_ZeroZoneProjectionsUseUTC(t *testing.T) {
 	t.Parallel()
 
@@ -88,13 +101,19 @@ func TestDateTimeMarshalJSON_ZeroZoneProjectionsUseUTC(t *testing.T) {
 }
 
 func TestDateTimeUnmarshalJSON_NoZone(t *testing.T) {
-	// When zone field is absent, fall back to the offset embedded in the value.
 	var dt DateTime
 	input := `{"kind":"datetime","value":"2026-03-27T13:00:00+09:00"}`
-	if err := json.Unmarshal([]byte(input), &dt); err != nil {
-		t.Fatalf("Unmarshal error: %v", err)
+	err := json.Unmarshal([]byte(input), &dt)
+	if !errors.Is(err, ErrInvalidZone) {
+		t.Fatalf("Unmarshal error = %v, want ErrInvalidZone", err)
 	}
-	if dt.Clock().Hour() != 13 {
-		t.Errorf("hour = %d, want 13", dt.Clock().Hour())
+}
+
+func TestDateTimeUnmarshalJSON_OffsetMustMatchZone(t *testing.T) {
+	var dt DateTime
+	input := `{"kind":"datetime","value":"2026-03-27T13:00:00+08:00","zone":"Asia/Tokyo"}`
+	err := json.Unmarshal([]byte(input), &dt)
+	if !errors.Is(err, ErrInvalidZone) {
+		t.Fatalf("Unmarshal error = %v, want ErrInvalidZone", err)
 	}
 }

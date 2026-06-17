@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/go-json-experiment/json"
-
-	ianazone "github.com/agentable/go-time/internal/zone"
 )
 
 // daysInMonth returns the number of days in the given month of the given year.
@@ -67,34 +65,7 @@ func NewDateTime(d Date, t Time, z Zone) (DateTime, error) {
 			"construct Time with NewTime or NewTimeNanos before combining it into a DateTime",
 		)
 	}
-	z = normalizeZone(z)
-
-	res := ianazone.ProjectLocalTime(z.Location(), d.year, d.month, d.day, t.hour, t.minute, t.second)
-	switch res.Status {
-	case ianazone.DSTNormal:
-		return DateTime{t: res.Times[0].Add(time.Duration(t.nanosecond)), zone: z}, nil
-	case ianazone.DSTNonexistent:
-		return DateTime{}, newTimeError(
-			ErrNonexistentTime,
-			fmt.Sprintf("local time %s %s does not exist in %s", d, t, z.ID()),
-			fmt.Sprintf("%sT%s[%s]", d, t, z.ID()),
-			"choose a real wall-clock time after the DST gap or construct from an Instant",
-		)
-	case ianazone.DSTAmbiguous:
-		return DateTime{}, newTimeError(
-			ErrDuplicateTime,
-			fmt.Sprintf("local time %s %s occurs twice in %s", d, t, z.ID()),
-			fmt.Sprintf("%sT%s[%s]", d, t, z.ID()),
-			"use DateTimeFromTime with a stdlib time.Time carrying the desired offset",
-		)
-	default:
-		return DateTime{}, newTimeError(
-			ErrInvalidTime,
-			"local time projection failed",
-			fmt.Sprintf("%sT%s[%s]", d, t, z.ID()),
-			"check the date, time, and zone components",
-		)
-	}
+	return NewLocalDateTime(d, t).Resolve(z).Only()
 }
 
 // DateTimeFromTime creates a DateTime from a stdlib time.Time and a Zone.
@@ -167,21 +138,29 @@ func (dt DateTime) String() string {
 
 // MarshalJSON encodes dt as {"kind":"datetime","value":"<RFC3339Nano>","zone":"<IANA id>","calendar":"iso8601"}.
 func (dt DateTime) MarshalJSON() ([]byte, error) {
+	zoneID := normalizeZone(dt.zone).ID()
+	if isFixedOffsetID(zoneID) {
+		return nil, newTimeError(
+			ErrInvalidZone,
+			"fixed UTC offsets are not IANA zones",
+			zoneID,
+			"represent numeric offsets as instant syntax, not as DateTime zone identity",
+		)
+	}
 	return json.Marshal(struct {
 		Kind     string `json:"kind"`
 		Value    string `json:"value"`
-		Zone     string `json:"zone,omitempty"`
+		Zone     string `json:"zone"`
 		Calendar string `json:"calendar"`
 	}{
 		Kind:     "datetime",
 		Value:    dt.t.Format(time.RFC3339Nano),
-		Zone:     dt.zone.ID(),
+		Zone:     zoneID,
 		Calendar: "iso8601",
 	})
 }
 
 // UnmarshalJSON decodes dt from {"kind":"datetime","value":"<RFC3339Nano>","zone":"<IANA id>"[,"calendar":"..."]}.
-// The zone field is preferred; if absent the offset embedded in value is used.
 func (dt *DateTime) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind     string `json:"kind"`
@@ -196,16 +175,32 @@ func (dt *DateTime) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return fmt.Errorf("gotime: invalid datetime value %q: %w", wire.Value, err)
 	}
-	var z Zone
-	if wire.Zone != "" {
-		z, err = LoadZone(wire.Zone)
-		if err != nil {
-			return fmt.Errorf("gotime: invalid zone %q: %w", wire.Zone, err)
-		}
-	} else {
-		// Fall back to the location embedded in the parsed time (fixed offset).
-		z = Zone{id: t.Location().String(), loc: t.Location()}
+	if wire.Zone == "" {
+		return newTimeError(
+			ErrInvalidZone,
+			"datetime zone is required",
+			wire.Value,
+			"include an IANA zone id in the zone field, e.g. Asia/Tokyo",
+		)
+	}
+	z, err := LoadZone(wire.Zone)
+	if err != nil {
+		return fmt.Errorf("gotime: invalid zone %q: %w", wire.Zone, err)
+	}
+	if !dateTimeOffsetMatchesZone(t, z) {
+		return newTimeError(
+			ErrInvalidZone,
+			"datetime value offset does not match zone",
+			wire.Value+"["+wire.Zone+"]",
+			"encode DateTime values using the offset observed by the IANA zone at that instant",
+		)
 	}
 	*dt = DateTimeFromTime(t, z)
 	return nil
+}
+
+func dateTimeOffsetMatchesZone(t time.Time, z Zone) bool {
+	_, valueOffset := t.Zone()
+	_, zoneOffset := t.In(z.Location()).Zone()
+	return valueOffset == zoneOffset
 }

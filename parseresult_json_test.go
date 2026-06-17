@@ -102,6 +102,26 @@ func TestParseResultMarshalResolvedDate(t *testing.T) {
 	}
 }
 
+func TestParseResultMarshalResolvedLocalDateTime(t *testing.T) {
+	ldt := NewLocalDateTime(mustDate(2026, 3, 27), mustTime(13, 0, 0))
+	r := ParseResult{
+		Status: StatusResolved,
+		Kind:   KindLocalDateTime,
+		Input:  "2026-03-27T13:00:00",
+	}
+	r.localDateTime = ldt
+
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	got := string(b)
+	want := `{"kind":"parse_result","status":"resolved","input":"2026-03-27T13:00:00","value_kind":"local_datetime","value":{"kind":"local_datetime","value":"2026-03-27T13:00:00","calendar":"iso8601"}}`
+	if got != want {
+		t.Errorf("Marshal() = %s, want %s", got, want)
+	}
+}
+
 func TestParseResultMarshalResolvedDuration(t *testing.T) {
 	dur := (2 * Hour)
 	r := ParseResult{

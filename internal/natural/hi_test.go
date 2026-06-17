@@ -43,8 +43,6 @@ func TestHindiFutureDuration(t *testing.T) {
 		{"2 घंटे में", 2 * int64(time.Hour)},
 		{"2 घंटे बाद", 2 * int64(time.Hour)},
 		{"1 मिनट में", int64(time.Minute)},
-		{"3 दिन बाद", 3 * 24 * int64(time.Hour)},
-		{"1 सप्ताह में", 7 * 24 * int64(time.Hour)},
 	}
 	for _, tt := range tests {
 		r, ok := Parse(tt.input, ctx)
@@ -62,13 +60,37 @@ func TestHindiFutureDuration(t *testing.T) {
 	}
 }
 
+func TestHindiFuturePeriod(t *testing.T) {
+	ctx := Context{Locale: "hi", ZoneID: "UTC", RelativeTo: hiBase}
+	tests := []struct {
+		input    string
+		wantDays int32
+	}{
+		{"3 दिन बाद", 3},
+		{"1 सप्ताह में", 7},
+	}
+	for _, tt := range tests {
+		r, ok := Parse(tt.input, ctx)
+		if !ok {
+			t.Errorf("Parse(%q) not ok", tt.input)
+			continue
+		}
+		if r.Kind != KindPeriod {
+			t.Errorf("Parse(%q) kind=%v want KindPeriod", tt.input, r.Kind)
+			continue
+		}
+		if r.PeriodDays != tt.wantDays {
+			t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
+		}
+	}
+}
+
 func TestHindiPastDuration(t *testing.T) {
 	ctx := Context{Locale: "hi", ZoneID: "UTC", RelativeTo: hiBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
 	}{
-		{"3 दिन पहले", -3 * 24 * int64(time.Hour)},
 		{"1 घंटे पहले", -int64(time.Hour)},
 		{"2 मिनट पहले", -2 * int64(time.Minute)},
 	}
@@ -85,6 +107,20 @@ func TestHindiPastDuration(t *testing.T) {
 		if r.DurNanos != tt.wantNanos {
 			t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
 		}
+	}
+}
+
+func TestHindiPastPeriod(t *testing.T) {
+	ctx := Context{Locale: "hi", ZoneID: "UTC", RelativeTo: hiBase}
+	r, ok := Parse("3 दिन पहले", ctx)
+	if !ok {
+		t.Fatal("Parse returned ok=false")
+	}
+	if r.Kind != KindPeriod {
+		t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
+	}
+	if r.PeriodDays != -3 {
+		t.Errorf("PeriodDays = %d, want -3", r.PeriodDays)
 	}
 }
 

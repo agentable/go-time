@@ -43,8 +43,6 @@ func TestArabicNumericFutureDuration(t *testing.T) {
 	}{
 		{"بعد 3 ساعات", 3 * int64(time.Hour)},
 		{"بعد 1 دقيقة", int64(time.Minute)},
-		{"بعد 5 أيام", 5 * 24 * int64(time.Hour)},
-		{"بعد 2 أسابيع", 2 * 7 * 24 * int64(time.Hour)},
 	}
 	for _, tt := range tests {
 		r, ok := Parse(tt.input, ctx)
@@ -62,6 +60,31 @@ func TestArabicNumericFutureDuration(t *testing.T) {
 	}
 }
 
+func TestArabicNumericFuturePeriod(t *testing.T) {
+	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	tests := []struct {
+		input    string
+		wantDays int32
+	}{
+		{"بعد 5 أيام", 5},
+		{"بعد 2 أسابيع", 14},
+	}
+	for _, tt := range tests {
+		r, ok := Parse(tt.input, ctx)
+		if !ok {
+			t.Errorf("Parse(%q) not ok", tt.input)
+			continue
+		}
+		if r.Kind != KindPeriod {
+			t.Errorf("Parse(%q) kind=%v want KindPeriod", tt.input, r.Kind)
+			continue
+		}
+		if r.PeriodDays != tt.wantDays {
+			t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
+		}
+	}
+}
+
 func TestArabicDualDuration(t *testing.T) {
 	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
 	tests := []struct {
@@ -69,10 +92,8 @@ func TestArabicDualDuration(t *testing.T) {
 		wantNanos int64
 	}{
 		{"بعد ساعتين", 2 * int64(time.Hour)},
-		{"بعد يومين", 2 * 24 * int64(time.Hour)},
 		{"منذ ساعتين", -2 * int64(time.Hour)},
 		{"بعد دقيقتين", 2 * int64(time.Minute)},
-		{"بعد أسبوعين", 2 * 7 * 24 * int64(time.Hour)},
 	}
 	for _, tt := range tests {
 		r, ok := Parse(tt.input, ctx)
@@ -92,15 +113,31 @@ func TestArabicDualDuration(t *testing.T) {
 
 func TestArabicDualPeriod(t *testing.T) {
 	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
-	r, ok := Parse("بعد شهرين", ctx)
-	if !ok {
-		t.Fatal("Parse returned ok=false")
+	tests := []struct {
+		input      string
+		wantDays   int32
+		wantMonths int32
+	}{
+		{input: "بعد يومين", wantDays: 2},
+		{input: "بعد أسبوعين", wantDays: 14},
+		{input: "بعد شهرين", wantMonths: 2},
 	}
-	if r.Kind != KindPeriod {
-		t.Fatalf("Kind = %v, want KindPeriod", r.Kind)
-	}
-	if r.PeriodMonths != 2 {
-		t.Errorf("PeriodMonths = %d, want 2", r.PeriodMonths)
+	for _, tt := range tests {
+		r, ok := Parse(tt.input, ctx)
+		if !ok {
+			t.Errorf("Parse(%q) not ok", tt.input)
+			continue
+		}
+		if r.Kind != KindPeriod {
+			t.Errorf("Parse(%q) kind=%v want KindPeriod", tt.input, r.Kind)
+			continue
+		}
+		if r.PeriodDays != tt.wantDays {
+			t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
+		}
+		if r.PeriodMonths != tt.wantMonths {
+			t.Errorf("Parse(%q) months=%d want %d", tt.input, r.PeriodMonths, tt.wantMonths)
+		}
 	}
 }
 
@@ -110,9 +147,7 @@ func TestArabicPastDuration(t *testing.T) {
 		input     string
 		wantNanos int64
 	}{
-		{"منذ 3 أيام", -3 * 24 * int64(time.Hour)},
 		{"منذ 1 ساعة", -int64(time.Hour)},
-		{"منذ 2 أسابيع", -2 * 7 * 24 * int64(time.Hour)},
 	}
 	for _, tt := range tests {
 		r, ok := Parse(tt.input, ctx)
@@ -126,6 +161,31 @@ func TestArabicPastDuration(t *testing.T) {
 		}
 		if r.DurNanos != tt.wantNanos {
 			t.Errorf("Parse(%q) nanos=%d want %d", tt.input, r.DurNanos, tt.wantNanos)
+		}
+	}
+}
+
+func TestArabicPastPeriod(t *testing.T) {
+	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	tests := []struct {
+		input    string
+		wantDays int32
+	}{
+		{"منذ 3 أيام", -3},
+		{"منذ 2 أسابيع", -14},
+	}
+	for _, tt := range tests {
+		r, ok := Parse(tt.input, ctx)
+		if !ok {
+			t.Errorf("Parse(%q) not ok", tt.input)
+			continue
+		}
+		if r.Kind != KindPeriod {
+			t.Errorf("Parse(%q) kind=%v want KindPeriod", tt.input, r.Kind)
+			continue
+		}
+		if r.PeriodDays != tt.wantDays {
+			t.Errorf("Parse(%q) days=%d want %d", tt.input, r.PeriodDays, tt.wantDays)
 		}
 	}
 }
