@@ -46,7 +46,7 @@ func TestDurationMarshalJSON_Negative(t *testing.T) {
 
 func TestDurationUnmarshalJSON(t *testing.T) {
 	var d Duration
-	if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"PT1H30M","parts":{"hours":1,"minutes":30}}`), &d); err != nil {
+	if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"PT1H30M"}`), &d); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	if d.InHours() != 1.5 {
@@ -56,7 +56,7 @@ func TestDurationUnmarshalJSON(t *testing.T) {
 
 func TestDurationUnmarshalJSON_Zero(t *testing.T) {
 	var d Duration
-	if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"PT0S","parts":{}}`), &d); err != nil {
+	if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"PT0S"}`), &d); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	if !d.IsZero() {

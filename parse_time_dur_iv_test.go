@@ -2,6 +2,8 @@ package gotime
 
 import (
 	"testing"
+
+	"golang.org/x/text/language"
 )
 
 // ── Time ──────────────────────────────────────────────────────────────────
@@ -298,5 +300,16 @@ func TestParse_Interval_AmbiguousEndpoint(t *testing.T) {
 	)
 	if r.Status != StatusAmbiguous {
 		t.Fatalf("status = %v (err=%v), want Ambiguous", r.Status, r.Error)
+	}
+}
+
+func TestParse_Interval_RejectsNaturalLanguageEndpoint(t *testing.T) {
+	r := Parse(
+		"tomorrow/2026-03-28T00:00:00Z",
+		WithInputLocale(language.English),
+		WithReference(fixedNow),
+	)
+	if r.Status != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status)
 	}
 }

@@ -17,7 +17,6 @@ func TestZone_Snapshot(t *testing.T) {
 	want := ZoneSnapshot{
 		ID:           "America/New_York",
 		Offset:       "-04:00",
-		DST:          true,
 		Abbreviation: "EDT",
 	}
 	if diff := cmp.Diff(want, got); diff != "" {

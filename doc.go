@@ -43,11 +43,13 @@
 //
 // # Example — natural language with locale
 //
-// Relative expressions ("tomorrow", "in 2 hours") default to time.Now();
-// pass [WithReference] only when you need a fixed reference for testing.
+// Natural date/datetime expressions require an explicit reference instant.
+// Product code can pass [Now] at the boundary; tests usually pass a fixed
+// [Instant].
 //
 //	dt, err := gotime.ParseDateTime("tomorrow at 3pm",
 //	    gotime.WithInputLocale(language.English),
 //	    gotime.WithZone(gotime.MustLoadZone("America/New_York")),
+//	    gotime.WithReference(gotime.Now()),
 //	)
 package gotime

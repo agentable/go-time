@@ -48,7 +48,16 @@ func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 		Value    string `json:"value"`
 		Calendar string `json:"calendar"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("local_datetime", wire.Kind, "local_datetime"); err != nil {
+		return err
+	}
+	if err := requireJSONCalendar("local_datetime", wire.Calendar); err != nil {
+		return err
+	}
+	if err := requireJSONString("local_datetime", "value", wire.Value); err != nil {
 		return err
 	}
 	parsed, err := time.Parse("2006-01-02T15:04:05", wire.Value)

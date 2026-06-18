@@ -178,7 +178,10 @@ func (iv *Interval) UnmarshalJSON(b []byte) error {
 		Start string `json:"start"`
 		End   string `json:"end"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("interval", wire.Kind, "interval"); err != nil {
 		return err
 	}
 	if wire.Start == "" || wire.End == "" {

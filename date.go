@@ -186,20 +186,36 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 		Value    string `json:"value"`
 		Calendar string `json:"calendar"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("date", wire.Kind, "date"); err != nil {
+		return err
+	}
+	if err := requireJSONCalendar("date", wire.Calendar); err != nil {
+		return err
+	}
+	if err := requireJSONString("date", "value", wire.Value); err != nil {
 		return err
 	}
 	t, err := time.Parse("2006-01-02", wire.Value)
 	if err != nil {
 		return fmt.Errorf("gotime: invalid date value %q: %w", wire.Value, err)
 	}
-	*d = DateFromTime(t)
+	date, err := NewDate(t.Year(), t.Month(), t.Day())
+	if err != nil {
+		return err
+	}
+	*d = date
 	return nil
 }
 
 // validateDateComponents returns a non-empty error message if the date is invalid,
 // or an empty string if valid.
 func validateDateComponents(year, month, day int) string {
+	if year < 0 || year > 9999 {
+		return fmt.Sprintf("invalid year %d: must be 0-9999", year)
+	}
 	if month < 1 || month > 12 {
 		return fmt.Sprintf("invalid month %d: must be 1-12", month)
 	}

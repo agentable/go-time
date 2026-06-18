@@ -104,27 +104,6 @@ func (p Period) ISO8601() string {
 	return b.String()
 }
 
-// RFC5545 formats p per RFC 5545 §3.3.6. RFC 5545 disallows months/years
-// in DURATION values, but Period intentionally carries calendar offsets;
-// we still emit P{n}Y, P{n}M, P{n}D — callers responsible for validating
-// the receiving system supports this. For weeks-aligned days, emit "P{n}W".
-func (p Period) RFC5545() string {
-	if p.Years == 0 && p.Months == 0 && p.Days != 0 && p.Days%7 == 0 {
-		neg := p.Days < 0
-		days := p.Days
-		if neg {
-			days = -days
-		}
-		var b strings.Builder
-		if neg {
-			b.WriteByte('-')
-		}
-		fmt.Fprintf(&b, "P%dW", days/7)
-		return b.String()
-	}
-	return p.ISO8601()
-}
-
 // String returns a compact human form, e.g. "1y3mo7d", "-2mo".
 func (p Period) String() string {
 	if p.IsZero() {
@@ -167,7 +146,13 @@ func (p *Period) UnmarshalJSON(b []byte) error {
 		Kind string `json:"kind"`
 		ISO  string `json:"iso"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("period", wire.Kind, "period"); err != nil {
+		return err
+	}
+	if err := requireJSONString("period", "iso", wire.ISO); err != nil {
 		return err
 	}
 	parsed, err := parseISO8601Period(wire.ISO)

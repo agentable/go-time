@@ -93,6 +93,40 @@ func TestParse_Natural_En(t *testing.T) {
 	}
 }
 
+func TestParse_Natural_RelativeDateRequiresReference(t *testing.T) {
+	t.Parallel()
+
+	r := Parse("tomorrow",
+		WithInputLocale(language.English),
+		WithZone(MustLoadZone("America/New_York")),
+	)
+	if r.Status != StatusInvalid {
+		t.Fatalf("Parse(tomorrow).Status = %s, want %s", r.Status, StatusInvalid)
+	}
+	if !errors.Is(r.Error, ErrInvalidFormat) {
+		t.Fatalf("Parse(tomorrow).Error = %v, want ErrInvalidFormat", r.Error)
+	}
+}
+
+func TestParse_Natural_DurationDoesNotRequireReference(t *testing.T) {
+	t.Parallel()
+
+	r := Parse("in 2 hours", WithInputLocale(language.English))
+	if r.Status != StatusResolved {
+		t.Fatalf("Parse(in 2 hours).Status = %s (err=%v), want %s", r.Status, r.Error, StatusResolved)
+	}
+	if r.Kind != KindDuration {
+		t.Fatalf("Parse(in 2 hours).Kind = %s, want %s", r.Kind, KindDuration)
+	}
+	d, ok := r.Duration()
+	if !ok {
+		t.Fatal("Parse(in 2 hours).Duration() ok=false, want true")
+	}
+	if d != 2*Hour {
+		t.Fatalf("Parse(in 2 hours).Duration() = %s, want 2h0m0s", d)
+	}
+}
+
 func TestParse_Natural_DateTimeWithoutZoneReturnsLocalDateTime(t *testing.T) {
 	r := Parse("tomorrow at 3pm",
 		WithInputLocale(language.English),

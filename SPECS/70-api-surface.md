@@ -6,6 +6,22 @@ All public API lives in the top-level `gotime` package. The design favors concre
 
 There is no public subpackage API and no formatting layer.
 
+## Surface Decisions
+
+### Delete Misleading Convenience
+
+- **Decision**: Public names must describe contracts the package fully owns.
+- **Why**: A small foundation API ages better than compatibility shims or protocol-named helpers that overpromise.
+- **Rejected**: Keeping `RFC5545()` as a cosmetic alias, keeping `Zone.IsDST()` with heuristic behavior, and adding placeholder strategy or formatter surfaces.
+- **Contract Impact**: Removed or forbidden APIs stay out unless a future spec owns their full semantics and verification.
+
+### Prefer Stdlib Bridges Over Product Policy
+
+- **Decision**: go-time exits to stdlib values and simple slots; product policy stays above the module.
+- **Why**: Formatting, recurrence, scheduling, locale display, and ambiguity UX depend on product context.
+- **Rejected**: Formatter types, global defaults, calendar products, and mutable policy objects.
+- **Contract Impact**: New public APIs must either be primitive value semantics or explicit bridges, not product workflow.
+
 ## Current Time
 
 ```go
@@ -193,7 +209,7 @@ func (iv Interval) Shift(d Duration) Interval
 func (iv Interval) Expand(before, after Duration) Interval
 ```
 
-No `Interval.Step` exists in the current implementation.
+Interval iteration is not part of this API surface. Cadence, inclusivity, and DST behavior belong to a separate scheduling or recurrence contract, not to `Interval`.
 
 ## Zones
 
@@ -209,7 +225,12 @@ func ZoneCatalogVersion() string
 
 func (z Zone) ID() string
 func (z Zone) Location() *time.Location
+func (z Zone) String() string
+func (z Zone) Equal(other Zone) bool
+func (z Zone) IsZero() bool
 func (z Zone) Snapshot(i Instant) ZoneSnapshot
+func (z Zone) OffsetAt(i Instant) string
+func (z Zone) Abbreviation(i Instant) string
 ```
 
 ## Stdlib Bridges
@@ -242,6 +263,8 @@ Stable value JSON:
 - `Interval`: `{"kind":"interval","start":"...","end":"..."}`
 - `Zone`: `{"kind":"zone","id":"..."}`
 
+Decoding is strict for value-object JSON: unknown fields, missing required fields, wrong `kind`, unsupported calendars, and contradictory cross-check fields are errors.
+
 ## Removed Or Forbidden API
 
 - Formatter and locale-display types.
@@ -249,10 +272,20 @@ Stable value JSON:
 - `gotime.Today()`.
 - `gotime.Day` duration constant.
 - `Duration.InDays()`.
+- `Duration.RFC5545()`.
+- `Period.RFC5545()`.
 - `Period.Decompose()`.
+- `Zone.IsDST()`.
 - `WithStrategy`, `Strategy*`, `WithLocale`, `WithZoneID`.
 - `Min`, `Max`, `Clamp`.
 - `StartOf*`, `EndOf*`.
-- `Interval.Step`, `Each`, `EachDate` until implemented.
+- `Interval.Step`, `Each`, `EachDate`.
 - `ParseResult.Locale`, `ParseResult.Strategy`.
 - Public `Must*` APIs other than `MustLoadZone`.
+
+## Acceptance Criteria
+
+- `go doc` exposes only top-level `gotime` APIs; no public subpackage becomes part of the contract.
+- API inventory contains no formatter, recurrence, strategy, `RFC5545`, or `IsDST` surface.
+- `Zone` exposes point-in-time offset and abbreviation, but no DST boolean.
+- JSON shapes match the list above and decode strictly.

@@ -168,7 +168,16 @@ func (dt *DateTime) UnmarshalJSON(b []byte) error {
 		Zone     string `json:"zone"`
 		Calendar string `json:"calendar"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("datetime", wire.Kind, "datetime"); err != nil {
+		return err
+	}
+	if err := requireJSONCalendar("datetime", wire.Calendar); err != nil {
+		return err
+	}
+	if err := requireJSONString("datetime", "value", wire.Value); err != nil {
 		return err
 	}
 	t, err := time.Parse(time.RFC3339Nano, wire.Value)

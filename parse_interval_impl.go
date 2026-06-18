@@ -20,11 +20,11 @@ func parseInterval(input string, cfg *config) ParseResult {
 
 	switch {
 	case !startIsDur && !endIsDur:
-		sr, ok := parseIntervalPart(input, left, "start", WithZone(cfg.zone))
+		sr, ok := parseIntervalBoundary(input, left, "start", cfg)
 		if !ok {
 			return sr
 		}
-		er, ok := parseIntervalPart(input, right, "end", WithZone(cfg.zone))
+		er, ok := parseIntervalBoundary(input, right, "end", cfg)
 		if !ok {
 			return er
 		}
@@ -38,11 +38,11 @@ func parseInterval(input string, cfg *config) ParseResult {
 		}
 
 	case !startIsDur && endIsDur:
-		sr, ok := parseIntervalPart(input, left, "start", WithZone(cfg.zone))
+		sr, ok := parseIntervalBoundary(input, left, "start", cfg)
 		if !ok {
 			return sr
 		}
-		dr, ok := parseIntervalPart(input, right, "duration")
+		dr, ok := parseIntervalDuration(input, right)
 		if !ok {
 			return dr
 		}
@@ -53,11 +53,11 @@ func parseInterval(input string, cfg *config) ParseResult {
 		endInstant = startInstant.Add(dr.duration)
 
 	case startIsDur && !endIsDur:
-		dr, ok := parseIntervalPart(input, left, "duration")
+		dr, ok := parseIntervalDuration(input, left)
 		if !ok {
 			return dr
 		}
-		er, ok := parseIntervalPart(input, right, "end", WithZone(cfg.zone))
+		er, ok := parseIntervalBoundary(input, right, "end", cfg)
 		if !ok {
 			return er
 		}
@@ -89,8 +89,27 @@ func parseInterval(input string, cfg *config) ParseResult {
 	return r
 }
 
-func parseIntervalPart(input, part, label string, opts ...Option) (ParseResult, bool) {
-	r := Parse(part, opts...)
+func parseIntervalBoundary(input, part, label string, cfg *config) (ParseResult, bool) {
+	if r, ok := parseDateTimeStage(part, cfg); ok {
+		return validateIntervalPart(input, label, r)
+	}
+	if r, ok := parseDateStage(part, cfg); ok {
+		return validateIntervalPart(input, label, r)
+	}
+	if r, ok := parseTimeStage(part, cfg); ok {
+		return validateIntervalPart(input, label, r)
+	}
+	return invalidResult(input, ErrInvalidFormat,
+		fmt.Sprintf("invalid interval %s: parse failed", label),
+		"Use ISO 8601 interval format"), false
+}
+
+func parseIntervalDuration(input, part string) (ParseResult, bool) {
+	var cfg config
+	return validateIntervalPart(input, "duration", parseDuration(part, &cfg))
+}
+
+func validateIntervalPart(input, label string, r ParseResult) (ParseResult, bool) {
 	switch r.Status {
 	case StatusResolved:
 		if label == "duration" {

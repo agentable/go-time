@@ -115,29 +115,6 @@ func TestPeriod_ISO8601(t *testing.T) {
 	}
 }
 
-func TestPeriod_RFC5545(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		p    Period
-		want string
-	}{
-		{name: "positive whole weeks", p: Days(14), want: "P2W"},
-		{name: "negative whole weeks", p: Days(-21), want: "-P3W"},
-		{name: "non-week period falls back to ISO", p: Period{Years: 1, Months: 2, Days: 3}, want: "P1Y2M3D"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := tc.p.RFC5545(); got != tc.want {
-				t.Errorf("RFC5545() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestPeriod_String(t *testing.T) {
 	t.Parallel()
 

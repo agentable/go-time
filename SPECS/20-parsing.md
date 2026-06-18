@@ -43,9 +43,25 @@ Current language families:
 - Latin-script European languages in `internal/natural/latin` (`fr`, `de`, `es`, `pt`, `ru`)
 - Chinese (`zh-Hans`, `zh-Hant`)
 
-Current coverage is intentionally small: relative dates, week expressions, basic date+time expressions, basic exact-duration expressions, and calendar period expressions for day/week/month/year units. Natural-language intervals are outside the current implementation.
+The grammar is intentionally small: relative dates, week expressions, basic date+time expressions, basic exact-duration expressions, and calendar period expressions for day/week/month/year units. Natural-language intervals are outside this contract.
 
 Natural-language day, week, month, and year units route to `KindPeriod`. They are never approximated as 24-hour, 7-day, 30-day, or 365-day `Duration` values. Natural-language second, minute, and hour units route to `KindDuration`.
+
+## Contract Decisions
+
+### Explicit Human Context
+
+- **Decision**: Natural-language parsing requires `WithInputLocale`. Natural date/datetime expressions that need a calendar reference also require `WithReference`.
+- **Why**: Locale and reference time are human interpretation context. A semantics kernel must not read ambient process time or silently infer language policy.
+- **Rejected**: Defaulting relative phrases to `time.Now()`, global parser defaults, `WithNow`, `WithClock`, and strategy knobs that hide ambiguity.
+- **Contract Impact**: Product code chooses "now" explicitly at the boundary with `WithReference(gotime.Now())`; deterministic code passes a fixed `Instant`.
+
+### Formal Interval Grammar
+
+- **Decision**: Interval parsing is contained to formal instant/datetime/duration subparsers. It does not re-enter public `Parse` for interval parts.
+- **Why**: `Parse` is an inspection dispatcher whose accepted grammar can grow. Interval grammar must not widen accidentally when natural language or other dispatch paths change.
+- **Rejected**: Natural-language interval endpoints, date-only interval endpoints, and recursive public-dispatch parsing of interval sides.
+- **Contract Impact**: Intervals accept only explicit absolute endpoints or one explicit endpoint plus exact duration.
 
 ## ParseResult
 
@@ -111,9 +127,11 @@ func WithReference(t Instant) Option
 
 - `WithInputLocale` enables natural-language parsing and disambiguates slash dates.
 - `WithZone` supplies the zone for floating datetimes. Without it, local datetimes remain `KindLocalDateTime` instead of defaulting to UTC.
-- `WithReference` supplies the base instant for relative expressions.
+- `WithReference` supplies the base instant for natural date/datetime expressions.
 
 There is no `WithStrategy`. Ambiguity is surfaced through `Candidates`; callers decide.
+
+Natural date/datetime expressions that need a calendar reference, such as `tomorrow` or `next Friday`, return `StatusInvalid` with `ErrInvalidFormat` unless `WithReference` is provided. Exact natural durations and periods that resolve directly to `Duration` or `Period` do not require a reference.
 
 When `WithZone` resolves a floating datetime, `ParseResult.Warnings` includes `WarnAssumedZone`. Without `WithZone`, the same input resolves to `KindLocalDateTime` and carries no zone assumption. When fractional seconds exceed nanosecond precision, `ParseResult.Warnings` includes `WarnTruncatedPrecision` and the value is truncated to nanoseconds. Slash-date candidates use `WarnInferredCalendar` to explain month-first vs day-first interpretation.
 
@@ -126,6 +144,7 @@ Floating datetime parsing uses the same projection rule as `LocalDateTime.Resolv
 `HasZone` reports whether the original input explicitly included a timezone or offset. It is the caller's hook for detecting floating time.
 
 Interval boundaries must resolve to `KindInstant` or `KindDateTime`. Date-only interval boundaries are invalid because an interval is an absolute UTC range and a bare date has no time or zone.
+Natural-language interval boundaries are invalid even when `WithInputLocale` and `WithReference` are supplied.
 
 ## Processing Order
 
@@ -142,6 +161,15 @@ Interval boundaries must resolve to `KindInstant` or `KindDateTime`. Date-only i
 
 - Do not silently choose between genuinely ambiguous interpretations.
 - Do not make natural language the primary parser.
+- Do not read `time.Now()` while interpreting input. Callers pass reference time explicitly.
+- Do not let interval parsing re-enter public `Parse` for interval subparts.
 - Do not return zero values from accessors when the kind does not match.
 - Do not encode warnings as raw strings; use `Warning{Code, Message, Hint}`.
 - Do not add strategy options for ambiguity resolution.
+
+## Acceptance Criteria
+
+- Relative natural date/datetime input without `WithReference` returns `StatusInvalid` with an actionable error.
+- Exact natural durations and periods still resolve without a reference when locale is supplied.
+- Slash-date and DST ambiguity surface through `StatusAmbiguous` and candidates, not a strategy option.
+- Interval tests prove date-only and natural-language boundaries are rejected unless a future spec deliberately changes the interval grammar.

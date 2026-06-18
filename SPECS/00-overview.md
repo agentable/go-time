@@ -29,6 +29,14 @@ The API follows constraint-led design: remove every decision the caller should n
 8. **Errors compose with stdlib**: `Err*` sentinels for `errors.Is`, `*TimeError` for `errors.As`.
 9. **Minimal dependency surface**: public API uses stdlib plus `golang.org/x/text/language.Tag`; no formatter, CLDR, or locale-data dependency.
 
+## Load-Bearing Decisions
+
+- **Human interpretation is explicit**: natural-language parsing requires `WithInputLocale`; date/datetime phrases that depend on "now" require `WithReference`.
+- **Wire formats are closed**: value JSON rejects unknown fields and contradictory facts instead of accepting unrelated extra data.
+- **External protocols stay outside**: core values expose canonical ISO text and stdlib bridges, not protocol-named rendering helpers.
+- **Timezone facts must be provable**: zones persist as IANA IDs; snapshots expose offset and abbreviation at an explicit instant, not heuristic DST truth.
+- **Intervals are formal ranges**: interval parsing accepts explicit time grammar only and does not inherit the full public `Parse` dispatcher.
+
 ## Architecture
 
 ```text
@@ -67,6 +75,7 @@ These specs describe the current v2 contract. If implementation and specs disagr
 - No event, reminder, alarm, scheduler, cron, RRULE, recurrence, business-calendar, holiday, lunar-calendar, Julian-day, sunrise/sunset, or moon-phase model.
 - No semantic mixing: `Instant + Period`, `Date + Duration`, and `DateTime + DateTime` remain undefined.
 - No marshal-time calls to `time.Now()`.
+- No parser fallback to ambient `time.Now()` for relative human language.
 - No public `Must*` except `MustLoadZone`.
 - No exposed monotonic clock concept.
 - No zone-free `DateTime`; unresolved wall-clock values use `LocalDateTime`, while persisted `DateTime` values carry a `Zone`.

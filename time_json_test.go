@@ -60,7 +60,7 @@ func TestTimeMarshalJSON_MicrosecondPrecision(t *testing.T) {
 
 func TestTimeUnmarshalJSON(t *testing.T) {
 	var tm Time
-	if err := json.Unmarshal([]byte(`{"kind":"time","value":"13:30:45"}`), &tm); err != nil {
+	if err := json.Unmarshal([]byte(`{"kind":"time","value":"13:30:45","precision":"second"}`), &tm); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	if tm.Hour() != 13 || tm.Minute() != 30 || tm.Second() != 45 {

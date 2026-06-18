@@ -2,7 +2,6 @@ package gotime
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/agentable/go-time/internal/natural"
 	ianazone "github.com/agentable/go-time/internal/zone"
@@ -14,22 +13,20 @@ func tryParseNatural(input string, cfg *config) (ParseResult, bool) {
 		return ParseResult{}, false
 	}
 
-	var refTime time.Time
-	if !cfg.relativeTo.IsZero() {
-		refTime = cfg.relativeTo.Std()
-	} else {
-		refTime = time.Now()
-	}
-
 	ctx := natural.Context{
 		Locale:     cfg.lang.String(),
 		ZoneID:     cfg.zone.ID(),
-		RelativeTo: refTime,
+		RelativeTo: cfg.relativeTo.Std(),
 	}
 
 	r, ok := natural.Parse(input, ctx)
 	if !ok {
 		return ParseResult{}, false
+	}
+	if r.NeedsReference && cfg.relativeTo.IsZero() {
+		return invalidResult(input, ErrInvalidFormat,
+			"natural language expression requires a reference instant",
+			"pass WithReference(gotime.Now()) at the product boundary or provide a fixed reference for deterministic parsing"), true
 	}
 	return naturalResultToParseResult(input, &r, cfg), true
 }

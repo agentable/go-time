@@ -130,11 +130,14 @@ Current interval operations:
 (90 * gotime.Minute).String() // "1h30m0s"
 ```
 
-`Duration.ISO8601()` and `Period.ISO8601()` provide stable machine strings. `RFC5545()` exists on both types and does not return an error.
+`Duration.ISO8601()` and `Period.ISO8601()` provide stable machine strings. RFC 5545 rendering belongs to calendar integration code outside go-time.
 
-## Not Implemented
+## External Protocol Text
 
-The current implementation does not expose `Instant.Truncate`, `Instant.Round`, `Each`, `EachDate`, or `Interval.Step`. Specs must not claim those APIs until code exists.
+- **Decision**: `ISO8601()` is the only core machine-text helper for `Duration` and `Period`.
+- **Why**: ISO text is already the canonical wire representation. Protocol-specific duration dialects have extra validity rules that belong to integrations that own those protocols.
+- **Rejected**: Public `RFC5545()` methods on core value objects, especially for calendar periods with year/month fields.
+- **Contract Impact**: Core values stay protocol-neutral. Calendar, scheduling, or interchange adapters translate from go-time values outside this module.
 
 ## Forbidden
 
@@ -145,3 +148,12 @@ The current implementation does not expose `Instant.Truncate`, `Instant.Round`, 
 - Do not put zone context on `Interval`.
 - Do not add `Min`, `Max`, or `Clamp` methods.
 - Do not introduce `StartOf*` or `EndOf*` families.
+- Do not add protocol-named rendering methods to core value objects.
+- Do not add iteration APIs such as `Each`, `EachDate`, or `Interval.Step` without a separate spec that owns cadence, inclusivity, and DST semantics.
+
+## Acceptance Criteria
+
+- Exact and calendar arithmetic remain separated by type signatures.
+- Month/year arithmetic clamps at end of month.
+- Interval operations preserve half-open `[start, end)` semantics.
+- No public `RFC5545` method exists on `Duration` or `Period`.

@@ -83,44 +83,6 @@ func TestZone_OffsetAt_UTC(t *testing.T) {
 	}
 }
 
-func TestZone_IsDST_Tokyo(t *testing.T) {
-	z := MustLoadZone("Asia/Tokyo")
-	if z.IsDST(summerInstant) {
-		t.Error("Tokyo has no DST: IsDST(summerInstant) should be false")
-	}
-}
-
-func TestZone_IsDST_NewYork_Summer(t *testing.T) {
-	z := MustLoadZone("America/New_York")
-	if !z.IsDST(summerInstant) {
-		t.Error("New York summer: IsDST(summerInstant) should be true")
-	}
-}
-
-func TestZone_IsDST_NewYork_Winter(t *testing.T) {
-	z := MustLoadZone("America/New_York")
-	if z.IsDST(winterInstant) {
-		t.Error("New York winter: IsDST(winterInstant) should be false")
-	}
-}
-
-// TestZone_IsDST_Sydney_Summer verifies southern-hemisphere DST detection.
-// Australia/Sydney observes AEDT (UTC+11, DST active) in January and
-// AEST (UTC+10, standard) in July — opposite of northern-hemisphere zones.
-func TestZone_IsDST_Sydney_Summer(t *testing.T) {
-	z := MustLoadZone("Australia/Sydney")
-	// January 15 is southern-hemisphere summer → DST active (AEDT)
-	sydneySummer := InstantFromTime(time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC))
-	if !z.IsDST(sydneySummer) {
-		t.Error("Australia/Sydney January (summer): IsDST should be true (AEDT)")
-	}
-	// July 15 is southern-hemisphere winter → DST inactive (AEST)
-	sydneyWinter := InstantFromTime(time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC))
-	if z.IsDST(sydneyWinter) {
-		t.Error("Australia/Sydney July (winter): IsDST should be false (AEST)")
-	}
-}
-
 func TestZone_Abbreviation_Tokyo(t *testing.T) {
 	z := MustLoadZone("Asia/Tokyo")
 	if got := z.Abbreviation(summerInstant); got != "JST" {
@@ -154,13 +116,9 @@ func TestZone_ZeroValue_NoPanic(t *testing.T) {
 		t.Errorf("zero Zone Location() = %v, want UTC", z.Location())
 	}
 	offset := z.OffsetAt(summerInstant)
-	isDST := z.IsDST(summerInstant)
 	abbr := z.Abbreviation(summerInstant)
 	if offset != "+00:00" {
 		t.Errorf("zero Zone OffsetAt = %q, want +00:00", offset)
-	}
-	if isDST {
-		t.Error("zero Zone IsDST should be false")
 	}
 	if abbr != "UTC" {
 		t.Errorf("zero Zone Abbreviation = %q, want UTC", abbr)

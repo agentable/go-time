@@ -130,10 +130,20 @@ func (t Time) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON decodes t from {"kind":"time","value":"HH:MM:SS[.nnnnnnnnn]"}.
 func (t *Time) UnmarshalJSON(b []byte) error {
 	var wire struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
+		Kind      string `json:"kind"`
+		Value     string `json:"value"`
+		Precision string `json:"precision"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("time", wire.Kind, "time"); err != nil {
+		return err
+	}
+	if err := requireJSONString("time", "value", wire.Value); err != nil {
+		return err
+	}
+	if err := requireJSONString("time", "precision", wire.Precision); err != nil {
 		return err
 	}
 	parsed, err := time.Parse("15:04:05.000000000", wire.Value)
@@ -142,6 +152,14 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 		if err != nil {
 			return fmt.Errorf("gotime: invalid time value %q: %w", wire.Value, err)
 		}
+	}
+	if got, want := wire.Precision, timePrecision(parsed.Nanosecond()); got != want {
+		return newTimeError(
+			ErrInvalidFormat,
+			"time precision does not match value",
+			fmt.Sprintf("value=%s precision=%s", wire.Value, got),
+			fmt.Sprintf("use precision %q for this time value", want),
+		)
 	}
 	*t = TimeFromTime(parsed)
 	return nil

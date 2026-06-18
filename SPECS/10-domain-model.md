@@ -6,6 +6,22 @@ go-time has nine immutable value objects. Each represents exactly one time conce
 
 The most important split is `Duration` vs `Period`: exact elapsed time and calendar offsets are different types, so the compiler prevents accidental mixing.
 
+## Contract Decisions
+
+### Closed Value JSON
+
+- **Decision**: Value-object JSON is a closed contract. Decoders reject unknown fields, missing required fields, wrong `kind`, unsupported calendars, and contradictory derived fields.
+- **Why**: Persisted time payloads must fail at the boundary when they carry two competing facts. Silent acceptance makes old or malformed data look authoritative.
+- **Rejected**: Lenient decode for compatibility, mirror component fields, and display fields embedded in value JSON.
+- **Contract Impact**: A wire payload either maps to one semantic value or returns a typed error. There is no best-effort merge.
+
+### Constructible Domain
+
+- **Decision**: Checked constructors and parse/unmarshal paths share the stable wire domain. `Date` years are `0000..9999`, matching the fixed-width ISO calendar shape used by parsing and JSON.
+- **Why**: A caller should not be able to create a checked calendar value that the public wire contract cannot carry.
+- **Rejected**: Extended years without a new wire grammar, and constructor normalization of invalid dates.
+- **Contract Impact**: Invalid calendar components fail construction instead of being normalized.
+
 ## Value Objects
 
 ### Instant
@@ -21,6 +37,8 @@ JSON:
 ```
 
 Key API: `InstantFromTime`, `UnixSeconds`, `UnixMillis`, `UnixNanos`, `Std`, `UnixNano`, `UnixMilli`, `In`, `Add(Duration)`, `Sub(Instant)`, `Compare`.
+
+`iso` owns the instant value. `epoch_ms` is a mandatory cross-check field for systems that index by epoch milliseconds; unmarshal rejects payloads where it does not match `iso`.
 
 ### DateTime
 
@@ -73,7 +91,7 @@ JSON:
 
 Key API: `NewDate`, `DateFromTime`, `Year`, `Month`, `Day`, `Std(Zone)`, `Weekday`, `ISOWeek`, `YearDay`, `DaysInMonth`, `IsLeapYear`, `Add(Period)`, `DaysUntil(Date)`, `PeriodUntil(Date)`, `Compare`.
 
-`NewDate` returns an error for invalid calendar components. It never normalizes values such as February 31.
+`NewDate` returns an error for invalid calendar components. It accepts the stable wire-domain year range `0000..9999` and never normalizes values such as February 31.
 
 `Date` accepts `Period`, never `Duration`.
 
@@ -97,6 +115,8 @@ Key API: `NewTime`, `NewTimeNanos`, `TimeFromTime`, `Hour`, `Minute`, `Second`, 
 
 `NewTime` and `NewTimeNanos` return errors for out-of-range clock components. They never normalize values such as 24:00:00 or nanosecond 1,000,000,000.
 
+`value` owns the clock time. `precision` is a mandatory cross-check field describing the finest represented clock slot; unmarshal rejects mismatches.
+
 ### Duration
 
 An exact elapsed span represented as `type Duration time.Duration`.
@@ -114,7 +134,7 @@ JSON:
 {"kind":"duration","iso":"PT1H30M"}
 ```
 
-Key API: `Std`, `Nanoseconds`, `Milliseconds`, `InSeconds`, `InMinutes`, `InHours`, `Abs`, `String`, `ISO8601`, `RFC5545`, `Decompose`.
+Key API: `Std`, `Nanoseconds`, `Milliseconds`, `InSeconds`, `InMinutes`, `InHours`, `Abs`, `String`, `ISO8601`, `Decompose`.
 
 `Duration.String()` matches `time.Duration.String()` byte-for-byte. `Duration.Decompose()` exposes clock slots only: hours, minutes, seconds, milliseconds, microseconds, nanoseconds.
 
@@ -134,7 +154,7 @@ JSON:
 {"kind":"period","iso":"P1Y3M7D"}
 ```
 
-Key API: exported `Years`, `Months`, `Days` fields, `NewPeriod`, `Years`, `Months`, `Days` constructors, `Negate`, `Abs`, `Add`, `Sub`, `ISO8601`, `RFC5545`, `String`.
+Key API: exported `Years`, `Months`, `Days` fields, `NewPeriod`, `Years`, `Months`, `Days` constructors, `Negate`, `Abs`, `Add`, `Sub`, `ISO8601`, `String`.
 
 Month/year arithmetic clamps to the end of the target month. `Period` has no `Decompose`; callers read the exported fields directly.
 
@@ -162,12 +182,12 @@ JSON:
 {"kind":"zone","id":"Asia/Tokyo"}
 ```
 
-Key API: `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ID`, `Location`, `Snapshot`, `OffsetAt`, `IsDST`, `Abbreviation`.
+Key API: `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ID`, `Location`, `Snapshot`, `OffsetAt`, `Abbreviation`.
 
 `Zone.Location()` is total: a zero `Zone` falls back to UTC. Time-dependent display data is explicit:
 
 ```json
-{"id":"Asia/Tokyo","offset":"+09:00","dst":false,"abbreviation":"JST"}
+{"id":"Asia/Tokyo","offset":"+09:00","abbreviation":"JST"}
 ```
 
 ## Relationships
@@ -191,10 +211,19 @@ Key API: `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ID`, `Location`, `
 
 JSON shapes are part of the long-term contract.
 
-- Fields may be added only when old consumers can ignore them.
+- Fields are closed. Adding a field is a deliberate wire-format change, not an accidental extension point.
 - Existing field names and meanings must not change.
-- A value must have one source of truth. `Duration` and `Period` JSON use `iso`; derived components stay outside the wire payload.
+- Each payload has one semantic source of truth. Required cross-check fields such as `epoch_ms` and `precision` must match that source exactly and never introduce additional semantics.
+- `Duration` and `Period` JSON use `iso`; derived components stay outside the wire payload.
 - Marshal output must not depend on `time.Now()`, process locale, mutable globals, or ambient zone state.
+- Unmarshal rejects wrong `kind`, missing required fields, unknown fields, unsupported calendars, and contradictory derived fields such as mismatched `epoch_ms` or `precision`.
+
+## Acceptance Criteria
+
+- JSON tests reject unknown fields, missing required fields, wrong `kind`, unsupported calendars, and contradictory derived fields.
+- `Marshal -> Unmarshal -> Marshal` remains byte-stable for accepted value payloads.
+- Date construction rejects years outside `0000..9999` and invalid calendar components.
+- Zone JSON remains `{"kind":"zone","id":"..."}` and never carries offset, abbreviation, or DST display fields.
 
 ## Forbidden
 

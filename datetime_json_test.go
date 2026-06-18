@@ -26,7 +26,7 @@ func TestDateTimeMarshalJSON(t *testing.T) {
 
 func TestDateTimeUnmarshalJSON(t *testing.T) {
 	var dt DateTime
-	input := `{"kind":"datetime","value":"2026-03-27T13:00:00+09:00","zone":"Asia/Tokyo"}`
+	input := `{"kind":"datetime","value":"2026-03-27T13:00:00+09:00","zone":"Asia/Tokyo","calendar":"iso8601"}`
 	if err := json.Unmarshal([]byte(input), &dt); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestDateTimeMarshalJSON_ZeroZoneProjectionsUseUTC(t *testing.T) {
 
 func TestDateTimeUnmarshalJSON_NoZone(t *testing.T) {
 	var dt DateTime
-	input := `{"kind":"datetime","value":"2026-03-27T13:00:00+09:00"}`
+	input := `{"kind":"datetime","value":"2026-03-27T13:00:00+09:00","calendar":"iso8601"}`
 	err := json.Unmarshal([]byte(input), &dt)
 	if !errors.Is(err, ErrInvalidZone) {
 		t.Fatalf("Unmarshal error = %v, want ErrInvalidZone", err)
@@ -111,7 +111,7 @@ func TestDateTimeUnmarshalJSON_NoZone(t *testing.T) {
 
 func TestDateTimeUnmarshalJSON_OffsetMustMatchZone(t *testing.T) {
 	var dt DateTime
-	input := `{"kind":"datetime","value":"2026-03-27T13:00:00+08:00","zone":"Asia/Tokyo"}`
+	input := `{"kind":"datetime","value":"2026-03-27T13:00:00+08:00","zone":"Asia/Tokyo","calendar":"iso8601"}`
 	err := json.Unmarshal([]byte(input), &dt)
 	if !errors.Is(err, ErrInvalidZone) {
 		t.Fatalf("Unmarshal error = %v, want ErrInvalidZone", err)

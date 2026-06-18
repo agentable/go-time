@@ -42,7 +42,7 @@ func TestZoneMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
 
 func TestZoneUnmarshalJSON(t *testing.T) {
 	var z Zone
-	if err := json.Unmarshal([]byte(`{"kind":"zone","id":"Asia/Tokyo","offset_now":"+09:00","dst":false}`), &z); err != nil {
+	if err := json.Unmarshal([]byte(`{"kind":"zone","id":"Asia/Tokyo"}`), &z); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	if z.ID() != "Asia/Tokyo" {

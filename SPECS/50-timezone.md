@@ -44,9 +44,25 @@ zone.IsZero()
 {"kind":"zone","id":"Asia/Tokyo"}
 ```
 
-It never emits current offset, DST state, abbreviation, or any field that would require `time.Now()`. Fixed UTC offsets are not zone identities; `ResolveZone("+08:00")` and `ResolveZone("UTC+8")` return `ErrInvalidZone`, and marshaling an internally malformed fixed-offset `Zone` returns `ErrInvalidZone` instead of emitting `{"kind":"zone","id":"+08:00"}`.
+It never emits offset, abbreviation, DST flags, or any field that would require a reference instant. Fixed UTC offsets are not zone identities; `ResolveZone("+08:00")` and `ResolveZone("UTC+8")` return `ErrInvalidZone`, and marshaling an internally malformed fixed-offset `Zone` returns `ErrInvalidZone` instead of emitting `{"kind":"zone","id":"+08:00"}`.
 
 RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax for an absolute moment, not a persisted zone identity.
+
+## Contract Decisions
+
+### Identity Is An IANA Zone
+
+- **Decision**: Persisted zones are IANA identifiers only. Numeric offsets identify instants in timestamp syntax, not reusable zone identities.
+- **Why**: A zone carries historical and future transition rules. A fixed offset cannot answer local-time projection questions.
+- **Rejected**: Persisting `+08:00` as `Zone`, guessing a zone from an offset, and accepting abbreviations as identity.
+- **Contract Impact**: Offset-bearing RFC 3339 input resolves to `Instant`; `Zone` JSON remains `{"kind":"zone","id":"..."}`.
+
+### Snapshots Carry Observed Facts Only
+
+- **Decision**: `Zone.Snapshot(at)` exposes only zone ID, offset, and abbreviation for the supplied instant.
+- **Why**: Offset and abbreviation are directly observed from stdlib projection. A DST boolean is jurisdictional rule interpretation and is not reliably derivable from offset sampling.
+- **Rejected**: `Zone.IsDST`, `ZoneSnapshot.DST`, and any heuristic DST flag.
+- **Contract Impact**: DST gaps and overlaps are reported through `LocalDateTime.Resolve`; point-in-time zone display uses offset and abbreviation.
 
 ## Snapshot
 
@@ -56,17 +72,16 @@ Display-related zone data is time-dependent and must be requested explicitly:
 snap := zone.Snapshot(gotime.Now())
 snap.ID
 snap.Offset
-snap.DST
 snap.Abbreviation
 ```
 
 JSON shape:
 
 ```json
-{"id":"Asia/Tokyo","offset":"+09:00","dst":false,"abbreviation":"JST"}
+{"id":"Asia/Tokyo","offset":"+09:00","abbreviation":"JST"}
 ```
 
-Convenience methods `OffsetAt`, `IsDST`, and `Abbreviation` are allowed because they require an explicit `Instant`.
+Convenience methods `OffsetAt` and `Abbreviation` are allowed because they require an explicit `Instant`.
 
 ## Projection
 
@@ -105,4 +120,12 @@ Zone and language are orthogonal. `WithZone` controls temporal projection. `With
 - Do not call `MustLoadZone` on user input.
 - Do not ignore DST gaps or duplicate local times.
 - Do not put time-dependent fields in `Zone.MarshalJSON`.
+- Do not expose a DST boolean unless generated rule metadata can answer it directly.
 - Do not add `GuessZone`, `ValidateZone`, `ListZones`, or `LocalZone`; use the current API.
+
+## Acceptance Criteria
+
+- Zone JSON contains only `kind` and `id`, and rejects fixed-offset identities.
+- `Snapshot` JSON contains `id`, `offset`, and `abbreviation` only.
+- No public `IsDST` method or `ZoneSnapshot.DST` field exists.
+- DST gaps and duplicate local times remain observable through `LocalDateTime.Resolve` and parsing with `WithZone`.

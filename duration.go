@@ -119,49 +119,6 @@ func (d Duration) ISO8601() string {
 	return b.String()
 }
 
-// RFC5545 formats d per RFC 5545 §3.3.6 using W/D/H/M/S designators only.
-// Duration cannot carry months/years, so this never returns an error.
-func (d Duration) RFC5545() string {
-	if d == 0 {
-		return "PT0S"
-	}
-	neg := d < 0
-	abs := int64(d)
-	if neg {
-		abs = -abs
-	}
-	totalDays := abs / int64(24*time.Hour)
-	rem := abs - totalDays*int64(24*time.Hour)
-	_, h, m, s, _ := decomposeDuration(rem)
-
-	var b strings.Builder
-	if neg {
-		b.WriteByte('-')
-	}
-	b.WriteByte('P')
-
-	if totalDays > 0 && totalDays%7 == 0 && h == 0 && m == 0 && s == 0 {
-		fmt.Fprintf(&b, "%dW", totalDays/7)
-		return b.String()
-	}
-	if totalDays > 0 {
-		fmt.Fprintf(&b, "%dD", totalDays)
-	}
-	if h > 0 || m > 0 || s > 0 {
-		b.WriteByte('T')
-		if h > 0 {
-			fmt.Fprintf(&b, "%dH", h)
-		}
-		if m > 0 {
-			fmt.Fprintf(&b, "%dM", m)
-		}
-		if s > 0 {
-			fmt.Fprintf(&b, "%dS", s)
-		}
-	}
-	return b.String()
-}
-
 // isoDurationRe matches subset of ISO 8601 duration strings produced by ISO8601().
 // Groups: (1)sign (2)hours (3)minutes (4)seconds.
 var isoDurationRe = regexp.MustCompile(
@@ -256,7 +213,13 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 		Kind string `json:"kind"`
 		ISO  string `json:"iso"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("duration", wire.Kind, "duration"); err != nil {
+		return err
+	}
+	if err := requireJSONString("duration", "iso", wire.ISO); err != nil {
 		return err
 	}
 	parsed, err := parseISO8601Duration(wire.ISO)

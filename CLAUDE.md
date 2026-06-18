@@ -50,7 +50,7 @@ github.com/agentable/go-time/
 ├── duration.go         # Duration = type Duration time.Duration (no Day constant); .Decompose()→DurationComponents
 ├── period.go           # Period = struct{Years, Months, Days int32} (EOM clamp); fields exported directly, no Decompose
 ├── interval.go         # Interval (half-open [start, end); .StdRange()→(time.Time, time.Time))
-├── zone.go             # Zone (IANA only in JSON; Snapshot(at) for offset/dst/abbr)
+├── zone.go             # Zone (IANA only in JSON; Snapshot(at) for offset/abbr)
 ├── duration_components.go # DurationComponents struct — Hours…Nanoseconds slots for external formatters
 ├── parse.go            # Layer 2: ISO 8601 / RFC 3339 parsing + ParseResult tagged-sum
 ├── parse_typed.go      # Layer 2: ParseInstant/ParseDateTime/ParseLocalDateTime/.../ParseInterval (8 typed parsers)
@@ -171,7 +171,7 @@ Operational corollaries:
 - Use `ResolveZone` for fuzzy timezone resolution (Windows names and case-insensitive IANA names) — use `LoadZone` for strict IANA-only. Fixed offsets are not zones; RFC3339 numeric offsets parse to `Instant`.
 - `.Std()` returns stdlib types (`time.Time` / `time.Duration`); `.Clock()` returns a `Time`; `Duration.Decompose()` returns `DurationComponents` (clock slots only). Naming is load-bearing: stdlib vs. clock vs. structured slot. `Period` has no `Decompose` — read `p.Years` / `p.Months` / `p.Days` directly (exported fields), no parallel struct.
 - `Zone.Location()` is total — the zero `Zone` falls back to `UTC`; do not reintroduce parallel fallback helpers
-- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` — never call `time.Now()` during marshal. Time-dependent display uses `Zone.Snapshot(at Instant)`.
+- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` — never call `time.Now()` during marshal. Time-dependent offset and abbreviation use `Zone.Snapshot(at Instant)`.
 - `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
 - `ParseResult.HasZone` indicates whether the input explicitly included timezone/offset information — use this to detect floating times
 - `errors.Is(err, gotime.ErrAmbiguousDate)` for control flow; `errors.As(err, &te)` for detail extraction. `*TimeError` unwraps its `Err` sentinel; `Code` is JSON/log metadata

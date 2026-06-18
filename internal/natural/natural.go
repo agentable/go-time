@@ -47,6 +47,8 @@ type Result struct {
 	DateOnly bool
 	// ZoneID is the zone associated with the result when one applies.
 	ZoneID string
+	// NeedsReference reports whether the result was resolved from Context.RelativeTo.
+	NeedsReference bool
 	// DurNanos is the parsed duration when Kind is KindDuration.
 	DurNanos int64
 	// Period fields hold calendar offsets when Kind is KindPeriod.
@@ -157,19 +159,21 @@ func lastWeekday(base time.Time, wd time.Weekday) time.Time {
 // dateResult builds a KindDate Result at midnight in the given location.
 func dateResult(t time.Time, zoneID string) Result {
 	return Result{
-		Kind:     KindDate,
-		Time:     t,
-		DateOnly: true,
-		ZoneID:   zoneID,
+		Kind:           KindDate,
+		Time:           t,
+		DateOnly:       true,
+		ZoneID:         zoneID,
+		NeedsReference: true,
 	}
 }
 
 // datetimeResult builds a KindDateTime Result.
 func datetimeResult(t time.Time, zoneID string) Result {
 	return Result{
-		Kind:   KindDateTime,
-		Time:   t,
-		ZoneID: zoneID,
+		Kind:           KindDateTime,
+		Time:           t,
+		ZoneID:         zoneID,
+		NeedsReference: true,
 	}
 }
 

@@ -89,15 +89,38 @@ func (i Instant) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON decodes i from {"kind":"instant","iso":"<RFC3339Nano>",...}.
 func (i *Instant) UnmarshalJSON(b []byte) error {
 	var wire struct {
-		Kind string `json:"kind"`
-		ISO  string `json:"iso"`
+		Kind    string `json:"kind"`
+		ISO     string `json:"iso"`
+		EpochMs *int64 `json:"epoch_ms"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("instant", wire.Kind, "instant"); err != nil {
+		return err
+	}
+	if err := requireJSONString("instant", "iso", wire.ISO); err != nil {
 		return err
 	}
 	t, err := time.Parse(time.RFC3339Nano, wire.ISO)
 	if err != nil {
 		return fmt.Errorf("gotime: invalid instant iso %q: %w", wire.ISO, err)
+	}
+	if wire.EpochMs == nil {
+		return newTimeError(
+			ErrInvalidFormat,
+			"instant epoch_ms is required",
+			wire.ISO,
+			"include the epoch_ms field produced by Instant.MarshalJSON",
+		)
+	}
+	if got, want := *wire.EpochMs, t.UnixMilli(); got != want {
+		return newTimeError(
+			ErrInvalidFormat,
+			"instant epoch_ms does not match iso",
+			fmt.Sprintf("iso=%s epoch_ms=%d", wire.ISO, got),
+			fmt.Sprintf("use epoch_ms=%d for this iso value", want),
+		)
 	}
 	*i = InstantFromTime(t)
 	return nil

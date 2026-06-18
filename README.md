@@ -13,7 +13,7 @@ A Go time semantics library for parsing, computing, and serializing precise time
 - **Stdlib bridges**: `.Std()`, `.Clock()`, `Duration.Decompose()` send values back to `time.Time` / `time.Duration` / structured clock slots so any formatter can consume them
 - **Timezone-aware semantics**: Strict IANA zones, fuzzy zone resolution, explicit local-time resolution, floating-time detection (`ParseResult.HasZone`)
 - **Calendar-safe computation**: `Duration.Add` is exact; `AddPeriod` is calendar-aware with end-of-month clamping and DST-stable wall-clock preservation
-- **Stable JSON schemas**: Each value object has a single-source-of-truth wire format that never depends on `time.Now()` or runtime locale
+- **Stable JSON schemas**: Deterministic wire formats with strict decoding; no schema depends on `time.Now()` or runtime locale
 - **Zero i18n footprint**: This package ships no locale data, no formatter types — display is the caller's choice (stdlib `time.Format`, logging libraries, templates, or app-owned renderers)
 
 ## Installation
@@ -54,21 +54,24 @@ func main() {
 
 ### Natural language
 
-Pass a locale; relative expressions default to `time.Now()`, so most callers
-do not need `WithReference`:
+Pass a locale and an explicit reference instant for natural date/datetime
+phrases. Product code chooses "now" at the boundary; tests pin a fixed
+reference:
 
 ```go
 zone := gotime.MustLoadZone("America/New_York")
+now := gotime.Now()
 
 dt, err := gotime.ParseDateTime("tomorrow at 3pm",
 	gotime.WithInputLocale(language.English),
 	gotime.WithZone(zone),
+	gotime.WithReference(now),
 )
 ```
 
 ### Deterministic tests
 
-Pin the reference instant when you need reproducible output:
+Use a fixed reference instant when you need reproducible output:
 
 ```go
 ref, _ := gotime.ParseInstant("2026-03-30T12:00:00Z")
@@ -158,7 +161,7 @@ statically.
 |--------|---------|
 | `WithInputLocale(tag language.Tag)` | Language hint for natural-language input. Also disambiguates slash-date order (e.g. `04/05/2026` is May 4 in `en-GB`, April 5 in `en-US`). |
 | `WithZone(zone)` | Resolve floating datetimes into `DateTime`; without it they remain `LocalDateTime` |
-| `WithReference(instant)` | Anchor relative expressions such as `tomorrow` or `in 2 hours` |
+| `WithReference(instant)` | Anchor natural date/datetime expressions such as `tomorrow` or `next Friday` |
 
 Ambiguity is surfaced through `ParseResult.Candidates`, not pre-selected by an option — callers decide. There is no `WithStrategy` knob.
 
@@ -394,7 +397,7 @@ See `SPECS/60-errors.md` for the full code list.
 
 ## JSON
 
-All value objects implement stable JSON encoding via `github.com/go-json-experiment/json`. Each schema has a **single source of truth**: derived fields (e.g. `Duration.Decompose()`) are computed at the call site, not duplicated on the wire.
+All value objects implement stable JSON encoding via `github.com/go-json-experiment/json`. Decoding is strict: wrong `kind`, missing required fields, unknown fields, unsupported calendars, and contradictory derived fields are rejected.
 
 ```go
 b, err := json.Marshal(dt)
@@ -415,7 +418,7 @@ Representative shapes:
 ```
 
 - `Duration` / `Period` carry **only** `kind` + `iso` — no `components` / `years` / `months` / `days` mirror fields. Run `Duration.Decompose()` for clock slots; read `Period.Years` / `.Months` / `.Days` directly.
-- `Zone` JSON contains only `{"kind":"zone","id":"…"}`. Time-dependent display data (offset, DST, abbreviation) lives in `Zone.Snapshot(at Instant)` — never on the marshalled value, so the same `Zone` encodes byte-identical regardless of when you call `Marshal`.
+- `Zone` JSON contains only `{"kind":"zone","id":"…"}`. Time-dependent display data (offset and abbreviation) lives in `Zone.Snapshot(at Instant)` — never on the marshalled value, so the same `Zone` encodes byte-identical regardless of when you call `Marshal`.
 
 ## API Reference
 

@@ -172,28 +172,6 @@ func TestDuration_Decompose_SubSecond(t *testing.T) {
 	}
 }
 
-func TestDuration_RFC5545(t *testing.T) {
-	tests := []struct {
-		name string
-		d    Duration
-		want string
-	}{
-		{"zero", Duration(0), "PT0S"},
-		{"1 hour", 1 * Hour, "PT1H"},
-		{"1 day", 24 * Hour, "P1D"},
-		{"1 week", 7 * 24 * Hour, "P1W"},
-		{"1 day 2 hours", 26 * Hour, "P1DT2H"},
-		{"-30 minutes", -30 * Minute, "-PT30M"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.d.RFC5545(); got != tc.want {
-				t.Errorf("RFC5545() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestDuration_Std_RoundTrip(t *testing.T) {
 	d := 90 * Minute
 	std := d.Std()

@@ -94,7 +94,7 @@ func (z Zone) IsZero() bool { return z.id == "" && z.loc == nil }
 
 // MarshalJSON encodes z as {"kind":"zone","id":"<IANA id>"}.
 // The output is deterministic and never depends on time.Now() —
-// time-dependent display data lives in Zone.Snapshot(at).
+// time-dependent offset and abbreviation data lives in Zone.Snapshot(at).
 func (z Zone) MarshalJSON() ([]byte, error) {
 	if isFixedOffsetID(z.ID()) {
 		return nil, newTimeError(
@@ -124,7 +124,10 @@ func (z *Zone) UnmarshalJSON(b []byte) error {
 		Kind string `json:"kind"`
 		ID   string `json:"id"`
 	}
-	if err := json.Unmarshal(b, &wire); err != nil {
+	if err := unmarshalJSONWire(b, &wire); err != nil {
+		return err
+	}
+	if err := requireJSONKind("zone", wire.Kind, "zone"); err != nil {
 		return err
 	}
 	loaded, err := LoadZone(wire.ID)
@@ -153,24 +156,6 @@ func (z Zone) OffsetAt(i Instant) string {
 	return formatOffset(offsetSec)
 }
 
-// IsDST reports whether the zone is observing Daylight Saving Time at the given Instant.
-func (z Zone) IsDST(i Instant) bool {
-	eLoc := z.Location()
-	t := i.Std().In(eLoc)
-	// DST detection: compare the current offset against the standard (non-DST) offset.
-	// We determine the standard offset by sampling both January and July and taking the
-	// lower one — this handles both northern-hemisphere zones (summer DST = July higher)
-	// and southern-hemisphere zones (summer DST = January higher, e.g. Australia/Sydney).
-	// Zones without DST have identical January/July offsets, so this returns false correctly.
-	_, currentOffset := t.Zone()
-	jan := time.Date(t.Year(), time.January, 15, 12, 0, 0, 0, eLoc)
-	jul := time.Date(t.Year(), time.July, 15, 12, 0, 0, 0, eLoc)
-	_, janOffset := jan.Zone()
-	_, julOffset := jul.Zone()
-	standardOffset := min(janOffset, julOffset)
-	return currentOffset > standardOffset
-}
-
 // Abbreviation returns the timezone abbreviation (e.g., "JST", "EDT") at the given Instant.
 func (z Zone) Abbreviation(i Instant) string {
 	abbr, _ := i.Std().In(z.Location()).Zone()
@@ -184,20 +169,17 @@ type ZoneSnapshot struct {
 	ID string `json:"id"`
 	// Offset is the UTC offset at the snapshot time, formatted as "+HH:MM".
 	Offset string `json:"offset"`
-	// DST reports whether the zone is observing Daylight Saving Time.
-	DST bool `json:"dst"`
 	// Abbreviation is the zone abbreviation (e.g. "JST", "PDT").
 	Abbreviation string `json:"abbreviation"`
 }
 
-// Snapshot returns a point-in-time view of z (offset, DST, abbreviation) at i.
+// Snapshot returns a point-in-time view of z (offset and abbreviation) at i.
 // The snapshot is decoupled from JSON serialization — callers requiring
 // time-dependent fields compute and embed them explicitly.
 func (z Zone) Snapshot(i Instant) ZoneSnapshot {
 	return ZoneSnapshot{
 		ID:           z.ID(),
 		Offset:       z.OffsetAt(i),
-		DST:          z.IsDST(i),
 		Abbreviation: z.Abbreviation(i),
 	}
 }
