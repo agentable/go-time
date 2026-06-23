@@ -22,10 +22,16 @@ package gotime
 // 8601 string. Run Decompose at the call site when you need structured
 // slots.
 type DurationComponents struct {
-	Hours        int64
-	Minutes      int64
-	Seconds      int64
+	// Hours is the whole-hour slot.
+	Hours int64
+	// Minutes is the remaining whole-minute slot.
+	Minutes int64
+	// Seconds is the remaining whole-second slot.
+	Seconds int64
+	// Milliseconds is the remaining whole-millisecond slot.
 	Milliseconds int64
+	// Microseconds is the remaining whole-microsecond slot.
 	Microseconds int64
-	Nanoseconds  int64
+	// Nanoseconds is the remaining nanosecond slot.
+	Nanoseconds int64
 }

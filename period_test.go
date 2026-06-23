@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -187,7 +188,11 @@ func TestPeriod_UnmarshalJSONInvalidISO(t *testing.T) {
 	t.Parallel()
 
 	var got Period
-	if err := json.Unmarshal([]byte(`{"kind":"period","iso":"P"}`), &got); err == nil {
+	err := json.Unmarshal([]byte(`{"kind":"period","iso":"P"}`), &got)
+	if err == nil {
 		t.Fatal("json.Unmarshal invalid period succeeded, want error")
+	}
+	if !errors.Is(err, errInvalidISO8601Period) {
+		t.Fatalf("json.Unmarshal invalid period error = %v, want errInvalidISO8601Period", err)
 	}
 }

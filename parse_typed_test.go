@@ -26,6 +26,13 @@ func TestParseInstant_KindMismatch(t *testing.T) {
 	if !errors.Is(err, ErrIncompatibleTypes) {
 		t.Errorf("expected ErrIncompatibleTypes, got %v", err)
 	}
+	var te *TimeError
+	if !errors.As(err, &te) {
+		t.Fatalf("expected *TimeError, got %T", err)
+	}
+	if te.Hint != "input parsed as date, call ParseDate instead" {
+		t.Errorf("TimeError.Hint = %q, want ParseDate guidance", te.Hint)
+	}
 }
 
 func TestParseDateTime_Resolves(t *testing.T) {
@@ -233,5 +240,22 @@ func TestParseDate_InvalidPropagatesError(t *testing.T) {
 	}
 	if te.Hint == "" {
 		t.Error("error Hint must not be empty")
+	}
+}
+
+func TestParseResultError_InvalidWithoutErrorHasHint(t *testing.T) {
+	err := parseResultError(ParseResult{Status: StatusInvalid, Input: "??"}, KindDate)
+	if err == nil {
+		t.Fatal("parseResultError() error = nil, want error")
+	}
+	if !errors.Is(err, ErrUnparseable) {
+		t.Fatalf("parseResultError() error = %v, want ErrUnparseable", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) {
+		t.Fatalf("expected *TimeError, got %T", err)
+	}
+	if te.Hint == "" {
+		t.Fatal("TimeError.Hint is empty")
 	}
 }

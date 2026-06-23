@@ -125,7 +125,7 @@ func TestZone_ZeroValue_NoPanic(t *testing.T) {
 	}
 }
 
-// Phase 2: LoadZone, MustLoadZone, ValidateZone, GuessZone
+// Phase 2: LoadZone, MustLoadZone, ResolveZone, Zones
 
 func TestLoadZone_Valid(t *testing.T) {
 	z, err := LoadZone("Asia/Tokyo")

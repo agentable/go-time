@@ -115,9 +115,19 @@ func parseResultError(r ParseResult, want Kind) error {
 		if r.Error != nil {
 			return r.Error
 		}
-		return newTimeError(ErrUnparseable, "parse failed", r.Input, "")
+		return newTimeError(
+			ErrUnparseable,
+			"parse failed",
+			r.Input,
+			"check the input syntax and include the components required by the typed parser",
+		)
 	default:
-		return newTimeError(ErrUnparseable, "parse returned unknown status", r.Input, "")
+		return newTimeError(
+			ErrUnparseable,
+			"parse returned unknown status",
+			r.Input,
+			"call Parse to inspect Status before using a typed parser",
+		)
 	}
 }
 

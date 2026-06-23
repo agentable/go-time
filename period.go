@@ -1,12 +1,16 @@
 package gotime
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/go-json-experiment/json"
 )
+
+// errInvalidISO8601Period is returned when an ISO 8601 period string cannot be parsed.
+var errInvalidISO8601Period = errors.New("invalid ISO 8601 period")
 
 // Period represents a calendar offset in years, months, and days.
 // It is the calendar-aware counterpart to Duration: Period operations
@@ -20,9 +24,12 @@ import (
 //
 //	p := gotime.Period{Years: 1, Months: 3, Days: 7}
 type Period struct {
-	Years  int32 `json:"years,omitzero"`
+	// Years is the calendar-year offset.
+	Years int32 `json:"years,omitzero"`
+	// Months is the calendar-month offset.
 	Months int32 `json:"months,omitzero"`
-	Days   int32 `json:"days,omitzero"`
+	// Days is the calendar-day offset.
+	Days int32 `json:"days,omitzero"`
 }
 
 // NewPeriod creates a Period from calendar year, month, and day components.
@@ -173,31 +180,31 @@ var isoPeriodRe = regexp.MustCompile(
 func parseISO8601Period(s string) (Period, error) {
 	m := isoPeriodRe.FindStringSubmatch(s)
 	if m == nil {
-		return Period{}, fmt.Errorf("invalid ISO 8601 period: %q", s)
+		return Period{}, fmt.Errorf("period %q: %w", s, errInvalidISO8601Period)
 	}
 	if m[2] == "" && m[3] == "" && m[4] == "" && m[5] == "" {
-		return Period{}, fmt.Errorf("invalid ISO 8601 period: %q", s)
+		return Period{}, fmt.Errorf("period %q: %w", s, errInvalidISO8601Period)
 	}
 	neg := m[1] == "-"
 	y, ok := parsePeriodJSONComponent(m[2])
 	if !ok {
-		return Period{}, fmt.Errorf("invalid years component %q", m[2])
+		return Period{}, fmt.Errorf("period years component %q: %w", m[2], errInvalidISO8601Period)
 	}
 	mo, ok := parsePeriodJSONComponent(m[3])
 	if !ok {
-		return Period{}, fmt.Errorf("invalid months component %q", m[3])
+		return Period{}, fmt.Errorf("period months component %q: %w", m[3], errInvalidISO8601Period)
 	}
 	w, ok := parsePeriodJSONComponent(m[4])
 	if !ok {
-		return Period{}, fmt.Errorf("invalid weeks component %q", m[4])
+		return Period{}, fmt.Errorf("period weeks component %q: %w", m[4], errInvalidISO8601Period)
 	}
 	d, ok := parsePeriodJSONComponent(m[5])
 	if !ok {
-		return Period{}, fmt.Errorf("invalid days component %q", m[5])
+		return Period{}, fmt.Errorf("period days component %q: %w", m[5], errInvalidISO8601Period)
 	}
 	totalDays := int64(w)*7 + int64(d)
 	if totalDays > maxInt32 || totalDays < -maxInt32-1 {
-		return Period{}, fmt.Errorf("days component overflows int32")
+		return Period{}, fmt.Errorf("period days component overflows int32: %w", errInvalidISO8601Period)
 	}
 	if neg {
 		y, mo, totalDays = -y, -mo, -totalDays

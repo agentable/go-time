@@ -65,7 +65,7 @@ func TestEn_WeekRelative(t *testing.T) {
 		{"next Friday", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
 		{"this Friday", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
 		{"last Wednesday", time.Date(2026, 3, 25, 0, 0, 0, 0, loc)},
-		// next Monday when today is Monday → +7 days (StrategyLocale)
+		// next Monday when today is Monday → +7 days
 		{"next Monday", time.Date(2026, 4, 6, 0, 0, 0, 0, loc)},
 		// Case insensitive
 		{"Next Friday", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
