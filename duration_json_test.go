@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -75,14 +76,36 @@ func TestDurationUnmarshalJSON_Negative(t *testing.T) {
 }
 
 func TestDurationJSONRoundTrip(t *testing.T) {
-	orig := (90 * Minute)
-	b, _ := json.Marshal(orig)
-	var got Duration
-	if err := json.Unmarshal(b, &got); err != nil {
-		t.Fatalf("round-trip: %v", err)
+	tests := []struct {
+		name string
+		orig Duration
+	}{
+		{name: "whole units", orig: 90 * Minute},
+		{name: "nanosecond", orig: Nanosecond},
+		{name: "fractional second", orig: Second + Nanosecond},
+		{name: "negative fractional second", orig: -Nanosecond},
 	}
-	if orig.Nanoseconds() != got.Nanoseconds() {
-		t.Errorf("round-trip mismatch: got %v, want %v", got.ISO8601(), orig.ISO8601())
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b, err := json.Marshal(tc.orig)
+			if err != nil {
+				t.Fatalf("Marshal(%v) error = %v", tc.orig, err)
+			}
+			var got Duration
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("Unmarshal(%s) error = %v", b, err)
+			}
+			again, err := json.Marshal(got)
+			if err != nil {
+				t.Fatalf("Marshal(round-tripped %v) error = %v", got, err)
+			}
+			if !bytes.Equal(again, b) {
+				t.Errorf("Marshal after round-trip = %s, want %s", again, b)
+			}
+			if got.Nanoseconds() != tc.orig.Nanoseconds() {
+				t.Errorf("round-trip duration = %v, want %v", got.ISO8601(), tc.orig.ISO8601())
+			}
+		})
 	}
 }
 
@@ -104,6 +127,8 @@ func TestDurationUnmarshalJSON_InvalidComponents(t *testing.T) {
 	}{
 		{name: "hour overflow", iso: "PT999999999999999999999H"},
 		{name: "minute overflow", iso: "PT999999999999999999999M"},
+		{name: "second exponent", iso: "PT1e3S"},
+		{name: "negative second exponent", iso: "PT1E-9S"},
 		{name: "second overflow", iso: "PT1e309S"},
 	}
 

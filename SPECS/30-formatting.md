@@ -55,7 +55,7 @@ There is no `Period.Decompose()`.
 
 ## Input Locale
 
-Parsing may accept `language.Tag` through `WithInputLocale`. This is a parsing hint only. Unicode `-u-` display extensions such as hour cycle, calendar, and numbering system are outside go-time.
+Parsing may accept `language.Tag` through `WithInputLocale`. This is a parsing hint only. Unicode `-u-` display extensions such as hour cycle, calendar, and numbering system are outside go-time. Controlled input phrase tables are part of parsing; they are not a display formatting layer.
 
 ## Allowed
 
@@ -68,5 +68,5 @@ Parsing may accept `language.Tag` through `WithInputLocale`. This is a parsing h
 - No formatter types in go-time.
 - No `Locale`, `HourCycle`, `Calendar`, or `Style` types.
 - No methods like `dt.Format(f)` or `d.Render(locale)`.
-- No locale data files in this repository.
-- No i18n, CLDR, message-format, locale-data, or formatter dependency.
+- No CLDR, display-locale assets, or formatter data files in this repository.
+- No display i18n, CLDR, message-format, display-locale, or formatter dependency.

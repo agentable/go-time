@@ -146,11 +146,24 @@ func (iv Interval) Shift(d Duration) Interval {
 }
 
 // Expand returns a new Interval with start moved back by before and end moved forward by after.
-func (iv Interval) Expand(before, after Duration) Interval {
-	return Interval{
-		start: iv.start.Add(-before),
-		end:   iv.end.Add(after),
+func (iv Interval) Expand(before, after Duration) (Interval, error) {
+	if before.IsNegative() {
+		return Interval{}, newTimeError(
+			ErrInvalidDuration,
+			"interval expansion before must not be negative",
+			before.String(),
+			"provide a non-negative duration for before",
+		)
 	}
+	if after.IsNegative() {
+		return Interval{}, newTimeError(
+			ErrInvalidDuration,
+			"interval expansion after must not be negative",
+			after.String(),
+			"provide a non-negative duration for after",
+		)
+	}
+	return NewInterval(iv.start.Add(-before), iv.end.Add(after))
 }
 
 // String returns the ISO 8601 interval notation "<start>/<end>".

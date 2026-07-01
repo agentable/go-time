@@ -138,13 +138,13 @@ These nine principles override all SPECS and code. When a current API contradict
 6. **One concept per type.** `Duration` is exact nanoseconds. `Period` is calendar Y/M/D. `Interval` carries no formatting state.
 7. **Stable wire format.** Every JSON shape is deterministic. Never recompute at marshal time from `time.Now()` or other ambient state.
 8. **Errors compose with stdlib.** Sentinel `Err*` for `errors.Is`, typed `*TimeError` for `errors.As` — same pattern as `os.ErrNotExist` + `*fs.PathError`.
-9. **Minimal dependency surface.** Public API uses only stdlib types + `golang.org/x/text/language.Tag`. **go-time never imports any i18n / locale-data / formatting package.** This is the 10-year contract.
+9. **Minimal dependency surface.** Public API uses only stdlib types + `golang.org/x/text/language.Tag`. go-time never imports display i18n, CLDR, message-format, or formatting packages. Controlled input phrase grammars are parsing data, not a display layer.
 
 If a coding decision violates one of these, the principle wins and the decision is wrong.
 
 Operational corollaries:
 - **KISS** — One `Parse()` handles all inputs. No formatters in this package — display is the caller's problem.
-- **DRY** — Each concern lives in exactly one package. Locale data lives elsewhere; we do not duplicate it.
+- **DRY** — Each concern lives in exactly one package. Display locale data lives elsewhere; controlled input phrase grammars stay small and parser-owned until an adapter boundary is proven.
 - **YAGNI** — Not a calendar, scheduler, cron, recurrence, or formatting library. Permanently out of scope.
 - **Simplicity as art** — `gotime.Now()` → `Instant` (zero config). `gotime.TodayIn(z)` → `Date` (zone is mandatory — a calendar date with no zone is undefined).
 - **Never:** accidental complexity, feature gravity, abstraction theater, configurability cope, importing formatters.
@@ -167,18 +167,21 @@ Operational corollaries:
 - `Period` fields (`Years`, `Months`, `Days`) are exported — literal initialization is the canonical form. Constructors `Years(n)` / `Months(n)` / `Days(n)` are sugar.
 - `Period` month/year add applies end-of-month clamping (Jan 31 + Months(1) = Feb 28/29). Never overflow.
 - Intervals are half-open `[start, end)` — `Contains` excludes end, `Overlaps` excludes touching endpoints, use `Adjacent` for boundary detection
+- `Interval.Expand(before, after)` returns `(Interval, error)` — reject negative expansion durations and preserve the same `end >= start` invariant as constructors.
 - `Interval` carries no zone field — projection zone belongs to the rendering layer (which is outside this module)
 - Use `ResolveZone` for fuzzy timezone resolution (Windows names and case-insensitive IANA names) — use `LoadZone` for strict IANA-only. Fixed offsets are not zones; RFC3339 numeric offsets parse to `Instant`.
 - `.Std()` returns stdlib types (`time.Time` / `time.Duration`); `.Clock()` returns a `Time`; `Duration.Decompose()` returns `DurationComponents` (clock slots only). Naming is load-bearing: stdlib vs. clock vs. structured slot. `Period` has no `Decompose` — read `p.Years` / `p.Months` / `p.Days` directly (exported fields), no parallel struct.
 - `Zone.Location()` is total — the zero `Zone` falls back to `UTC`; do not reintroduce parallel fallback helpers
-- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` — never call `time.Now()` during marshal. Time-dependent offset and abbreviation use `Zone.Snapshot(at Instant)`.
+- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC` — never call `time.Now()` during marshal. Time-dependent offset and abbreviation use `Zone.Snapshot(at Instant)`.
 - `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
+- `ParseResult` has no public `Value() any` escape hatch — dispatch unknown input with `Status`, `Kind`, and comma-ok accessors.
 - `ParseResult.HasZone` indicates whether the input explicitly included timezone/offset information — use this to detect floating times
-- `errors.Is(err, gotime.ErrAmbiguousDate)` for control flow; `errors.As(err, &te)` for detail extraction. `*TimeError` unwraps its `Err` sentinel; `Code` is JSON/log metadata
+- `errors.Is(err, gotime.ErrAmbiguousDate)` for control flow; `errors.As(err, &te)` for detail extraction. `*TimeError` unwraps its `Err` sentinel; `Code` is JSON/log metadata. Typed parsers map DST duplicate local-time ambiguity to `ErrDuplicateTime`, not generic date ambiguity.
 - `Code*` is `ErrorCode` (string metadata); `Err*` is a sentinel `error`. Never mix prefixes.
 - `MustLoadZone` is the only public `Must*`. Never add `MustParse`, `MustNewInterval`, etc.
 - `Parse("P{date-only}")` (e.g. `P1Y`, `P5D`, `P2W`) routes to `KindPeriod`. `Parse("PT{time-only}")` routes to `KindDuration`. `Parse("P{date}T{time}")` returns `StatusInvalid` + `CodeInvalidFormat` — no single type can carry both halves.
 - Duration / Period JSON contain **only** `{"kind":..., "iso":...}`. No `components` / `years` / `months` / `days` fields on the wire. Run `Duration.Decompose()` or read `Period` struct fields at the call site.
+- `Duration.ISO8601()` uses canonical decimal seconds for sub-second precision; scientific notation is not accepted on the wire.
 - Parse ambiguity (slash-date with no locale, DST fall-back) returns `StatusAmbiguous` with `Candidates`. The caller decides — there is no `WithStrategy` knob.
 - `Duration.String()` matches `time.Duration.String()` byte-for-byte. Stringer is a stdlib contract; do not invent variants like `"1h30m"` that drop the trailing `0s`.
 - Selection / clamping uses `Compare` + `slices.MinFunc` / `slices.MaxFunc`. There are no `Min` / `Max` / `Clamp` methods on any value object — they would either be asymmetric or balloon the API surface.
@@ -187,9 +190,9 @@ Operational corollaries:
 
 **Top directive — the 10-year contract:**
 
-- **go-time MUST NEVER import any i18n / CLDR / message-format / locale-data / formatting package.** No specific implementation or successor is exempt. The only language-related dependency permitted is `golang.org/x/text/language` (BCP-47 tag type, no data).
+- **go-time MUST NEVER import any display i18n / CLDR / message-format / formatting package.** No specific implementation or successor is exempt. The only language-related dependency permitted is `golang.org/x/text/language` (BCP-47 tag type, no display data).
 - **go-time MUST NEVER expose a formatter type** (`DateTimeFormat`, `RelativeTimeFormat`, `DurationFormat`), a `Locale` type, a `HourCycle` / `Calendar` enum, or a `Style` enum.
-- **go-time MUST NEVER ship locale JSON / YAML / template / CLDR data** in this repository.
+- **go-time MUST NEVER ship display-locale JSON / YAML / template / CLDR data** in this repository.
 - **No value-object method takes a formatter parameter.** `dt.Format(f)`, `d.Render(loc)`, etc. are banned. Rendering happens via `f.Format(dt.Std())` at the call site, in code the caller wrote.
 
 **Other constraints:**
@@ -240,19 +243,19 @@ See SPECS/ for detailed patterns:
 |------------|---------|
 | `github.com/go-json-experiment/json` | Stable JSON serialization via jsonv2 |
 | `github.com/google/go-cmp` | Test diffs only |
-| `golang.org/x/text` | `language.Tag` for `WithInputLocale` — BCP-47 type only, no locale data |
+| `golang.org/x/text` | `language.Tag` for `WithInputLocale` — BCP-47 type only, no CLDR/display data |
 
-**No other dependencies are permitted in `go.mod`.** Any addition that pulls in i18n, CLDR, message-format, or locale data is forbidden by the top directive in Forbidden above.
+**No other dependencies are permitted in `go.mod`.** Any addition that pulls in display i18n, CLDR, message-format, or display-locale data is forbidden by the top directive in Forbidden above.
 
 ## Error Handling
 
 Sentinel + typed struct hybrid (`os.ErrNotExist` + `*fs.PathError` pattern). Go system errors use `error`; parse semantic states use `ParseResult.Status` (`StatusResolved` / `StatusAmbiguous` / `StatusInvalid`); typed `Parse*` functions translate `StatusAmbiguous`/`StatusInvalid` to a returned `*TimeError`.
 
 `ErrorCode` constants (typed string, prefix `Code*`):
-`CodeEmptyInput`, `CodeInvalidFormat`, `CodeInvalidDate`, `CodeInvalidTime`, `CodeInvalidDuration`, `CodeInvalidPeriod`, `CodeInvalidZone`, `CodeAmbiguousDate`, `CodeAmbiguousTime`, `CodeAmbiguousZone`, `CodeNonexistentTime`, `CodeDuplicateTime`, `CodeIntervalReversed`, `CodeIntervalsDisjoint`, `CodeUnparseable`, `CodeOverflow`, `CodeIncompatibleTypes`.
+`CodeEmptyInput`, `CodeInvalidFormat`, `CodeInvalidDate`, `CodeInvalidTime`, `CodeInvalidDuration`, `CodeInvalidPeriod`, `CodeInvalidZone`, `CodeAmbiguousDate`, `CodeNonexistentTime`, `CodeDuplicateTime`, `CodeIntervalReversed`, `CodeIntervalsDisjoint`, `CodeUnparseable`, `CodeOverflow`, `CodeIncompatibleTypes`.
 
 Sentinel `*TimeError` instances (one per code, prefix `Err*`):
-`ErrEmptyInput`, `ErrInvalidFormat`, `ErrInvalidDate`, `ErrInvalidTime`, `ErrInvalidDuration`, `ErrInvalidPeriod`, `ErrInvalidZone`, `ErrAmbiguousDate`, `ErrAmbiguousTime`, `ErrAmbiguousZone`, `ErrNonexistentTime`, `ErrDuplicateTime`, `ErrIntervalReversed`, `ErrIntervalsDisjoint`, `ErrUnparseable`, `ErrOverflow`, `ErrIncompatibleTypes`.
+`ErrEmptyInput`, `ErrInvalidFormat`, `ErrInvalidDate`, `ErrInvalidTime`, `ErrInvalidDuration`, `ErrInvalidPeriod`, `ErrInvalidZone`, `ErrAmbiguousDate`, `ErrNonexistentTime`, `ErrDuplicateTime`, `ErrIntervalReversed`, `ErrIntervalsDisjoint`, `ErrUnparseable`, `ErrOverflow`, `ErrIncompatibleTypes`.
 
 Pattern:
 

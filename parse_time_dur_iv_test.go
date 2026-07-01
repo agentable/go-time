@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"testing"
 
 	"golang.org/x/text/language"
@@ -203,6 +204,25 @@ func TestParse_Duration_Invalid(t *testing.T) {
 			}
 			if r.Error.Code != CodeInvalidFormat {
 				t.Errorf("error code = %q, want %q", r.Error.Code, CodeInvalidFormat)
+			}
+		})
+	}
+}
+
+func TestParse_Duration_RejectsExponentSeconds(t *testing.T) {
+	for _, input := range []string{"PT1e3S", "PT1E-9S"} {
+		t.Run(input, func(t *testing.T) {
+			r := Parse(input)
+			if r.Status != StatusInvalid {
+				t.Fatalf("Parse(%q).Status = %v, want Invalid", input, r.Status)
+			}
+			if r.Error.Code != CodeInvalidFormat {
+				t.Errorf("Parse(%q).Error.Code = %q, want %q", input, r.Error.Code, CodeInvalidFormat)
+			}
+
+			_, err := ParseDuration(input)
+			if !errors.Is(err, ErrInvalidFormat) {
+				t.Errorf("ParseDuration(%q) error = %v, want ErrInvalidFormat", input, err)
 			}
 		})
 	}

@@ -175,7 +175,7 @@ func (r ParseResult) Interval() (Interval, bool) {
 //
 // Reach for Parse when you need any of:
 //
-//   - Polymorphic dispatch on Kind via [ParseResult.Value] and a Go type switch.
+//   - Polymorphic dispatch on Kind via Status, Kind, and comma-ok accessors.
 //   - Access to [ParseResult.Candidates] for ambiguous inputs.
 //   - Access to [ParseResult.Warnings], [ParseResult.HasZone], or
 //     [ParseResult.Reference] metadata.
@@ -195,7 +195,7 @@ func (r ParseResult) MarshalJSON() ([]byte, error) {
 	switch r.Status {
 	case StatusResolved:
 		wire.ValueKind = r.Kind
-		wire.Value = r.Value()
+		wire.Value = parseResultValue(r)
 		if !r.Zone.IsZero() {
 			wire.Zone = r.Zone.ID()
 		}
@@ -220,24 +220,7 @@ type parseResultWire struct {
 	Error      *TimeError    `json:"error,omitzero"`
 }
 
-// Value returns the parsed value as an untyped any so callers can dispatch via
-// a Go type switch. The concrete type is one of [Instant], [DateTime],
-// [LocalDateTime], [Date], [Time], [Duration], [Period], or [Interval] —
-// matching r.Kind. Returns nil when r.Status is not [StatusResolved], so a type
-// switch with a nil case (or default) naturally handles ambiguous / invalid inputs.
-//
-//	switch v := result.Value().(type) {
-//	case gotime.DateTime: handle(v)
-//	case gotime.LocalDateTime: handle(v)
-//	case gotime.Date:     handle(v)
-//	case nil:             // ambiguous or invalid — inspect result.Candidates / result.Error
-//	}
-//
-// When you already know the target type, prefer the typed helpers
-// ([ParseDateTime], [ParseDate], ...). The comma-ok accessors
-// ([ParseResult.DateTime] etc.) remain available for callers that use Parse
-// for Warnings / Candidates but still know the Kind statically.
-func (r ParseResult) Value() any {
+func parseResultValue(r ParseResult) any {
 	if r.Status != StatusResolved {
 		return nil
 	}

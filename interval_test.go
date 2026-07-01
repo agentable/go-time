@@ -246,12 +246,60 @@ func TestInterval_Shift(t *testing.T) {
 
 func TestInterval_Expand(t *testing.T) {
 	iv := mustInterval(t, ivStart, ivEnd)
-	expanded := iv.Expand((15 * Minute), (15 * Minute))
+	expanded, err := iv.Expand((15 * Minute), (15 * Minute))
+	if err != nil {
+		t.Fatalf("Expand() error = %v", err)
+	}
 	if !expanded.Start().Equal(ivStart.Add((-15 * Minute))) {
 		t.Errorf("Expand Start = %v, want %v", expanded.Start(), ivStart.Add((-15 * Minute)))
 	}
 	if !expanded.End().Equal(ivEnd.Add((15 * Minute))) {
 		t.Errorf("Expand End = %v, want %v", expanded.End(), ivEnd.Add((15 * Minute)))
+	}
+}
+
+func TestInterval_Expand_ZeroPreservesInterval(t *testing.T) {
+	iv := mustInterval(t, ivStart, ivEnd)
+
+	expanded, err := iv.Expand(0, 0)
+	if err != nil {
+		t.Fatalf("Expand(0, 0) error = %v", err)
+	}
+	if !expanded.Start().Equal(ivStart) {
+		t.Errorf("Expand(0, 0).Start() = %v, want %v", expanded.Start(), ivStart)
+	}
+	if !expanded.End().Equal(ivEnd) {
+		t.Errorf("Expand(0, 0).End() = %v, want %v", expanded.End(), ivEnd)
+	}
+}
+
+func TestInterval_Expand_RejectsNegativeInputs(t *testing.T) {
+	iv := mustInterval(t, ivStart, ivEnd)
+
+	tests := []struct {
+		name   string
+		before Duration
+		after  Duration
+	}{
+		{name: "negative before", before: -1 * Minute, after: 0},
+		{name: "negative after", before: 0, after: -1 * Minute},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := iv.Expand(tc.before, tc.after)
+			if !errors.Is(err, ErrInvalidDuration) {
+				t.Errorf("Expand(%v, %v) error = %v, want ErrInvalidDuration", tc.before, tc.after, err)
+			}
+		})
+	}
+}
+
+func TestInterval_Expand_RejectsShrinkPastZero(t *testing.T) {
+	iv := mustInterval(t, ivStart, ivEnd)
+
+	_, err := iv.Expand(-5*Hour, -5*Hour)
+	if !errors.Is(err, ErrInvalidDuration) {
+		t.Errorf("Expand(-5h, -5h) error = %v, want ErrInvalidDuration", err)
 	}
 }
 

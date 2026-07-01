@@ -27,7 +27,7 @@ The API follows constraint-led design: remove every decision the caller should n
 6. **One concept per type**: `Duration` is exact nanoseconds; `Period` is calendar Y/M/D; `Interval` is zone-free.
 7. **Stable wire format**: JSON is deterministic and never depends on marshal-time state.
 8. **Errors compose with stdlib**: `Err*` sentinels for `errors.Is`, `*TimeError` for `errors.As`.
-9. **Minimal dependency surface**: public API uses stdlib plus `golang.org/x/text/language.Tag`; no formatter, CLDR, or locale-data dependency.
+9. **Minimal dependency surface**: public API uses stdlib plus `golang.org/x/text/language.Tag`; no formatter, CLDR, message-format, or display-locale dependency. Controlled input phrase grammars belong to parsing, not display.
 
 ## Load-Bearing Decisions
 
@@ -71,7 +71,7 @@ These specs describe the current v2 contract. If implementation and specs disagr
 ## Permanent Non-Goals
 
 - No formatter or locale types (`DateTimeFormat`, `RelativeTimeFormat`, `DurationFormat`, `Locale`, `HourCycle`, `Calendar`, `Style`).
-- No i18n, CLDR, message-format, locale-data, JSON/YAML/template locale assets, or formatter dependency.
+- No display i18n, CLDR, message-format, JSON/YAML/template locale assets, or formatter dependency.
 - No event, reminder, alarm, scheduler, cron, RRULE, recurrence, business-calendar, holiday, lunar-calendar, Julian-day, sunrise/sunset, or moon-phase model.
 - No semantic mixing: `Instant + Period`, `Date + Duration`, and `DateTime + DateTime` remain undefined.
 - No marshal-time calls to `time.Now()`.

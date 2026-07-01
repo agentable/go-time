@@ -53,60 +53,106 @@ func TestParseResult_Accessors_ZeroValue(t *testing.T) {
 	if _, ok := r.Interval(); ok {
 		t.Error("zero ParseResult.Interval() should report ok=false")
 	}
-	if v := r.Value(); v != nil {
-		t.Errorf("zero ParseResult.Value() = %v, want nil", v)
-	}
 }
 
-func TestParseResult_Value_ByKind(t *testing.T) {
+func TestParseResult_Accessors_ByKind(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name  string
-		input string
-		opts  []Option
-		want  any
+		name     string
+		input    string
+		opts     []Option
+		wantKind Kind
+		assert   func(*testing.T, ParseResult)
 	}{
 		{
-			name:  "instant",
-			input: "2026-03-27T04:00:00Z",
-			want:  Instant{},
+			name:     "instant",
+			input:    "2026-03-27T04:00:00Z",
+			wantKind: KindInstant,
+			assert: func(t *testing.T, r ParseResult) {
+				t.Helper()
+				if _, ok := r.Instant(); !ok {
+					t.Fatal("Instant() ok=false, want true")
+				}
+			},
 		},
 		{
-			name:  "datetime",
-			input: "2026-03-27T13:00:00",
-			opts:  []Option{WithZone(MustLoadZone("Asia/Tokyo"))},
-			want:  DateTime{},
+			name:     "datetime",
+			input:    "2026-03-27T13:00:00",
+			opts:     []Option{WithZone(MustLoadZone("Asia/Tokyo"))},
+			wantKind: KindDateTime,
+			assert: func(t *testing.T, r ParseResult) {
+				t.Helper()
+				if _, ok := r.DateTime(); !ok {
+					t.Fatal("DateTime() ok=false, want true")
+				}
+			},
 		},
 		{
-			name:  "local datetime",
-			input: "2026-03-27T13:00:00",
-			want:  LocalDateTime{},
+			name:     "local datetime",
+			input:    "2026-03-27T13:00:00",
+			wantKind: KindLocalDateTime,
+			assert: func(t *testing.T, r ParseResult) {
+				t.Helper()
+				if _, ok := r.LocalDateTime(); !ok {
+					t.Fatal("LocalDateTime() ok=false, want true")
+				}
+			},
 		},
 		{
-			name:  "date",
-			input: "2026-03-27",
-			want:  Date{},
+			name:     "date",
+			input:    "2026-03-27",
+			wantKind: KindDate,
+			assert: func(t *testing.T, r ParseResult) {
+				t.Helper()
+				if _, ok := r.Date(); !ok {
+					t.Fatal("Date() ok=false, want true")
+				}
+			},
 		},
 		{
-			name:  "time",
-			input: "13:00:00",
-			want:  Time{},
+			name:     "time",
+			input:    "13:00:00",
+			wantKind: KindTime,
+			assert: func(t *testing.T, r ParseResult) {
+				t.Helper()
+				if _, ok := r.Time(); !ok {
+					t.Fatal("Time() ok=false, want true")
+				}
+			},
 		},
 		{
-			name:  "duration",
-			input: "PT1H30M",
-			want:  Duration(0),
+			name:     "duration",
+			input:    "PT1H30M",
+			wantKind: KindDuration,
+			assert: func(t *testing.T, r ParseResult) {
+				t.Helper()
+				if _, ok := r.Duration(); !ok {
+					t.Fatal("Duration() ok=false, want true")
+				}
+			},
 		},
 		{
-			name:  "period",
-			input: "P1Y2M3D",
-			want:  Period{},
+			name:     "period",
+			input:    "P1Y2M3D",
+			wantKind: KindPeriod,
+			assert: func(t *testing.T, r ParseResult) {
+				t.Helper()
+				if _, ok := r.Period(); !ok {
+					t.Fatal("Period() ok=false, want true")
+				}
+			},
 		},
 		{
-			name:  "interval",
-			input: "2026-03-27T00:00:00Z/2026-03-28T00:00:00Z",
-			want:  Interval{},
+			name:     "interval",
+			input:    "2026-03-27T00:00:00Z/2026-03-28T00:00:00Z",
+			wantKind: KindInterval,
+			assert: func(t *testing.T, r ParseResult) {
+				t.Helper()
+				if _, ok := r.Interval(); !ok {
+					t.Fatal("Interval() ok=false, want true")
+				}
+			},
 		},
 	}
 	for _, tc := range tests {
@@ -117,29 +163,27 @@ func TestParseResult_Value_ByKind(t *testing.T) {
 			if r.Status != StatusResolved {
 				t.Fatalf("Parse(%q).Status = %q, want resolved", tc.input, r.Status)
 			}
-			v := r.Value()
-			gotType := typeName(v)
-			wantType := typeName(tc.want)
-			if gotType != wantType {
-				t.Errorf("Value() type = %s, want %s", gotType, wantType)
+			if r.Kind != tc.wantKind {
+				t.Fatalf("Parse(%q).Kind = %q, want %q", tc.input, r.Kind, tc.wantKind)
 			}
+			tc.assert(t, r)
 		})
 	}
 }
 
-func TestParseResult_Value_NilWhenNotResolved(t *testing.T) {
+func TestParseResult_Accessors_NonResolvedReturnFalse(t *testing.T) {
 	t.Parallel()
 
 	r := Parse("nonsense gibberish 12345!@#")
 	if r.Status == StatusResolved {
 		t.Fatalf("expected non-resolved status, got %q", r.Status)
 	}
-	if v := r.Value(); v != nil {
-		t.Errorf("non-resolved Value() = %v, want nil", v)
+	if _, ok := r.Date(); ok {
+		t.Fatal("Date() ok=true, want false")
 	}
 }
 
-func TestParseResult_Accessors_NonResolvedReturnFalse(t *testing.T) {
+func TestParseResult_Accessors_AmbiguousReturnFalse(t *testing.T) {
 	t.Parallel()
 
 	r := Parse("04/05/2026")
@@ -148,34 +192,6 @@ func TestParseResult_Accessors_NonResolvedReturnFalse(t *testing.T) {
 	}
 	if _, ok := r.Date(); ok {
 		t.Fatal("ambiguous Date() ok=true, want false")
-	}
-	if v := r.Value(); v != nil {
-		t.Fatalf("ambiguous Value() = %v, want nil", v)
-	}
-}
-
-func typeName(v any) string {
-	switch v.(type) {
-	case Instant:
-		return "Instant"
-	case DateTime:
-		return "DateTime"
-	case LocalDateTime:
-		return "LocalDateTime"
-	case Date:
-		return "Date"
-	case Time:
-		return "Time"
-	case Duration:
-		return "Duration"
-	case Period:
-		return "Period"
-	case Interval:
-		return "Interval"
-	case nil:
-		return "nil"
-	default:
-		return "unknown"
 	}
 }
 

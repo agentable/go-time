@@ -100,22 +100,31 @@ type ParseResult struct {
 }
 ```
 
-`Candidates` is recursive: each candidate is a resolved `ParseResult`. Access parsed values through either `Value()` or the comma-ok accessors.
+`Candidates` is recursive: each candidate is a resolved `ParseResult`. Access parsed values through comma-ok accessors.
 
 ```go
-switch v := result.Value().(type) {
-case gotime.DateTime:
-    handle(v)
-case gotime.LocalDateTime:
-    handle(v)
-case gotime.Date:
-    handle(v)
-case nil:
+switch result.Status {
+case gotime.StatusResolved:
+    switch result.Kind {
+    case gotime.KindDateTime:
+        if dt, ok := result.DateTime(); ok {
+            handle(dt)
+        }
+    case gotime.KindLocalDateTime:
+        if ldt, ok := result.LocalDateTime(); ok {
+            handle(ldt)
+        }
+    case gotime.KindDate:
+        if d, ok := result.Date(); ok {
+            handle(d)
+        }
+    }
+case gotime.StatusAmbiguous, gotime.StatusInvalid:
     handleNonResolved(result)
 }
 ```
 
-`Value()` returns `nil` unless `Status == StatusResolved`. Accessors such as `DateTime() (DateTime, bool)` and `LocalDateTime() (LocalDateTime, bool)` return `ok=false` when the kind does not match.
+Accessors such as `DateTime() (DateTime, bool)` and `LocalDateTime() (LocalDateTime, bool)` return `ok=false` unless `Status == StatusResolved` and the kind matches.
 
 ## Options
 
@@ -140,6 +149,8 @@ When `WithZone` resolves a floating datetime, `ParseResult.Warnings` includes `W
 Slash dates follow locale when provided. With no locale, they resolve only when one interpretation is valid; otherwise `Parse` returns `StatusAmbiguous`.
 
 Floating datetime parsing uses the same projection rule as `LocalDateTime.Resolve` only when `WithZone` is supplied. DST fall-back local times return `StatusAmbiguous` with `DateTime` candidates. Each candidate carries `WarnDuplicateTime` with its abbreviation and offset. DST spring-forward gaps return `StatusInvalid` with `CodeNonexistentTime`.
+
+Typed parsers preserve the ambiguity cause when translating `StatusAmbiguous` into an error. Slash-date ambiguity returns a `*TimeError` wrapping `ErrAmbiguousDate`. DST fall-back ambiguity returns a `*TimeError` wrapping `ErrDuplicateTime`, including when the duplicate local time appears inside an interval endpoint.
 
 `HasZone` reports whether the original input explicitly included a timezone or offset. It is the caller's hook for detecting floating time.
 

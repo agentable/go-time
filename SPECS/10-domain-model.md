@@ -138,6 +138,8 @@ Key API: `Std`, `Nanoseconds`, `Milliseconds`, `InSeconds`, `InMinutes`, `InHour
 
 `Duration.String()` matches `time.Duration.String()` byte-for-byte. `Duration.Decompose()` exposes clock slots only: hours, minutes, seconds, milliseconds, microseconds, nanoseconds.
 
+`Duration.ISO8601()` emits canonical decimal seconds for sub-second precision. Scientific notation is not part of the wire domain.
+
 ### Period
 
 A calendar offset in years, months, and calendar days.
@@ -189,6 +191,8 @@ Key API: `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ID`, `Location`, `
 ```json
 {"id":"Asia/Tokyo","offset":"+09:00","abbreviation":"JST"}
 ```
+
+Zero `Zone` values normalize to `UTC` on identity output surfaces such as JSON and `Snapshot`.
 
 ## Relationships
 

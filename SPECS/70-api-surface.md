@@ -132,7 +132,6 @@ Diagnostic parser:
 
 ```go
 func Parse(input string, opts ...Option) ParseResult
-func (r ParseResult) Value() any
 ```
 
 Comma-ok accessors:
@@ -206,7 +205,7 @@ func (iv Interval) Adjacent(other Interval) bool
 func (iv Interval) Intersect(other Interval) (Interval, bool)
 func (iv Interval) Union(other Interval) (Interval, error)
 func (iv Interval) Shift(d Duration) Interval
-func (iv Interval) Expand(before, after Duration) Interval
+func (iv Interval) Expand(before, after Duration) (Interval, error)
 ```
 
 Interval iteration is not part of this API surface. Cadence, inclusivity, and DST behavior belong to a separate scheduling or recurrence contract, not to `Interval`.
@@ -265,10 +264,12 @@ Stable value JSON:
 
 Decoding is strict for value-object JSON: unknown fields, missing required fields, wrong `kind`, unsupported calendars, and contradictory cross-check fields are errors.
 
+`Duration` ISO strings use canonical decimal seconds for sub-second precision; scientific notation is outside the wire domain. A zero `Zone` encodes with `id:"UTC"` to match its total UTC projection behavior.
+
 ## Removed Or Forbidden API
 
 - Formatter and locale-display types.
-- i18n, CLDR, message-format, locale-data, and formatter dependencies.
+- display i18n, CLDR, message-format, display-locale, and formatter dependencies.
 - `gotime.Today()`.
 - `gotime.Day` duration constant.
 - `Duration.InDays()`.
@@ -280,6 +281,7 @@ Decoding is strict for value-object JSON: unknown fields, missing required field
 - `Min`, `Max`, `Clamp`.
 - `StartOf*`, `EndOf*`.
 - `Interval.Step`, `Each`, `EachDate`.
+- `ParseResult.Value()`.
 - `ParseResult.Locale`, `ParseResult.Strategy`.
 - Public `Must*` APIs other than `MustLoadZone`.
 

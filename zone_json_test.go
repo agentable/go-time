@@ -32,6 +32,17 @@ func TestZoneMarshalJSON_UTC(t *testing.T) {
 	}
 }
 
+func TestZoneMarshalJSON_ZeroNormalizesToUTC(t *testing.T) {
+	b, err := json.Marshal(Zone{})
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	want := `{"kind":"zone","id":"UTC"}`
+	if string(b) != want {
+		t.Errorf("Marshal(Zone{}) = %s, want %s", b, want)
+	}
+}
+
 func TestZoneMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
 	z := Zone{id: "+08:00", loc: time.FixedZone("+08:00", 8*3600)}
 	_, err := json.Marshal(z)

@@ -117,7 +117,12 @@ func TestDuration_ISO8601(t *testing.T) {
 		{90 * Minute, "PT1H30M"},
 		{45 * Minute, "PT45M"},
 		{30 * Second, "PT30S"},
+		{Nanosecond, "PT0.000000001S"},
+		{Microsecond, "PT0.000001S"},
+		{Millisecond, "PT0.001S"},
+		{Second + Nanosecond, "PT1.000000001S"},
 		{-30 * Minute, "-PT30M"},
+		{-Nanosecond, "-PT0.000000001S"},
 		{2*Hour + 15*Minute, "PT2H15M"},
 	}
 	for _, tc := range tests {

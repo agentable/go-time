@@ -14,7 +14,7 @@ A Go time semantics library for parsing, computing, and serializing precise time
 - **Timezone-aware semantics**: Strict IANA zones, fuzzy zone resolution, explicit local-time resolution, floating-time detection (`ParseResult.HasZone`)
 - **Calendar-safe computation**: `Duration.Add` is exact; `AddPeriod` is calendar-aware with end-of-month clamping and DST-stable wall-clock preservation
 - **Stable JSON schemas**: Deterministic wire formats with strict decoding; no schema depends on `time.Now()` or runtime locale
-- **Zero i18n footprint**: This package ships no locale data, no formatter types — display is the caller's choice (stdlib `time.Format`, logging libraries, templates, or app-owned renderers)
+- **No display locale stack**: This package ships no formatter types, CLDR data, or message-format dependency. Parsing includes small, controlled input phrase grammars selected by `language.Tag`; display remains the caller's choice.
 
 ## Installation
 
@@ -107,37 +107,43 @@ wrapping `ErrIncompatibleTypes`.
 ### `Parse` — inspection / polymorphic dispatch
 
 Reach for `Parse` when you do not know the kind ahead of time, or when you
-need access to `Candidates`, `Warnings`, `HasZone`, or `Reference`. The fastest
-way to dispatch is `Value()` + a Go type switch:
+need access to `Candidates`, `Warnings`, `HasZone`, or `Reference`. Dispatch
+through `Status`, `Kind`, and the comma-ok accessors:
 
 ```go
 r := gotime.Parse(input, opts...)
 
-switch v := r.Value().(type) {
-case gotime.DateTime:
-	fmt.Println(v)
-case gotime.LocalDateTime:
-	fmt.Println(v)
-case gotime.Date:
-	fmt.Println(v)
-case gotime.Duration:
-	fmt.Println(v)
-case nil:
-	// Status is StatusAmbiguous or StatusInvalid.
-	switch r.Status {
-	case gotime.StatusAmbiguous:
-		for _, c := range r.Candidates {
-			fmt.Println(c.Kind)
+switch r.Status {
+case gotime.StatusResolved:
+	switch r.Kind {
+	case gotime.KindDateTime:
+		if dt, ok := r.DateTime(); ok {
+			fmt.Println(dt)
 		}
-	case gotime.StatusInvalid:
-		fmt.Println(r.Error.Code, r.Error.Hint)
+	case gotime.KindLocalDateTime:
+		if ldt, ok := r.LocalDateTime(); ok {
+			fmt.Println(ldt)
+		}
+	case gotime.KindDate:
+		if d, ok := r.Date(); ok {
+			fmt.Println(d)
+		}
+	case gotime.KindDuration:
+		if d, ok := r.Duration(); ok {
+			fmt.Println(d)
+		}
 	}
+case gotime.StatusAmbiguous:
+	for _, c := range r.Candidates {
+		fmt.Println(c.Kind)
+	}
+case gotime.StatusInvalid:
+	fmt.Println(r.Error.Code, r.Error.Hint)
 }
 ```
 
-The comma-ok accessors (`r.DateTime()`, `r.LocalDateTime()`, `r.Date()`, …) are still available for
-callers that use `Parse` for metadata but already know the target `Kind`
-statically.
+The comma-ok accessors return `ok=false` unless the result is resolved and the
+kind matches the accessor.
 
 ### Supported inputs
 
@@ -417,8 +423,8 @@ Representative shapes:
 {"kind":"zone","id":"America/New_York"}
 ```
 
-- `Duration` / `Period` carry **only** `kind` + `iso` — no `components` / `years` / `months` / `days` mirror fields. Run `Duration.Decompose()` for clock slots; read `Period.Years` / `.Months` / `.Days` directly.
-- `Zone` JSON contains only `{"kind":"zone","id":"…"}`. Time-dependent display data (offset and abbreviation) lives in `Zone.Snapshot(at Instant)` — never on the marshalled value, so the same `Zone` encodes byte-identical regardless of when you call `Marshal`.
+- `Duration` / `Period` carry **only** `kind` + `iso` — no `components` / `years` / `months` / `days` mirror fields. `Duration` sub-second ISO text uses decimal seconds, never scientific notation. Run `Duration.Decompose()` for clock slots; read `Period.Years` / `.Months` / `.Days` directly.
+- `Zone` JSON contains only `{"kind":"zone","id":"…"}`. A zero `Zone` encodes as `{"kind":"zone","id":"UTC"}`. Time-dependent display data (offset and abbreviation) lives in `Zone.Snapshot(at Instant)` — never on the marshalled value, so the same `Zone` encodes byte-identical regardless of when you call `Marshal`.
 
 ## API Reference
 

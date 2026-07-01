@@ -177,13 +177,34 @@ func TestTypedParsers_ReturnErrorSentinels(t *testing.T) {
 		wantCode ErrorCode
 	}{
 		{
-			name: "ambiguous local datetime",
+			name: "duplicate local datetime",
 			parse: func() error {
 				_, err := ParseDateTime("2026-11-01T01:30:00", WithZone(MustLoadZone("America/New_York")))
 				return err
 			},
-			wantErr:  ErrAmbiguousDate,
-			wantCode: CodeAmbiguousDate,
+			wantErr:  ErrDuplicateTime,
+			wantCode: CodeDuplicateTime,
+		},
+		{
+			name: "non-hour duplicate local datetime",
+			parse: func() error {
+				_, err := ParseDateTime("2026-04-05T01:45:00", WithZone(MustLoadZone("Australia/Lord_Howe")))
+				return err
+			},
+			wantErr:  ErrDuplicateTime,
+			wantCode: CodeDuplicateTime,
+		},
+		{
+			name: "interval duplicate local start",
+			parse: func() error {
+				_, err := ParseInterval(
+					"2026-11-01T01:30:00/2026-11-01T03:00:00",
+					WithZone(MustLoadZone("America/New_York")),
+				)
+				return err
+			},
+			wantErr:  ErrDuplicateTime,
+			wantCode: CodeDuplicateTime,
 		},
 		{
 			name: "invalid clock time",

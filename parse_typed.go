@@ -7,7 +7,7 @@ package gotime
 //
 //   - StatusResolved + matching Kind → (value, nil)
 //   - StatusResolved + wrong Kind    → (zero, *TimeError wrapping ErrIncompatibleTypes)
-//   - StatusAmbiguous                → (zero, *TimeError wrapping the matching ErrAmbiguous*)
+//   - StatusAmbiguous                → (zero, *TimeError wrapping the precise ambiguity cause)
 //   - StatusInvalid                  → (zero, r.Error)
 //
 // These helpers are sugar over Parse — callers that need Candidates or
@@ -105,11 +105,12 @@ func parseResultError(r ParseResult, want Kind) error {
 			"input parsed as "+string(r.Kind)+", call "+parseFunctionForKind(r.Kind)+" instead",
 		)
 	case StatusAmbiguous:
+		hint, sentinel := ambiguousErrorForResult(r)
 		return newTimeError(
-			ambiguousSentinelForKind(r.Kind),
+			sentinel,
 			"input is ambiguous; inspect Parse(...).Candidates to choose",
 			r.Input,
-			"add WithInputLocale or call Parse to inspect candidates",
+			hint,
 		)
 	case StatusInvalid:
 		if r.Error != nil {
@@ -131,12 +132,31 @@ func parseResultError(r ParseResult, want Kind) error {
 	}
 }
 
+func ambiguousErrorForResult(r ParseResult) (string, error) {
+	if hasWarningCode(r, WarnDuplicateTime) {
+		return "call Parse to inspect candidates and choose the intended offset", ErrDuplicateTime
+	}
+	return "add WithInputLocale or call Parse to inspect candidates", ambiguousSentinelForKind(r.Kind)
+}
+
+func hasWarningCode(r ParseResult, code WarningCode) bool {
+	for _, w := range r.Warnings {
+		if w.Code == code {
+			return true
+		}
+	}
+	for i := range r.Candidates {
+		if hasWarningCode(r.Candidates[i], code) {
+			return true
+		}
+	}
+	return false
+}
+
 func ambiguousSentinelForKind(k Kind) error {
 	switch k {
 	case KindDate, KindDateTime, KindLocalDateTime, KindInstant, KindInterval:
 		return ErrAmbiguousDate
-	case KindTime:
-		return ErrAmbiguousTime
 	default:
 		return ErrAmbiguousDate
 	}

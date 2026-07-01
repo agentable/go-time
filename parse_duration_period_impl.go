@@ -2,7 +2,6 @@ package gotime
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -145,15 +144,45 @@ func invalidPeriodComponent(input, component, raw string) ParseResult {
 }
 
 func parseDurationComponent(raw string, unit time.Duration) (int64, bool) {
-	f, err := strconv.ParseFloat(strings.ReplaceAll(raw, ",", "."), 64)
-	if err != nil || math.IsInf(f, 0) || math.IsNaN(f) {
+	wholeText, fracText, hasFrac := cutDecimal(raw)
+	whole, err := strconv.ParseInt(wholeText, 10, 64)
+	if err != nil {
 		return 0, false
 	}
-	ns := f * float64(unit)
-	if ns > float64(maxInt64) || ns < float64(minInt64) {
+	unitNs := int64(unit)
+	if whole > maxInt64/unitNs {
 		return 0, false
 	}
-	return int64(ns), true
+	total := whole * unitNs
+	if !hasFrac {
+		return total, true
+	}
+	if fracText == "" || len(fracText) > 9 {
+		return 0, false
+	}
+	frac, err := strconv.ParseInt(fracText, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	scale := pow10(len(fracText))
+	fractionNs := frac * (unitNs / scale)
+	return checkedAddInt64(total, fractionNs)
+}
+
+func cutDecimal(raw string) (whole, frac string, ok bool) {
+	if whole, frac, ok = strings.Cut(raw, "."); ok {
+		return whole, frac, true
+	}
+	whole, frac, ok = strings.Cut(raw, ",")
+	return whole, frac, ok
+}
+
+func pow10(n int) int64 {
+	p := int64(1)
+	for range n {
+		p *= 10
+	}
+	return p
 }
 
 func invalidDurationComponent(input, component, raw string) ParseResult {

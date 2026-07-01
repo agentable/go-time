@@ -44,7 +44,7 @@ zone.IsZero()
 {"kind":"zone","id":"Asia/Tokyo"}
 ```
 
-It never emits offset, abbreviation, DST flags, or any field that would require a reference instant. Fixed UTC offsets are not zone identities; `ResolveZone("+08:00")` and `ResolveZone("UTC+8")` return `ErrInvalidZone`, and marshaling an internally malformed fixed-offset `Zone` returns `ErrInvalidZone` instead of emitting `{"kind":"zone","id":"+08:00"}`.
+It never emits offset, abbreviation, DST flags, or any field that would require a reference instant. A zero `Zone` marshals as `{"kind":"zone","id":"UTC"}` to match its total UTC projection behavior. Fixed UTC offsets are not zone identities; `ResolveZone("+08:00")` and `ResolveZone("UTC+8")` return `ErrInvalidZone`, and marshaling an internally malformed fixed-offset `Zone` returns `ErrInvalidZone` instead of emitting `{"kind":"zone","id":"+08:00"}`.
 
 RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax for an absolute moment, not a persisted zone identity.
 
@@ -82,6 +82,7 @@ JSON shape:
 ```
 
 Convenience methods `OffsetAt` and `Abbreviation` are allowed because they require an explicit `Instant`.
+Snapshots of a zero `Zone` use `id:"UTC"` with the observed UTC offset and abbreviation.
 
 ## Projection
 

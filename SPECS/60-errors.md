@@ -23,8 +23,6 @@ const (
     CodeInvalidPeriod     ErrorCode = "INVALID_PERIOD"
     CodeInvalidZone       ErrorCode = "INVALID_ZONE"
     CodeAmbiguousDate     ErrorCode = "AMBIGUOUS_DATE"
-    CodeAmbiguousTime     ErrorCode = "AMBIGUOUS_TIME"
-    CodeAmbiguousZone     ErrorCode = "AMBIGUOUS_ZONE"
     CodeNonexistentTime   ErrorCode = "NONEXISTENT_LOCAL_TIME"
     CodeDuplicateTime     ErrorCode = "DUPLICATE_LOCAL_TIME"
     CodeIntervalReversed  ErrorCode = "INTERVAL_END_BEFORE_START"
@@ -63,8 +61,6 @@ var (
     ErrInvalidPeriod     error
     ErrInvalidZone       error
     ErrAmbiguousDate     error
-    ErrAmbiguousTime     error
-    ErrAmbiguousZone     error
     ErrNonexistentTime   error
     ErrDuplicateTime     error
     ErrIntervalReversed  error
@@ -101,6 +97,7 @@ Do not use `te.Code` for Go control flow when a sentinel exists.
 - `StatusInvalid` carries `ParseResult.Error`.
 - `StatusAmbiguous` carries `ParseResult.Candidates`.
 - Typed parsers translate non-resolved or wrong-kind results into `*TimeError`.
+- Typed parsers keep ambiguity causes precise: slash-date ambiguity wraps `ErrAmbiguousDate`, while DST fall-back duplicate local times wrap `ErrDuplicateTime`.
 
 Empty input in `Parse` returns `ErrEmptyInput` with `CodeEmptyInput`.
 

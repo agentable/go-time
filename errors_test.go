@@ -3,6 +3,7 @@ package gotime
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/go-json-experiment/json"
 )
@@ -112,8 +113,6 @@ func TestErrorCodes_Unique(t *testing.T) {
 		CodeInvalidPeriod,
 		CodeInvalidZone,
 		CodeAmbiguousDate,
-		CodeAmbiguousTime,
-		CodeAmbiguousZone,
 		CodeNonexistentTime,
 		CodeDuplicateTime,
 		CodeIntervalReversed,
@@ -180,8 +179,6 @@ func TestSentinels_NonEmpty(t *testing.T) {
 		"ErrInvalidPeriod":     ErrInvalidPeriod,
 		"ErrInvalidZone":       ErrInvalidZone,
 		"ErrAmbiguousDate":     ErrAmbiguousDate,
-		"ErrAmbiguousTime":     ErrAmbiguousTime,
-		"ErrAmbiguousZone":     ErrAmbiguousZone,
 		"ErrNonexistentTime":   ErrNonexistentTime,
 		"ErrDuplicateTime":     ErrDuplicateTime,
 		"ErrIntervalReversed":  ErrIntervalReversed,
@@ -200,6 +197,153 @@ func TestSentinels_NonEmpty(t *testing.T) {
 		}
 		if codeForSentinel(s) == "" {
 			t.Errorf("%s has no code mapping", name)
+		}
+	}
+}
+
+func TestPublicSentinels_HaveBehaviorProducer(t *testing.T) {
+	t.Parallel()
+
+	newYork := MustLoadZone("America/New_York")
+	mustInterval := func(start, end int64) Interval {
+		t.Helper()
+		iv, err := NewInterval(UnixSeconds(start), UnixSeconds(end))
+		if err != nil {
+			t.Fatalf("NewInterval(%d, %d): %v", start, end, err)
+		}
+		return iv
+	}
+
+	type producer struct {
+		name string
+		err  func() error
+	}
+	producers := map[error]producer{
+		ErrEmptyInput: {
+			name: "empty Parse input",
+			err: func() error {
+				return Parse("").Error
+			},
+		},
+		ErrInvalidFormat: {
+			name: "empty ISO duration",
+			err: func() error {
+				return Parse("P").Error
+			},
+		},
+		ErrInvalidDate: {
+			name: "invalid Date constructor",
+			err: func() error {
+				_, err := NewDate(2026, time.February, 30)
+				return err
+			},
+		},
+		ErrInvalidTime: {
+			name: "invalid Time constructor",
+			err: func() error {
+				_, err := NewTime(24, 0, 0)
+				return err
+			},
+		},
+		ErrInvalidDuration: {
+			name: "negative interval length",
+			err: func() error {
+				_, err := NewIntervalStartingAt(UnixSeconds(0), -Second)
+				return err
+			},
+		},
+		ErrInvalidPeriod: {
+			name: "fractional calendar period",
+			err: func() error {
+				return Parse("P1.5Y").Error
+			},
+		},
+		ErrInvalidZone: {
+			name: "unknown zone",
+			err: func() error {
+				_, err := LoadZone("Mars/Olympus")
+				return err
+			},
+		},
+		ErrAmbiguousDate: {
+			name: "ambiguous slash date",
+			err: func() error {
+				_, err := ParseDate("04/05/2026")
+				return err
+			},
+		},
+		ErrNonexistentTime: {
+			name: "DST gap datetime",
+			err: func() error {
+				_, err := ParseDateTime("2026-03-08T02:30:00", WithZone(newYork))
+				return err
+			},
+		},
+		ErrDuplicateTime: {
+			name: "DST duplicate datetime",
+			err: func() error {
+				_, err := ParseDateTime("2026-11-01T01:30:00", WithZone(newYork))
+				return err
+			},
+		},
+		ErrIntervalReversed: {
+			name: "reversed interval constructor",
+			err: func() error {
+				_, err := NewInterval(UnixSeconds(2), UnixSeconds(1))
+				return err
+			},
+		},
+		ErrIntervalsDisjoint: {
+			name: "disjoint interval union",
+			err: func() error {
+				left := mustInterval(0, 1)
+				right := mustInterval(2, 3)
+				_, err := left.Union(right)
+				return err
+			},
+		},
+		ErrUnparseable: {
+			name: "unparseable input",
+			err: func() error {
+				return Parse("not time").Error
+			},
+		},
+		ErrOverflow: {
+			name: "overflowing duration",
+			err: func() error {
+				return Parse("PT999999999999999999999999H").Error
+			},
+		},
+		ErrIncompatibleTypes: {
+			name: "typed parser kind mismatch",
+			err: func() error {
+				_, err := ParseInstant("2026-03-27")
+				return err
+			},
+		},
+	}
+
+	for sentinel, code := range codeBySentinel {
+		tc, ok := producers[sentinel]
+		if !ok {
+			t.Fatalf("%v (%s) has no behavior producer in inventory", sentinel, code)
+		}
+		err := tc.err()
+		if err == nil {
+			t.Fatalf("%s produced nil error for %v", tc.name, sentinel)
+		}
+		if !errors.Is(err, sentinel) {
+			t.Fatalf("%s error = %v, want errors.Is(..., %v)", tc.name, err, sentinel)
+		}
+		var te *TimeError
+		if !errors.As(err, &te) {
+			t.Fatalf("%s error = %T, want *TimeError in chain", tc.name, err)
+		}
+		if te.Code != code {
+			t.Fatalf("%s code = %s, want %s", tc.name, te.Code, code)
+		}
+		if te.Hint == "" {
+			t.Fatalf("%s hint is empty", tc.name)
 		}
 	}
 }

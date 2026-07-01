@@ -118,9 +118,9 @@ Current interval operations:
 | `Intersect(Interval)` | Returns overlap and `ok`. |
 | `Union(Interval)` | Merges overlapping or adjacent intervals; disjoint intervals return `ErrIntervalsDisjoint`. |
 | `Shift(Duration)` | Moves start and end. |
-| `Expand(before, after Duration)` | Moves start backward and end forward. |
+| `Expand(before, after Duration)` | Moves start backward and end forward; rejects negative expansion durations. |
 
-`NewInterval` returns `ErrIntervalReversed` when `end < start`. Zero-length intervals are allowed.
+`NewInterval` returns `ErrIntervalReversed` when `end < start`. `Expand` returns `(Interval, error)` so it can preserve the same invariant as constructors. Zero-length intervals are allowed.
 
 ## Duration and Period Display Hooks
 
@@ -130,7 +130,7 @@ Current interval operations:
 (90 * gotime.Minute).String() // "1h30m0s"
 ```
 
-`Duration.ISO8601()` and `Period.ISO8601()` provide stable machine strings. RFC 5545 rendering belongs to calendar integration code outside go-time.
+`Duration.ISO8601()` and `Period.ISO8601()` provide stable machine strings. Duration sub-second precision uses decimal seconds, never scientific notation. RFC 5545 rendering belongs to calendar integration code outside go-time.
 
 ## External Protocol Text
 

@@ -43,7 +43,16 @@ go-time owns parsing, typed value objects, arithmetic, timezone rules, stable JS
 result := gotime.Parse(input, gotime.WithInputLocale(locale), gotime.WithZone(zone))
 switch result.Status {
 case gotime.StatusResolved:
-    commit(result.Value())
+    switch result.Kind {
+    case gotime.KindDateTime:
+        if dt, ok := result.DateTime(); ok {
+            commitDateTime(dt)
+        }
+    case gotime.KindDate:
+        if d, ok := result.Date(); ok {
+            commitDate(d)
+        }
+    }
 case gotime.StatusAmbiguous:
     // Consumer policy: fail, prompt, or apply a documented rule.
 case gotime.StatusInvalid:

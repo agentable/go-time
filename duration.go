@@ -112,17 +112,21 @@ func (d Duration) ISO8601() string {
 		if ns == 0 {
 			fmt.Fprintf(&b, "%dS", s)
 		} else {
-			frac := float64(s) + float64(ns)/float64(time.Second)
-			fmt.Fprintf(&b, "%gS", frac)
+			fmt.Fprintf(&b, "%d.%sS", s, trimmedNanoseconds(ns))
 		}
 	}
 	return b.String()
 }
 
+func trimmedNanoseconds(ns int64) string {
+	frac := fmt.Sprintf("%09d", ns)
+	return strings.TrimRight(frac, "0")
+}
+
 // isoDurationRe matches subset of ISO 8601 duration strings produced by ISO8601().
 // Groups: (1)sign (2)hours (3)minutes (4)seconds.
 var isoDurationRe = regexp.MustCompile(
-	`^(-?)PT(?:(\d+)H)?(?:(\d+)M)?(?:([0-9]*\.?[0-9]+(?:[eE][+-]?\d+)?)S)?$`,
+	`^(-?)PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$`,
 )
 
 // parseISO8601Duration parses the subset of ISO 8601 duration strings produced by ISO8601().

@@ -96,6 +96,7 @@ func (z Zone) IsZero() bool { return z.id == "" && z.loc == nil }
 // The output is deterministic and never depends on time.Now() —
 // time-dependent offset and abbreviation data lives in Zone.Snapshot(at).
 func (z Zone) MarshalJSON() ([]byte, error) {
+	z = normalizeZone(z)
 	if isFixedOffsetID(z.ID()) {
 		return nil, newTimeError(
 			ErrInvalidZone,
@@ -177,6 +178,7 @@ type ZoneSnapshot struct {
 // The snapshot is decoupled from JSON serialization — callers requiring
 // time-dependent fields compute and embed them explicitly.
 func (z Zone) Snapshot(i Instant) ZoneSnapshot {
+	z = normalizeZone(z)
 	return ZoneSnapshot{
 		ID:           z.ID(),
 		Offset:       z.OffsetAt(i),

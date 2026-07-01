@@ -28,10 +28,6 @@ const (
 	CodeInvalidZone ErrorCode = "INVALID_ZONE"
 	// CodeAmbiguousDate reports multiple plausible date interpretations.
 	CodeAmbiguousDate ErrorCode = "AMBIGUOUS_DATE"
-	// CodeAmbiguousTime reports multiple plausible time interpretations.
-	CodeAmbiguousTime ErrorCode = "AMBIGUOUS_TIME"
-	// CodeAmbiguousZone reports timezone input matching multiple zones.
-	CodeAmbiguousZone ErrorCode = "AMBIGUOUS_ZONE"
 	// CodeNonexistentTime reports a local time that falls in a DST gap.
 	CodeNonexistentTime ErrorCode = "NONEXISTENT_LOCAL_TIME"
 	// CodeDuplicateTime reports a local time that occurs twice during DST fall-back.
@@ -108,8 +104,6 @@ var (
 	ErrInvalidPeriod     = errors.New("gotime: invalid period")
 	ErrInvalidZone       = errors.New("gotime: invalid zone")
 	ErrAmbiguousDate     = errors.New("gotime: ambiguous date")
-	ErrAmbiguousTime     = errors.New("gotime: ambiguous time")
-	ErrAmbiguousZone     = errors.New("gotime: ambiguous zone")
 	ErrNonexistentTime   = errors.New("gotime: nonexistent local time")
 	ErrDuplicateTime     = errors.New("gotime: duplicate local time")
 	ErrIntervalReversed  = errors.New("gotime: interval end before start")
@@ -131,8 +125,6 @@ var codeBySentinel = map[error]ErrorCode{
 	ErrInvalidPeriod:     CodeInvalidPeriod,
 	ErrInvalidZone:       CodeInvalidZone,
 	ErrAmbiguousDate:     CodeAmbiguousDate,
-	ErrAmbiguousTime:     CodeAmbiguousTime,
-	ErrAmbiguousZone:     CodeAmbiguousZone,
 	ErrNonexistentTime:   CodeNonexistentTime,
 	ErrDuplicateTime:     CodeDuplicateTime,
 	ErrIntervalReversed:  CodeIntervalReversed,

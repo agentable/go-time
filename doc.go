@@ -12,8 +12,8 @@
 //   - [Parse] — diagnostic / dispatch entry. Returns a [ParseResult] with
 //     Status / Kind / Candidates / Warnings. Reach for it when you do not
 //     know the kind ahead of time, or when you need ambiguity candidates,
-//     warnings, or zone metadata. Use [ParseResult.Value] with a Go type
-//     switch for polymorphic dispatch.
+//     warnings, or zone metadata. Dispatch through Status, Kind, and the
+//     comma-ok ParseResult accessors.
 //
 // # Current time
 //
