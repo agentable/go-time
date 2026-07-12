@@ -5,19 +5,16 @@ import (
 	"time"
 )
 
-func jaCtx(zoneID string) Context {
-	loc := locForZone(zoneID)
-	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc) // Monday
+func jaCtx() Context {
 	return Context{
 		Locale:     "ja",
-		ZoneID:     zoneID,
-		RelativeTo: ref,
+		RelativeTo: time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC), // Monday
 	}
 }
 
 func TestJa_RelativeDate(t *testing.T) {
-	ctx := jaCtx("Asia/Tokyo")
-	loc := locForZone("Asia/Tokyo")
+	ctx := jaCtx()
+	loc := mustLoadLocation(t, "Asia/Tokyo")
 	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc)
 	today := time.Date(ref.Year(), ref.Month(), ref.Day(), 0, 0, 0, 0, loc)
 
@@ -40,11 +37,8 @@ func TestJa_RelativeDate(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.DateOnly {
-				t.Error("DateOnly = false, want true")
-			}
-			if !r.Time.Equal(tt.want) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.want)
+			if !equalCivil(r, tt.want) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.want)
 			}
 		})
 	}
@@ -52,8 +46,8 @@ func TestJa_RelativeDate(t *testing.T) {
 
 func TestJa_WeekRelative(t *testing.T) {
 	// RelativeTo = 2026-03-30 (Monday)
-	ctx := jaCtx("Asia/Tokyo")
-	loc := locForZone("Asia/Tokyo")
+	ctx := jaCtx()
+	loc := mustLoadLocation(t, "Asia/Tokyo")
 
 	tests := []struct {
 		input    string
@@ -78,16 +72,16 @@ func TestJa_WeekRelative(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantDate) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			if !equalCivil(r, tt.wantDate) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
 			}
 		})
 	}
 }
 
 func TestJa_DateTime(t *testing.T) {
-	ctx := jaCtx("Asia/Tokyo")
-	loc := locForZone("Asia/Tokyo")
+	ctx := jaCtx()
+	loc := mustLoadLocation(t, "Asia/Tokyo")
 	today := time.Date(2026, 3, 30, 0, 0, 0, 0, loc)
 	tomorrow := today.AddDate(0, 0, 1)
 
@@ -111,15 +105,15 @@ func TestJa_DateTime(t *testing.T) {
 			if r.Kind != KindDateTime {
 				t.Fatalf("Kind = %v, want KindDateTime", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantTime) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantTime)
+			if !equalCivil(r, tt.wantTime) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantTime)
 			}
 		})
 	}
 }
 
 func TestJa_Duration(t *testing.T) {
-	ctx := jaCtx("")
+	ctx := jaCtx()
 	hour := int64(time.Hour)
 	minute := int64(time.Minute)
 
@@ -148,7 +142,7 @@ func TestJa_Duration(t *testing.T) {
 }
 
 func TestJa_Period(t *testing.T) {
-	ctx := jaCtx("")
+	ctx := jaCtx()
 	tests := []struct {
 		input     string
 		wantYears int32
@@ -177,7 +171,7 @@ func TestJa_Period(t *testing.T) {
 }
 
 func TestJa_NonMatch(t *testing.T) {
-	ctx := jaCtx("")
+	ctx := jaCtx()
 	tests := []string{"today", "今天", "2026-03-30", ""}
 	for _, input := range tests {
 		t.Run(input, func(t *testing.T) {
@@ -190,7 +184,7 @@ func TestJa_NonMatch(t *testing.T) {
 }
 
 func TestJa_NonJaLocale(t *testing.T) {
-	ctx := Context{Locale: "en", ZoneID: "", RelativeTo: time.Now()}
+	ctx := Context{Locale: "en", RelativeTo: time.Now()}
 	_, ok := Parse("今日", ctx)
 	if ok {
 		t.Error("ja parser should not handle 'en' locale")
@@ -200,8 +194,8 @@ func TestJa_NonJaLocale(t *testing.T) {
 func TestJa_WeekRelative_AdditionalWeekdays(t *testing.T) {
 	t.Parallel()
 
-	ctx := jaCtx("Asia/Tokyo")
-	loc := locForZone("Asia/Tokyo")
+	ctx := jaCtx()
+	loc := mustLoadLocation(t, "Asia/Tokyo")
 	tests := []struct {
 		input    string
 		wantDate time.Time
@@ -224,8 +218,8 @@ func TestJa_WeekRelative_AdditionalWeekdays(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantDate) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			if !equalCivil(r, tt.wantDate) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
 			}
 		})
 	}

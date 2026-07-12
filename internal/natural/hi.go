@@ -42,16 +42,15 @@ func (p *hiParser) canHandle(locale string) bool {
 
 func (p *hiParser) parse(input string, ctx Context) (Result, bool) {
 	input = strings.TrimSpace(input)
-	loc := locForZone(ctx.ZoneID)
-	base := midnightInLoc(ctx.RelativeTo, loc)
+	base := midnight(ctx.RelativeTo)
 
 	switch input {
 	case "आज":
-		return dateResult(base, ctx.ZoneID), true
+		return dateResult(base), true
 	case "कल":
-		return dateResult(base.AddDate(0, 0, 1), ctx.ZoneID), true
+		return dateResult(base.AddDate(0, 0, 1)), true
 	case "परसों":
-		return dateResult(base.AddDate(0, 0, 2), ctx.ZoneID), true
+		return dateResult(base.AddDate(0, 0, 2)), true
 	}
 
 	if m := reHiFuture.FindStringSubmatch(input); m != nil {

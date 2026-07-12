@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"bytes"
 	"errors"
 	"math"
 	"testing"
@@ -47,24 +48,107 @@ func TestPeriod_ComponentArithmetic(t *testing.T) {
 
 	base := Period{Years: 1, Months: -2, Days: 3}
 	other := Period{Years: -4, Months: 5, Days: -6}
-
-	tests := []struct {
-		name string
-		got  Period
-		want Period
-	}{
-		{name: "negate", got: base.Negate(), want: Period{Years: -1, Months: 2, Days: -3}},
-		{name: "add", got: base.Add(other), want: Period{Years: -3, Months: 3, Days: -3}},
-		{name: "subtract", got: base.Sub(other), want: Period{Years: 5, Months: -7, Days: 9}},
+	got, err := base.Sub(other)
+	if err != nil {
+		t.Fatalf("Sub() error = %v", err)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	want := Period{Years: 5, Months: -7, Days: 9}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Sub() mismatch (-want +got):\n%s", diff)
+	}
+}
 
-			if diff := cmp.Diff(tc.want, tc.got); diff != "" {
-				t.Errorf("Period mismatch (-want +got):\n%s", diff)
-			}
-		})
+func TestPeriod_Add(t *testing.T) {
+	t.Parallel()
+
+	got, err := (Period{Years: 1, Months: -2, Days: 3}).Add(Period{Years: -4, Months: 5, Days: -6})
+	if err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	want := Period{Years: -3, Months: 3, Days: -3}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Add() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPeriod_Negate(t *testing.T) {
+	t.Parallel()
+
+	got, err := (Period{Years: 1, Months: -2, Days: 3}).Negate()
+	if err != nil {
+		t.Fatalf("Negate() error = %v", err)
+	}
+	want := Period{Years: -1, Months: 2, Days: -3}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Negate() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPeriod_NegateOverflow(t *testing.T) {
+	t.Parallel()
+
+	_, err := (Period{Years: math.MinInt32}).Negate()
+	if !errors.Is(err, ErrOverflow) {
+		t.Fatalf("Period{Years: math.MinInt32}.Negate() error = %v, want ErrOverflow", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) {
+		t.Fatalf("Negate() error type = %T, want *TimeError", err)
+	}
+	if te.Hint == "" {
+		t.Fatal("Negate() error Hint is empty")
+	}
+}
+
+func TestPeriod_AddOverflow(t *testing.T) {
+	t.Parallel()
+
+	_, err := (Period{Months: math.MaxInt32}).Add(Period{Months: 1})
+	if !errors.Is(err, ErrOverflow) {
+		t.Fatalf("Period{Months: math.MaxInt32}.Add(Months(1)) error = %v, want ErrOverflow", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) || te.Hint == "" {
+		t.Fatalf("Add() error = %#v, want *TimeError with Hint", err)
+	}
+}
+
+func TestPeriod_SubOverflow(t *testing.T) {
+	t.Parallel()
+
+	_, err := (Period{Days: math.MinInt32}).Sub(Period{Days: 1})
+	if !errors.Is(err, ErrOverflow) {
+		t.Fatalf("Period{Days: math.MinInt32}.Sub(Days(1)) error = %v, want ErrOverflow", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) || te.Hint == "" {
+		t.Fatalf("Sub() error = %#v, want *TimeError with Hint", err)
+	}
+}
+
+func TestPeriod_AbsOverflow(t *testing.T) {
+	t.Parallel()
+
+	_, err := (Period{Months: math.MinInt32}).Abs()
+	if !errors.Is(err, ErrOverflow) {
+		t.Fatalf("Period{Months: math.MinInt32}.Abs() error = %v, want ErrOverflow", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) || te.Hint == "" {
+		t.Fatalf("Abs() error = %#v, want *TimeError with Hint", err)
+	}
+}
+
+func TestPeriod_Abs(t *testing.T) {
+	t.Parallel()
+
+	got, err := (Period{Years: -1, Months: 2, Days: -3}).Abs()
+	if err != nil {
+		t.Fatalf("Abs() error = %v", err)
+	}
+	want := Period{Years: 1, Months: 2, Days: 3}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Abs() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -146,6 +230,8 @@ func TestPeriod_JSONRoundTrip(t *testing.T) {
 		name string
 		orig Period
 	}{
+		{name: "minimum", orig: Period{Years: math.MinInt32, Months: math.MinInt32, Days: math.MinInt32}},
+		{name: "maximum", orig: Period{Years: math.MaxInt32, Months: math.MaxInt32, Days: math.MaxInt32}},
 		{name: "positive", orig: Period{Years: 1, Months: 3, Days: 14}},
 		{name: "mixed signs", orig: Period{Years: 1, Months: -2, Days: 3}},
 	}
@@ -165,6 +251,13 @@ func TestPeriod_JSONRoundTrip(t *testing.T) {
 
 			if diff := cmp.Diff(tc.orig, got); diff != "" {
 				t.Errorf("Period round-trip mismatch (-want +got):\n%s", diff)
+			}
+			again, err := json.Marshal(got)
+			if err != nil {
+				t.Fatalf("json.Marshal(round-tripped): %v", err)
+			}
+			if !bytes.Equal(again, b) {
+				t.Fatalf("Marshal after round-trip = %s, want %s", again, b)
 			}
 		})
 	}

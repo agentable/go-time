@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"time"
@@ -56,6 +57,24 @@ func TestLocalDateTimeResolveNonexistent(t *testing.T) {
 	}
 }
 
+func TestLocalDateTimeResolveSkippedDate(t *testing.T) {
+	d := mustDate(2011, time.December, 30)
+	clock := mustTime(12, 0, 0)
+	z := MustLoadZone("Pacific/Apia")
+
+	resolution := NewLocalDateTime(d, clock).Resolve(z)
+
+	if resolution.Status != LocalNonexistent {
+		t.Fatalf("Resolve status = %s, want %s", resolution.Status, LocalNonexistent)
+	}
+	if got := len(resolution.Candidates); got != 0 {
+		t.Fatalf("Resolve candidates = %d, want 0", got)
+	}
+	if _, err := resolution.Only(); !errors.Is(err, ErrNonexistentTime) {
+		t.Fatalf("Only() error = %v, want ErrNonexistentTime", err)
+	}
+}
+
 func TestLocalDateTimeResolveAmbiguous(t *testing.T) {
 	d := mustDate(2026, time.November, 1)
 	clock := mustTime(1, 30, 0)
@@ -83,8 +102,10 @@ func TestLocalDateTimeResolveAmbiguous(t *testing.T) {
 	if !first.Clock().Equal(clock) || !second.Clock().Equal(clock) {
 		t.Fatalf("candidate clocks = %s and %s, want %s", first.Clock(), second.Clock(), clock)
 	}
-	if first.Zone().OffsetAt(first.Instant()) == second.Zone().OffsetAt(second.Instant()) {
-		t.Fatalf("candidate offsets both = %s, want distinct offsets", first.Zone().OffsetAt(first.Instant()))
+	_, firstOffset := first.Instant().Std().In(first.Zone().Location()).Zone()
+	_, secondOffset := second.Instant().Std().In(second.Zone().Location()).Zone()
+	if firstOffset == secondOffset {
+		t.Fatalf("candidate offsets both = %d, want distinct offsets", firstOffset)
 	}
 }
 
@@ -116,7 +137,7 @@ func TestLocalDateTimeJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalJSON() error = %v, want nil", err)
 	}
-	const want = `{"kind":"local_datetime","value":"2026-03-27T09:30:00","calendar":"iso8601"}`
+	const want = `{"kind":"local_datetime","value":"2026-03-27T09:30:00"}`
 	if string(b) != want {
 		t.Fatalf("MarshalJSON() = %s, want %s", b, want)
 	}
@@ -140,7 +161,7 @@ func TestLocalDateTimeJSONRoundTripFraction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalJSON() error = %v, want nil", err)
 	}
-	const want = `{"kind":"local_datetime","value":"2026-03-27T09:30:00.12345","calendar":"iso8601"}`
+	const want = `{"kind":"local_datetime","value":"2026-03-27T09:30:00.12345"}`
 	if string(b) != want {
 		t.Fatalf("MarshalJSON() = %s, want %s", b, want)
 	}
@@ -151,5 +172,57 @@ func TestLocalDateTimeJSONRoundTripFraction(t *testing.T) {
 	}
 	if !got.Date.Equal(ldt.Date) || !got.Time.Equal(ldt.Time) {
 		t.Fatalf("UnmarshalJSON() = %v, want %v", got, ldt)
+	}
+}
+
+func TestLocalDateTimeJSONRoundTripCivilBoundaries(t *testing.T) {
+	for _, ldt := range []LocalDateTime{
+		NewLocalDateTime(mustDate(0, time.January, 1), mustTimeNanos(0, 0, 0, 1)),
+		NewLocalDateTime(mustDate(9999, time.December, 31), mustTimeNanos(23, 59, 59, 999_999_999)),
+	} {
+		b, err := json.Marshal(ldt)
+		if err != nil {
+			t.Fatalf("Marshal(%v) error = %v", ldt, err)
+		}
+		var got LocalDateTime
+		if err := json.Unmarshal(b, &got); err != nil {
+			t.Fatalf("Unmarshal(%s) error = %v", b, err)
+		}
+		again, err := json.Marshal(got)
+		if err != nil || !bytes.Equal(again, b) {
+			t.Fatalf("second Marshal(%v) = %s, %v; want %s", got, again, err, b)
+		}
+	}
+}
+
+func TestLocalDateTimeMarshalJSON_RejectsInvalidComponents(t *testing.T) {
+	tests := []struct {
+		name string
+		ldt  LocalDateTime
+		want error
+	}{
+		{
+			name: "invalid date",
+			ldt:  NewLocalDateTime(Date{}, mustTime(9, 30, 0)),
+			want: ErrInvalidDate,
+		},
+		{
+			name: "invalid time",
+			ldt:  NewLocalDateTime(mustDate(2026, time.March, 27), Time{hour: 24}),
+			want: ErrInvalidTime,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := json.Marshal(tc.ldt)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Marshal(%v) error = %v, want %v", tc.ldt, err, tc.want)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) || te.Hint == "" {
+				t.Fatalf("Marshal(%v) error = %#v, want TimeError with hint", tc.ldt, err)
+			}
+		})
 	}
 }

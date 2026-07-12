@@ -47,14 +47,20 @@ The grammar is intentionally small: relative dates, week expressions, basic date
 
 Natural-language day, week, month, and year units route to `KindPeriod`. They are never approximated as 24-hour, 7-day, 30-day, or 365-day `Duration` values. Natural-language second, minute, and hour units route to `KindDuration`.
 
+The internal natural parser receives a reference whose civil fields were
+already projected into the caller's `WithZone`. It performs calendar math only
+and returns unresolved civil components; it does not load or resolve zones.
+The gotime parse boundary maps natural datetime components through the same
+`LocalDateTime.Resolve` path as formal local datetime input.
+
 ## Contract Decisions
 
 ### Explicit Human Context
 
-- **Decision**: Natural-language parsing requires `WithInputLocale`. Natural date/datetime expressions that need a calendar reference also require `WithReference`.
-- **Why**: Locale and reference time are human interpretation context. A semantics kernel must not read ambient process time or silently infer language policy.
+- **Decision**: Natural-language parsing requires `WithInputLocale`. Natural date/datetime expressions that need a calendar reference require both `WithReference` and `WithZone`.
+- **Why**: Locale, reference time, and its calendar zone are human interpretation context. An `Instant` has no calendar date until projected into a zone. A semantics kernel must not read ambient process time or silently infer language/zone policy.
 - **Rejected**: Defaulting relative phrases to `time.Now()`, global parser defaults, `WithNow`, `WithClock`, and strategy knobs that hide ambiguity.
-- **Contract Impact**: Product code chooses "now" explicitly at the boundary with `WithReference(gotime.Now())`; deterministic code passes a fixed `Instant`.
+- **Contract Impact**: Product code chooses "now" and its calendar frame explicitly with `WithReference(gotime.Now())` plus `WithZone(zone)`; deterministic code passes a fixed `Instant` and Zone.
 
 ### Formal Interval Grammar
 
@@ -134,23 +140,58 @@ func WithZone(zone Zone) Option
 func WithReference(t Instant) Option
 ```
 
-- `WithInputLocale` enables natural-language parsing and disambiguates slash dates.
-- `WithZone` supplies the zone for floating datetimes. Without it, local datetimes remain `KindLocalDateTime` instead of defaulting to UTC.
-- `WithReference` supplies the base instant for natural date/datetime expressions.
+- `WithInputLocale` enables natural-language parsing. For slash dates, the
+  closed policy table supports month-first `en-US` and day-first `en-GB` /
+  `en-AU`. Unsupported tags, including bare `en` and `en-CA`, use the same
+  validity-based inference as no locale. Unicode `-u-` extensions do not change
+  a supported locale's order.
+- `WithZone` supplies the zone for formal floating datetimes and the required calendar frame for relative natural date/datetime expressions. Formal local datetimes remain `KindLocalDateTime` when it is omitted.
+- `WithReference` supplies the base instant for relative natural date/datetime expressions and is used with `WithZone`.
+
+Option presence is independent from value zero. `WithZone(Zone{})` explicitly
+selects UTC, while omitting `WithZone` preserves a formal floating local
+datetime but invalidates a reference-dependent natural date/datetime.
+`WithReference(Instant{})` explicitly selects the Go zero instant; only an
+omitted option means the reference is missing.
 
 There is no `WithStrategy`. Ambiguity is surfaced through `Candidates`; callers decide.
 
-Natural date/datetime expressions that need a calendar reference, such as `tomorrow` or `next Friday`, return `StatusInvalid` with `ErrInvalidFormat` unless `WithReference` is provided. Exact natural durations and periods that resolve directly to `Duration` or `Period` do not require a reference.
+Natural date/datetime expressions that need a calendar reference, such as
+`tomorrow` or `next Friday`, require both options. Missing `WithReference`
+returns `StatusInvalid` with `ErrInvalidFormat`; missing `WithZone` returns
+`StatusInvalid` with `ErrInvalidZone`. Exact natural durations and periods that
+resolve directly to `Duration` or `Period` require neither option.
 
-When `WithZone` resolves a floating datetime, `ParseResult.Warnings` includes `WarnAssumedZone`. Without `WithZone`, the same input resolves to `KindLocalDateTime` and carries no zone assumption. When fractional seconds exceed nanosecond precision, `ParseResult.Warnings` includes `WarnTruncatedPrecision` and the value is truncated to nanoseconds. Slash-date candidates use `WarnInferredCalendar` to explain month-first vs day-first interpretation.
+When `WithZone` resolves a formal floating datetime, `ParseResult.Warnings`
+includes `WarnAssumedZone`. Without `WithZone`, the same formal input resolves
+to `KindLocalDateTime` and carries no zone assumption. Relative natural
+date/datetime input instead returns `ErrInvalidZone` when the option is absent.
+When fractional seconds exceed nanosecond precision, `ParseResult.Warnings`
+includes `WarnTruncatedPrecision` and the value is truncated to nanoseconds.
+Slash-date candidates use `WarnInferredCalendar` to explain month-first vs
+day-first interpretation.
 
 ## Ambiguity
 
-Slash dates follow locale when provided. With no locale, they resolve only when one interpretation is valid; otherwise `Parse` returns `StatusAmbiguous`.
+Slash dates follow a locale only when it is in the closed policy table.
+Otherwise validity decides the state: zero valid interpretations return
+`StatusInvalid`, one resolves, and two distinct valid interpretations return
+`StatusAmbiguous` with resolved candidates. The parser does not infer likely
+regions from language-only tags.
 
-Floating datetime parsing uses the same projection rule as `LocalDateTime.Resolve` only when `WithZone` is supplied. DST fall-back local times return `StatusAmbiguous` with `DateTime` candidates. Each candidate carries `WarnDuplicateTime` with its abbreviation and offset. DST spring-forward gaps return `StatusInvalid` with `CodeNonexistentTime`.
+Formal and natural local datetime parsing use `LocalDateTime.Resolve` when
+`WithZone` is supplied. DST fall-back local times return `StatusAmbiguous` with
+chronological `DateTime` candidates. Each candidate carries
+`WarnDuplicateTime` with its abbreviation and offset. DST spring-forward gaps
+return `StatusInvalid` with `CodeNonexistentTime`. The natural parser never
+normalizes or selects these states before the shared resolver sees them.
 
 Typed parsers preserve the ambiguity cause when translating `StatusAmbiguous` into an error. Slash-date ambiguity returns a `*TimeError` wrapping `ErrAmbiguousDate`. DST fall-back ambiguity returns a `*TimeError` wrapping `ErrDuplicateTime`, including when the duplicate local time appears inside an interval endpoint.
+
+The semantic cause is package-owned state, not inferred from warnings.
+Warnings remain diagnostics and may be removed without changing typed error
+identity. Typed parsers narrow the same shared parse result; they are not a
+second parser engine.
 
 `HasZone` reports whether the original input explicitly included a timezone or offset. It is the caller's hook for detecting floating time.
 
@@ -180,7 +221,12 @@ Natural-language interval boundaries are invalid even when `WithInputLocale` and
 
 ## Acceptance Criteria
 
-- Relative natural date/datetime input without `WithReference` returns `StatusInvalid` with an actionable error.
-- Exact natural durations and periods still resolve without a reference when locale is supplied.
+- Relative natural date/datetime input requires `WithReference` and `WithZone`;
+  omission returns the corresponding actionable typed error.
+- Exact natural durations and periods still resolve without either option when
+  locale is supplied.
+- Natural and formal datetime inputs produce the same gap/fold status,
+  chronological candidates, and typed sentinel for equivalent civil intent.
 - Slash-date and DST ambiguity surface through `StatusAmbiguous` and candidates, not a strategy option.
+- Invalid slash dates never surface as ambiguity with invalid candidates.
 - Interval tests prove date-only and natural-language boundaries are rejected unless a future spec deliberately changes the interval grammar.

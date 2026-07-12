@@ -5,19 +5,16 @@ import (
 	"time"
 )
 
-func koCtx(zoneID string) Context {
-	loc := locForZone(zoneID)
-	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc) // Monday
+func koCtx() Context {
 	return Context{
 		Locale:     "ko",
-		ZoneID:     zoneID,
-		RelativeTo: ref,
+		RelativeTo: time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC), // Monday
 	}
 }
 
 func TestKo_RelativeDate(t *testing.T) {
-	ctx := koCtx("Asia/Seoul")
-	loc := locForZone("Asia/Seoul")
+	ctx := koCtx()
+	loc := mustLoadLocation(t, "Asia/Seoul")
 	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc)
 	today := time.Date(ref.Year(), ref.Month(), ref.Day(), 0, 0, 0, 0, loc)
 
@@ -40,11 +37,8 @@ func TestKo_RelativeDate(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.DateOnly {
-				t.Error("DateOnly = false, want true")
-			}
-			if !r.Time.Equal(tt.want) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.want)
+			if !equalCivil(r, tt.want) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.want)
 			}
 		})
 	}
@@ -52,8 +46,8 @@ func TestKo_RelativeDate(t *testing.T) {
 
 func TestKo_WeekRelative(t *testing.T) {
 	// RelativeTo = 2026-03-30 (Monday)
-	ctx := koCtx("Asia/Seoul")
-	loc := locForZone("Asia/Seoul")
+	ctx := koCtx()
+	loc := mustLoadLocation(t, "Asia/Seoul")
 
 	tests := []struct {
 		input    string
@@ -75,16 +69,16 @@ func TestKo_WeekRelative(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantDate) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			if !equalCivil(r, tt.wantDate) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
 			}
 		})
 	}
 }
 
 func TestKo_DateTime(t *testing.T) {
-	ctx := koCtx("Asia/Seoul")
-	loc := locForZone("Asia/Seoul")
+	ctx := koCtx()
+	loc := mustLoadLocation(t, "Asia/Seoul")
 	today := time.Date(2026, 3, 30, 0, 0, 0, 0, loc)
 	tomorrow := today.AddDate(0, 0, 1)
 
@@ -108,15 +102,15 @@ func TestKo_DateTime(t *testing.T) {
 			if r.Kind != KindDateTime {
 				t.Fatalf("Kind = %v, want KindDateTime", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantTime) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantTime)
+			if !equalCivil(r, tt.wantTime) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantTime)
 			}
 		})
 	}
 }
 
 func TestKo_Duration(t *testing.T) {
-	ctx := koCtx("")
+	ctx := koCtx()
 	hour := int64(time.Hour)
 	minute := int64(time.Minute)
 
@@ -145,7 +139,7 @@ func TestKo_Duration(t *testing.T) {
 }
 
 func TestKo_Period(t *testing.T) {
-	ctx := koCtx("")
+	ctx := koCtx()
 	tests := []struct {
 		input     string
 		wantYears int32
@@ -174,7 +168,7 @@ func TestKo_Period(t *testing.T) {
 }
 
 func TestKo_NonMatch(t *testing.T) {
-	ctx := koCtx("")
+	ctx := koCtx()
 	tests := []string{"today", "今天", "2026-03-30", ""}
 	for _, input := range tests {
 		t.Run(input, func(t *testing.T) {
@@ -187,7 +181,7 @@ func TestKo_NonMatch(t *testing.T) {
 }
 
 func TestKo_NonKoLocale(t *testing.T) {
-	ctx := Context{Locale: "en", ZoneID: "", RelativeTo: time.Now()}
+	ctx := Context{Locale: "en", RelativeTo: time.Now()}
 	_, ok := Parse("오늘", ctx)
 	if ok {
 		t.Error("ko parser should not handle 'en' locale")
@@ -197,8 +191,8 @@ func TestKo_NonKoLocale(t *testing.T) {
 func TestKo_WeekRelative_AdditionalWeekdays(t *testing.T) {
 	t.Parallel()
 
-	ctx := koCtx("Asia/Seoul")
-	loc := locForZone("Asia/Seoul")
+	ctx := koCtx()
+	loc := mustLoadLocation(t, "Asia/Seoul")
 	tests := []struct {
 		input    string
 		wantDate time.Time
@@ -221,8 +215,8 @@ func TestKo_WeekRelative_AdditionalWeekdays(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantDate) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			if !equalCivil(r, tt.wantDate) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
 			}
 		})
 	}

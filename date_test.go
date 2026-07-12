@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -30,9 +31,27 @@ func TestNewDate_Invalid(t *testing.T) {
 func TestDateFromTime(t *testing.T) {
 	loc := time.FixedZone("JST", 9*3600)
 	ts := time.Date(2026, 3, 27, 13, 0, 0, 0, loc)
-	d := DateFromTime(ts)
+	d, err := DateFromTime(ts)
+	if err != nil {
+		t.Fatalf("DateFromTime() error = %v", err)
+	}
 	if d.Year() != 2026 || d.Month() != time.March || d.Day() != 27 {
 		t.Errorf("DateFromTime() = %v, want 2026-03-27", d)
+	}
+}
+
+func TestDateFromTime_RejectsYearOutsideCivilDomain(t *testing.T) {
+	for _, year := range []int{-1, 10_000} {
+		t.Run(time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC).Format("2006"), func(t *testing.T) {
+			_, err := DateFromTime(time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC))
+			if !errors.Is(err, ErrOverflow) {
+				t.Fatalf("DateFromTime(year %d) error = %v, want ErrOverflow", year, err)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) || te.Hint == "" {
+				t.Fatalf("DateFromTime(year %d) error = %#v, want TimeError with hint", year, err)
+			}
+		})
 	}
 }
 
@@ -113,10 +132,54 @@ func TestDate_Add(t *testing.T) {
 		{"year boundary", mustDate(2026, time.December, 31), 1, mustDate(2027, time.January, 1)},
 	}
 	for _, tc := range tests {
-		got := tc.d.Add(Days(tc.days))
+		got, err := tc.d.Add(Days(tc.days))
+		if err != nil {
+			t.Fatalf("%s: Add(Days(%v)) error = %v", tc.name, tc.days, err)
+		}
 		if !got.Equal(tc.want) {
 			t.Errorf("%s: Add(Days(%v)) = %v, want %v", tc.name, tc.days, got, tc.want)
 		}
+	}
+}
+
+func TestDate_AddRejectsInvalidOrOutOfDomainResult(t *testing.T) {
+	tests := []struct {
+		name string
+		date Date
+		add  Period
+		want error
+	}{
+		{
+			name: "below minimum",
+			date: mustDate(0, time.January, 1),
+			add:  Days(-1),
+			want: ErrOverflow,
+		},
+		{
+			name: "above maximum",
+			date: mustDate(9999, time.December, 31),
+			add:  Days(1),
+			want: ErrOverflow,
+		},
+		{
+			name: "invalid zero receiver",
+			date: Date{},
+			add:  Period{},
+			want: ErrInvalidDate,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.date.Add(tc.add)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Date.Add(%v) error = %v, want %v", tc.add, err, tc.want)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) || te.Hint == "" {
+				t.Fatalf("Date.Add(%v) error = %#v, want TimeError with hint", tc.add, err)
+			}
+		})
 	}
 }
 
@@ -242,18 +305,5 @@ func TestDate_StringLeadingZeros(t *testing.T) {
 	d := mustDate(2026, time.January, 5)
 	if d.String() != "2026-01-05" {
 		t.Errorf("String() = %q, want %q", d.String(), "2026-01-05")
-	}
-}
-
-func TestDate_Std_ZoneProjection(t *testing.T) {
-	d := mustDate(2026, time.March, 27)
-	tokyo := MustLoadZone("Asia/Tokyo")
-	got := d.Std(tokyo)
-	want := time.Date(2026, time.March, 27, 0, 0, 0, 0, tokyo.Location())
-	if !got.Equal(want) || got.Location().String() != tokyo.Location().String() {
-		t.Errorf("Std(tokyo) = %v (%v), want %v (%v)", got, got.Location(), want, tokyo.Location())
-	}
-	if utc := d.Std(UTC); !utc.Equal(time.Date(2026, time.March, 27, 0, 0, 0, 0, time.UTC)) {
-		t.Errorf("Std(UTC) = %v, want 2026-03-27 00:00:00 UTC", utc)
 	}
 }

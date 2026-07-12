@@ -1,6 +1,10 @@
 package zone
 
 import (
+	"fmt"
+	"os"
+	"runtime"
+	"slices"
 	"testing"
 	"time"
 )
@@ -167,6 +171,87 @@ func TestProjectLocalTime_NilLoc(t *testing.T) {
 	}
 }
 
+func TestProjectLocalTime_TransitionBoundsCorpus(t *testing.T) {
+	t.Parallel()
+
+	// Each seed is inside the offset period immediately before the named
+	// transition. ZoneBounds supplies the transition and both adjacent offsets;
+	// no expected offset or production probe duration is copied into this test.
+	tests := []struct {
+		name string
+		zone string
+		seed time.Time
+	}{
+		{name: "New_York_2026_spring_one_hour_gap", zone: "America/New_York", seed: time.Date(2026, time.March, 8, 6, 30, 0, 0, time.UTC)},
+		{name: "New_York_2026_fall_one_hour_fold", zone: "America/New_York", seed: time.Date(2026, time.November, 1, 5, 30, 0, 0, time.UTC)},
+		{name: "Lord_Howe_2024_autumn_half_hour_fold", zone: "Australia/Lord_Howe", seed: time.Date(2024, time.April, 6, 14, 30, 0, 0, time.UTC)},
+		{name: "Lord_Howe_2024_spring_half_hour_gap", zone: "Australia/Lord_Howe", seed: time.Date(2024, time.October, 5, 15, 0, 0, 0, time.UTC)},
+		{name: "Apia_2011_full_day_gap", zone: "Pacific/Apia", seed: time.Date(2011, time.December, 30, 9, 0, 0, 0, time.UTC)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			loc := mustLoadLoc(t, tt.zone)
+			_, transition := tt.seed.In(loc).ZoneBounds()
+			if transition.IsZero() || !transition.After(tt.seed) {
+				t.Fatalf("zone=%s seed=%s: ZoneBounds end = %s, want a later transition (runtime=%s)", tt.zone, tt.seed, transition, timeZoneRuntime())
+			}
+
+			_, oldOffset := transition.Add(-time.Nanosecond).In(loc).Zone()
+			_, newOffset := transition.In(loc).Zone()
+			if oldOffset == newOffset {
+				t.Fatalf("zone=%s transition=%s: adjacent offsets are both %d (runtime=%s)", tt.zone, transition, oldOffset, timeZoneRuntime())
+			}
+
+			oldCivil := transition.UTC().Add(time.Duration(oldOffset) * time.Second)
+			newCivil := transition.UTC().Add(time.Duration(newOffset) * time.Second)
+			firstCivil, lastCivil := oldCivil, newCivil
+			if lastCivil.Before(firstCivil) {
+				firstCivil, lastCivil = lastCivil, firstCivil
+			}
+			midpoint := firstCivil.Add(lastCivil.Sub(firstCivil) / 2)
+
+			wantStatus := DSTNonexistent
+			var wantTimes []time.Time
+			if newOffset < oldOffset {
+				wantStatus = DSTAmbiguous
+				wantTimes = []time.Time{
+					midpoint.Add(-time.Duration(oldOffset) * time.Second),
+					midpoint.Add(-time.Duration(newOffset) * time.Second),
+				}
+				slices.SortFunc(wantTimes, func(a, b time.Time) int { return a.Compare(b) })
+			}
+
+			got := ProjectLocalTime(
+				loc,
+				midpoint.Year(), midpoint.Month(), midpoint.Day(),
+				midpoint.Hour(), midpoint.Minute(), midpoint.Second(),
+			)
+			if got.Status != wantStatus {
+				t.Fatalf("zone=%s transition=%s civil=%s offsets=%d->%d: status = %v, want %v (runtime=%s)", tt.zone, transition, midpoint.Format(time.RFC3339), oldOffset, newOffset, got.Status, wantStatus, timeZoneRuntime())
+			}
+			if len(got.Times) != len(wantTimes) {
+				t.Fatalf("zone=%s transition=%s civil=%s offsets=%d->%d: times = %v, want %v (runtime=%s)", tt.zone, transition, midpoint.Format(time.RFC3339), oldOffset, newOffset, got.Times, wantTimes, timeZoneRuntime())
+			}
+			for i := range wantTimes {
+				if !got.Times[i].Equal(wantTimes[i]) {
+					t.Errorf("zone=%s transition=%s civil=%s offsets=%d->%d: times[%d] = %s, want %s (runtime=%s)", tt.zone, transition, midpoint.Format(time.RFC3339), oldOffset, newOffset, i, got.Times[i], wantTimes[i], timeZoneRuntime())
+				}
+			}
+		})
+	}
+}
+
+func timeZoneRuntime() string {
+	return fmt.Sprintf(
+		"%s; ZONEINFO=%q; embedded time/tzdata fallback enabled",
+		runtime.Version(),
+		os.Getenv("ZONEINFO"),
+	)
+}
+
 func TestResolveLocation_ExactCaseInsensitiveAndWindows(t *testing.T) {
 	t.Parallel()
 
@@ -197,6 +282,24 @@ func TestResolveLocation_ExactCaseInsensitiveAndWindows(t *testing.T) {
 			}
 			if loc.String() != tt.wantCanonical {
 				t.Errorf("ResolveLocation(%q) location = %q, want %q", tt.input, loc.String(), tt.wantCanonical)
+			}
+		})
+	}
+}
+
+func TestWindowsToIANA_TargetsLoad(t *testing.T) {
+	t.Parallel()
+
+	for windowsName, ianaID := range WindowsToIANA {
+		windowsName, ianaID := windowsName, ianaID
+		t.Run(windowsName, func(t *testing.T) {
+			t.Parallel()
+			loc, err := time.LoadLocation(ianaID)
+			if err != nil {
+				t.Fatalf("CLDR target %q for Windows zone %q does not load: %v", ianaID, windowsName, err)
+			}
+			if loc.String() != ianaID {
+				t.Fatalf("loaded location = %q, want CLDR target %q", loc.String(), ianaID)
 			}
 		})
 	}

@@ -62,16 +62,15 @@ func (p *arParser) canHandle(locale string) bool {
 
 func (p *arParser) parse(input string, ctx Context) (Result, bool) {
 	input = strings.TrimSpace(input)
-	loc := locForZone(ctx.ZoneID)
-	base := midnightInLoc(ctx.RelativeTo, loc)
+	base := midnight(ctx.RelativeTo)
 
 	switch input {
 	case "اليوم":
-		return dateResult(base, ctx.ZoneID), true
+		return dateResult(base), true
 	case "غداً", "غدا":
-		return dateResult(base.AddDate(0, 0, 1), ctx.ZoneID), true
+		return dateResult(base.AddDate(0, 0, 1)), true
 	case "أمس":
-		return dateResult(base.AddDate(0, 0, -1), ctx.ZoneID), true
+		return dateResult(base.AddDate(0, 0, -1)), true
 	}
 
 	if m := reArDual.FindStringSubmatch(input); m != nil {

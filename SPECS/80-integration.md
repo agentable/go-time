@@ -30,10 +30,10 @@ Consumers map workflow needs to stable primitives:
 | strict zone identity | `LoadZone` |
 | fuzzy zone input | `ResolveZone` |
 | zone catalog | `Zones`, `ZoneCatalogVersion` |
-| zone display facts | `Zone.Snapshot` |
-| local zone | `Local` |
 
 Consumers own input channels, command routing, persistence, logging, stdout/stderr, exit codes, JSON vs text presentation, terminal layout, colors, prompts, defaults, authorization, retries, scheduling policy, and ambiguity-resolution UX.
+Host-local timezone discovery is also a consumer responsibility; consumers
+must pass an explicit IANA `Zone` into go-time.
 
 go-time owns parsing, typed value objects, arithmetic, timezone rules, stable JSON, structured errors, warnings, and stdlib bridges.
 

@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -17,10 +18,22 @@ func TestParse_SlashDate_NoLocale_BothValid_ReturnsAmbiguous(t *testing.T) {
 	if len(r.Candidates) != 2 {
 		t.Fatalf("len(Candidates) = %d, want 2", len(r.Candidates))
 	}
+	dates := make([]Date, 0, len(r.Candidates))
 	for _, c := range r.Candidates {
+		if c.Status != StatusResolved || c.Kind != KindDate {
+			t.Fatalf("candidate status/kind = %q/%q, want resolved/date", c.Status, c.Kind)
+		}
+		d, ok := c.Date()
+		if !ok {
+			t.Fatal("candidate Date() ok=false, want true")
+		}
+		dates = append(dates, d)
 		if len(c.Warnings) == 0 || c.Warnings[0].Message == "" {
 			t.Error("candidate Warnings must not be empty")
 		}
+	}
+	if dates[0].Equal(dates[1]) {
+		t.Fatalf("candidate dates are equal: %v", dates[0])
 	}
 }
 
@@ -57,6 +70,66 @@ func TestParse_SlashDate_LocaleFirstGB(t *testing.T) {
 	}
 }
 
+func TestParse_SlashDate_ClosedLocalePolicy(t *testing.T) {
+	tests := []struct {
+		name      string
+		tag       string
+		want      Status
+		wantMonth time.Month
+		wantDay   int
+	}{
+		{name: "US month first", tag: "en-US", want: StatusResolved, wantMonth: time.April, wantDay: 5},
+		{name: "GB day first", tag: "en-GB", want: StatusResolved, wantMonth: time.May, wantDay: 4},
+		{name: "AU day first", tag: "en-AU", want: StatusResolved, wantMonth: time.May, wantDay: 4},
+		{name: "CA uses no slash policy", tag: "en-CA", want: StatusAmbiguous},
+		{name: "bare English", tag: "en", want: StatusAmbiguous},
+		{name: "unknown locale", tag: "fr-FR", want: StatusAmbiguous},
+		{name: "canonical case and Unicode extension", tag: "EN-us-u-ca-gregory", want: StatusResolved, wantMonth: time.April, wantDay: 5},
+		{name: "explicit Latin script", tag: "en-Latn-AU", want: StatusResolved, wantMonth: time.May, wantDay: 4},
+		{name: "unrelated script", tag: "en-Cyrl-US", want: StatusAmbiguous},
+		{name: "private extension", tag: "en-US-x-private", want: StatusAmbiguous},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := Parse("04/05/2026", WithInputLocale(language.MustParse(tc.tag)))
+			if r.Status != tc.want {
+				t.Fatalf("Parse(locale %q) status = %v, want %v", tc.tag, r.Status, tc.want)
+			}
+			if tc.want != StatusResolved {
+				return
+			}
+			d, ok := r.Date()
+			if !ok {
+				t.Fatalf("Parse(locale %q).Date() ok = false", tc.tag)
+			}
+			if d.Month() != tc.wantMonth || d.Day() != tc.wantDay {
+				t.Fatalf("Parse(locale %q) date = %v, want %s %d", tc.tag, d, tc.wantMonth, tc.wantDay)
+			}
+		})
+	}
+}
+
+func TestParse_SlashDate_UnsupportedLocaleUsesValidityInference(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  Status
+	}{
+		{name: "one valid interpretation", input: "13/02/2026", want: StatusResolved},
+		{name: "no valid interpretation", input: "31/02/2026", want: StatusInvalid},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := Parse(tc.input, WithInputLocale(language.MustParse("fr-FR")))
+			if r.Status != tc.want {
+				t.Fatalf("Parse(%q, fr-FR) status = %v, want %v", tc.input, r.Status, tc.want)
+			}
+		})
+	}
+}
+
 func TestParse_SlashDate_NoLocale_OnlyOneValid_AutoResolves(t *testing.T) {
 	t.Parallel()
 
@@ -87,6 +160,9 @@ func TestParse_SlashDate_NoLocale_OnlyOneValid_AutoResolves(t *testing.T) {
 			if d.Month() != tc.wantMonth || d.Day() != tc.wantDay {
 				t.Fatalf("date = %v, want %s %d", d, tc.wantMonth, tc.wantDay)
 			}
+			if hasWarning(r.Warnings, WarnInferredCalendar) {
+				t.Fatalf("warnings = %v, do not want WarnInferredCalendar", r.Warnings)
+			}
 		})
 	}
 }
@@ -116,30 +192,48 @@ func TestParse_SlashDate_InvalidDateReportsActionableError(t *testing.T) {
 	}
 }
 
-func TestParse_SlashDate_NoLocale_BothInvalid_ReturnsAmbiguousWithInvalidCandidates(t *testing.T) {
+func TestParse_SlashDate_NoLocale_BothInvalid_ReturnsInvalid(t *testing.T) {
 	t.Parallel()
 
-	// "31/02/2026" — neither (Feb 31) nor (31st month) is valid; surface both
-	// invalid candidates so callers can inspect why.
 	r := Parse("31/02/2026")
-	if r.Status != StatusAmbiguous {
-		t.Fatalf("status = %v, want Ambiguous", r.Status)
+	if r.Status != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status)
 	}
-	if len(r.Candidates) != 2 {
-		t.Fatalf("len(Candidates) = %d, want 2", len(r.Candidates))
+	if r.Error == nil || r.Error.Code != CodeInvalidDate {
+		t.Fatalf("error = %#v, want CodeInvalidDate", r.Error)
 	}
-	invalidCount := 0
-	for _, candidate := range r.Candidates {
-		if candidate.Status != StatusInvalid {
-			continue
-		}
-		invalidCount++
-		if candidate.Error == nil || candidate.Error.Code != CodeInvalidDate {
-			t.Fatalf("candidate error = %#v, want invalid date", candidate.Error)
-		}
+	if r.Error.Hint == "" {
+		t.Fatal("error Hint is empty")
 	}
-	if invalidCount == 0 {
-		t.Fatalf("Candidates = %#v, want at least one invalid date candidate", r.Candidates)
+	if len(r.Candidates) != 0 {
+		t.Fatalf("len(Candidates) = %d, want 0", len(r.Candidates))
+	}
+}
+
+func TestParseDate_SlashDateValidInterpretationCount(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr error
+	}{
+		{name: "zero", input: "31/02/2026", wantErr: ErrInvalidDate},
+		{name: "one", input: "13/02/2026"},
+		{name: "two", input: "04/05/2026", wantErr: ErrAmbiguousDate},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := ParseDate(tc.input)
+			if tc.wantErr == nil && err != nil {
+				t.Fatalf("ParseDate(%q) error = %v", tc.input, err)
+			}
+			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+				t.Fatalf("ParseDate(%q) error = %v, want %v", tc.input, err, tc.wantErr)
+			}
+		})
 	}
 }
 

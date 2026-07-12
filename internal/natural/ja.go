@@ -53,16 +53,15 @@ func (p *jaParser) canHandle(locale string) bool {
 }
 
 func (p *jaParser) parse(input string, ctx Context) (Result, bool) {
-	loc := locForZone(ctx.ZoneID)
-	base := midnightInLoc(ctx.RelativeTo, loc)
+	base := midnight(ctx.RelativeTo)
 
 	if m := reJaRelativeDate.FindStringSubmatch(input); m != nil {
-		return dateResult(jaRelativeDateOffset(base, m[1]), ctx.ZoneID), true
+		return dateResult(jaRelativeDateOffset(base, m[1])), true
 	}
 
 	if m := reJaWeekRelative.FindStringSubmatch(input); m != nil {
 		t := jaWeekDate(base, m[1], m[2])
-		return dateResult(t, ctx.ZoneID), true
+		return dateResult(t), true
 	}
 
 	if m := reJaDateTime.FindStringSubmatch(input); m != nil {
@@ -87,7 +86,7 @@ func (p *jaParser) parse(input string, ctx Context) (Result, bool) {
 			// strip 分 suffix
 			min, _ = strconv.Atoi(minPart[:len(minPart)-3]) // 3 bytes for "分" (UTF-8)
 		}
-		return datetimeAt(dateBase, hour, min, loc, ctx.ZoneID), true
+		return datetimeAt(dateBase, hour, min), true
 	}
 
 	if m := reJaRelativeDur.FindStringSubmatch(input); m != nil {

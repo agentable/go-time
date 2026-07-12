@@ -5,21 +5,17 @@ import (
 	"time"
 )
 
-// fixedCtx returns a Context with a fixed reference time (2026-03-30 Monday, UTC).
-// RelativeTo is in the given zone; pass "" for UTC.
-func zhCtx(locale, zoneID string) Context {
-	loc := locForZone(zoneID)
-	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc)
+// zhCtx returns a Context with a fixed civil reference (2026-03-30 Monday).
+func zhCtx(locale string) Context {
 	return Context{
 		Locale:     locale,
-		ZoneID:     zoneID,
-		RelativeTo: ref,
+		RelativeTo: time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC),
 	}
 }
 
 func TestZh_RelativeDate(t *testing.T) {
-	ctx := zhCtx("zh-Hans", "Asia/Shanghai")
-	loc := locForZone("Asia/Shanghai")
+	ctx := zhCtx("zh-Hans")
+	loc := mustLoadLocation(t, "Asia/Shanghai")
 	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc)
 	today := time.Date(ref.Year(), ref.Month(), ref.Day(), 0, 0, 0, 0, loc)
 
@@ -43,11 +39,8 @@ func TestZh_RelativeDate(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.DateOnly {
-				t.Error("DateOnly = false, want true")
-			}
-			if !r.Time.Equal(tt.want) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.want)
+			if !equalCivil(r, tt.want) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.want)
 			}
 		})
 	}
@@ -55,8 +48,8 @@ func TestZh_RelativeDate(t *testing.T) {
 
 func TestZh_WeekRelative(t *testing.T) {
 	// RelativeTo = 2026-03-30 (Monday)
-	ctx := zhCtx("zh-Hans", "Asia/Shanghai")
-	loc := locForZone("Asia/Shanghai")
+	ctx := zhCtx("zh-Hans")
+	loc := mustLoadLocation(t, "Asia/Shanghai")
 
 	tests := []struct {
 		input    string
@@ -82,16 +75,16 @@ func TestZh_WeekRelative(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantDate) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			if !equalCivil(r, tt.wantDate) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
 			}
 		})
 	}
 }
 
 func TestZh_MonthRelative(t *testing.T) {
-	ctx := zhCtx("zh-Hans", "Asia/Shanghai")
-	loc := locForZone("Asia/Shanghai")
+	ctx := zhCtx("zh-Hans")
+	loc := mustLoadLocation(t, "Asia/Shanghai")
 
 	tests := []struct {
 		input    string
@@ -110,16 +103,16 @@ func TestZh_MonthRelative(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantDate) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			if !equalCivil(r, tt.wantDate) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
 			}
 		})
 	}
 }
 
 func TestZh_DateTime(t *testing.T) {
-	ctx := zhCtx("zh-Hans", "Asia/Shanghai")
-	loc := locForZone("Asia/Shanghai")
+	ctx := zhCtx("zh-Hans")
+	loc := mustLoadLocation(t, "Asia/Shanghai")
 	today := time.Date(2026, 3, 30, 0, 0, 0, 0, loc)
 	tomorrow := today.AddDate(0, 0, 1)
 
@@ -145,15 +138,15 @@ func TestZh_DateTime(t *testing.T) {
 			if r.Kind != KindDateTime {
 				t.Fatalf("Kind = %v, want KindDateTime", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantTime) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantTime)
+			if !equalCivil(r, tt.wantTime) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantTime)
 			}
 		})
 	}
 }
 
 func TestZh_Duration(t *testing.T) {
-	ctx := zhCtx("zh-Hans", "")
+	ctx := zhCtx("zh-Hans")
 	hour := int64(time.Hour)
 	minute := int64(time.Minute)
 
@@ -185,7 +178,7 @@ func TestZh_Duration(t *testing.T) {
 }
 
 func TestZh_Period(t *testing.T) {
-	ctx := zhCtx("zh-Hans", "")
+	ctx := zhCtx("zh-Hans")
 	r, ok := Parse("3天后", ctx)
 	if !ok {
 		t.Fatal("Parse returned ok=false")
@@ -199,7 +192,7 @@ func TestZh_Period(t *testing.T) {
 }
 
 func TestZh_NonMatch(t *testing.T) {
-	ctx := zhCtx("zh-Hans", "")
+	ctx := zhCtx("zh-Hans")
 	tests := []string{
 		"hello",
 		"tomorrow",
@@ -217,7 +210,7 @@ func TestZh_NonMatch(t *testing.T) {
 }
 
 func TestZh_NonZhLocale(t *testing.T) {
-	ctx := Context{Locale: "en", ZoneID: "", RelativeTo: time.Now()}
+	ctx := Context{Locale: "en", RelativeTo: time.Now()}
 	_, ok := Parse("今天", ctx)
 	if ok {
 		t.Error("zh parser should not handle 'en' locale")

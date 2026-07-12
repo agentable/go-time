@@ -42,8 +42,8 @@ func NewLocalDateTime(d Date, t Time) LocalDateTime
 func NewDateTime(d Date, t Time, z Zone) (DateTime, error)
 
 func InstantFromTime(t time.Time) Instant
-func DateTimeFromTime(t time.Time, z Zone) DateTime
-func DateFromTime(t time.Time) Date
+func DateTimeFromTime(t time.Time, z Zone) (DateTime, error)
+func DateFromTime(t time.Time) (Date, error)
 func TimeFromTime(t time.Time) Time
 
 func UnixSeconds(s int64) Instant
@@ -60,7 +60,19 @@ func Months(n int32) Period
 func Days(n int32) Period
 ```
 
-Constructors that validate components return errors. They never normalize invalid dates, invalid clock times, DST gaps, or duplicate local times. Use `DateTimeFromTime` when the caller already has a stdlib `time.Time` with the intended offset.
+Constructors and projections that can cross the civil domain return errors.
+They never normalize invalid dates, invalid clock times, DST gaps, duplicate
+local times, or years outside `0000..9999`. Use `DateTimeFromTime` when the
+caller already has a stdlib `time.Time` with the intended offset.
+
+```go
+func (i Instant) In(z Zone) (DateTime, error)
+func (dt DateTime) In(z Zone) (DateTime, error)
+```
+
+Both validate after projection into `z` and match `ErrOverflow` if the target
+civil year is outside `0000..9999`. `NowIn` and `TodayIn` remain total because
+the process clock is inside the civil domain.
 
 `Period` fields are exported, so struct literals are first-class:
 
@@ -155,6 +167,11 @@ func WithZone(zone Zone) Option
 func WithReference(t Instant) Option
 ```
 
+Reference-dependent natural dates and datetimes require both `WithReference`
+and `WithZone`; missing context returns `ErrInvalidFormat` or `ErrInvalidZone`.
+Formal floating datetimes may still omit `WithZone` and remain
+`LocalDateTime`. Exact natural durations and periods require neither option.
+
 There is no `WithStrategy`, `WithLocale`, or `WithZoneID`.
 
 Parse warning codes are part of the public inspection model:
@@ -175,19 +192,20 @@ func (i Instant) Add(d Duration) Instant
 func (i Instant) Sub(other Instant) Duration
 func (i Instant) Compare(other Instant) int
 
-func (dt DateTime) Add(d Duration) DateTime
-func (dt DateTime) AddPeriod(p Period) DateTime
+func (dt DateTime) Add(d Duration) (DateTime, error)
+func (dt DateTime) AddPeriod(p Period) (LocalResolution, error)
 func (dt DateTime) Sub(other DateTime) Duration
 func (dt DateTime) Compare(other DateTime) int
 
-func (d Date) Add(p Period) Date
+func (d Date) Add(p Period) (Date, error)
 func (d Date) DaysUntil(other Date) int
-func (d Date) PeriodUntil(other Date) Period
+func (d Date) PeriodUntil(other Date) (Period, error)
 func (d Date) Compare(other Date) int
 
-func (p Period) Add(other Period) Period
-func (p Period) Sub(other Period) Period
-func (p Period) Negate() Period
+func (p Period) Add(other Period) (Period, error)
+func (p Period) Sub(other Period) (Period, error)
+func (p Period) Negate() (Period, error)
+func (p Period) Abs() (Period, error)
 ```
 
 Use `Compare` with stdlib helpers for selection. There are no `Min`, `Max`, or `Clamp` methods.
@@ -214,7 +232,6 @@ Interval iteration is not part of this API surface. Cadence, inclusivity, and DS
 
 ```go
 var UTC Zone
-var Local Zone
 
 func LoadZone(id string) (Zone, error)
 func MustLoadZone(id string) Zone
@@ -227,9 +244,6 @@ func (z Zone) Location() *time.Location
 func (z Zone) String() string
 func (z Zone) Equal(other Zone) bool
 func (z Zone) IsZero() bool
-func (z Zone) Snapshot(i Instant) ZoneSnapshot
-func (z Zone) OffsetAt(i Instant) string
-func (z Zone) Abbreviation(i Instant) string
 ```
 
 ## Stdlib Bridges
@@ -237,14 +251,14 @@ func (z Zone) Abbreviation(i Instant) string
 ```go
 func (i Instant) Std() time.Time
 func (dt DateTime) Std() time.Time
-func (d Date) Std(z Zone) time.Time
-func (t Time) Std(on Date, z Zone) time.Time
 func (iv Interval) StdRange() (start, end time.Time)
 func (d Duration) Std() time.Duration
 func (d Duration) Decompose() DurationComponents
 ```
 
 `DateTime.Clock()` returns a go-time `Time`, not a stdlib type.
+Unresolved `Date` and `Time` values cross to stdlib only after
+`NewLocalDateTime(date, clock).Resolve(zone)` produces a chosen `DateTime`.
 
 ## JSON
 
@@ -252,17 +266,18 @@ All value objects and `ParseResult` use `github.com/go-json-experiment/json`. Do
 
 Stable value JSON:
 
-- `Instant`: `{"kind":"instant","iso":"...","epoch_ms":...}`
-- `DateTime`: `{"kind":"datetime","value":"...","zone":"...","calendar":"iso8601"}`
-- `LocalDateTime`: `{"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS","calendar":"iso8601"}`
-- `Date`: `{"kind":"date","value":"YYYY-MM-DD","calendar":"iso8601"}`
-- `Time`: `{"kind":"time","value":"HH:MM:SS","precision":"second"}`
+- `Instant`: `{"kind":"instant","iso":"..."}`
+- `DateTime`: `{"kind":"datetime","instant":"...Z","zone":"..."}`
+- `LocalDateTime`: `{"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS"}`
+- `Date`: `{"kind":"date","value":"YYYY-MM-DD"}`
+- `Time`: `{"kind":"time","value":"HH:MM:SS[.fraction]"}`
 - `Duration`: `{"kind":"duration","iso":"..."}`
 - `Period`: `{"kind":"period","iso":"..."}`
 - `Interval`: `{"kind":"interval","start":"...","end":"..."}`
 - `Zone`: `{"kind":"zone","id":"..."}`
 
-Decoding is strict for value-object JSON: unknown fields, missing required fields, wrong `kind`, unsupported calendars, and contradictory cross-check fields are errors.
+Decoding is strict for value-object JSON: unknown fields, missing required
+fields, wrong `kind`, non-canonical values, and invalid identities are errors.
 
 `Duration` ISO strings use canonical decimal seconds for sub-second precision; scientific notation is outside the wire domain. A zero `Zone` encodes with `id:"UTC"` to match its total UTC projection behavior.
 

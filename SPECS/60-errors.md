@@ -98,6 +98,7 @@ Do not use `te.Code` for Go control flow when a sentinel exists.
 - `StatusAmbiguous` carries `ParseResult.Candidates`.
 - Typed parsers translate non-resolved or wrong-kind results into `*TimeError`.
 - Typed parsers keep ambiguity causes precise: slash-date ambiguity wraps `ErrAmbiguousDate`, while DST fall-back duplicate local times wrap `ErrDuplicateTime`.
+- Warning metadata never determines sentinel identity.
 
 Empty input in `Parse` returns `ErrEmptyInput` with `CodeEmptyInput`.
 

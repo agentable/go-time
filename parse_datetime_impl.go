@@ -80,7 +80,7 @@ func localDateTimeResult(input string, cfg *config, year, mon, day, hour, min, s
 			"Provide a valid local clock time"), true
 	}
 
-	if !cfg.zone.IsZero() {
+	if cfg.zoneSet {
 		return resolveLocalDateTime(input, cfg, year, mon, day, hour, min, sec, ns, truncated)
 	}
 
@@ -142,6 +142,7 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 			Zone:       cfg.zone,
 			Warnings:   localDateTimeWarnings(cfg, z, truncated),
 			Candidates: candidates,
+			ambiguity:  ambiguityDuplicateTime,
 		}, true
 	case LocalResolved:
 		dt := resolution.Candidates[0]

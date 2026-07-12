@@ -143,24 +143,3 @@ func TestTime_StringLeadingZeros(t *testing.T) {
 		t.Errorf("String() = %q, want %q", ct.String(), "09:05:03")
 	}
 }
-
-func TestTime_Std_DateAndZoneProjection(t *testing.T) {
-	ct := mustTimeNanos(13, 30, 45, 500_000_000)
-	d := mustDate(2026, gtime.March, 27)
-	tokyo := MustLoadZone("Asia/Tokyo")
-
-	got := ct.Std(d, tokyo)
-	want := gtime.Date(2026, gtime.March, 27, 13, 30, 45, 500_000_000, tokyo.Location())
-	if !got.Equal(want) || got.Location().String() != tokyo.Location().String() {
-		t.Errorf("Std(date,tokyo) = %v (%v), want %v (%v)", got, got.Location(), want, tokyo.Location())
-	}
-
-	// Std on a "spring forward" instant assembles literally — no DST adjustment.
-	// 2:30 on 2026-03-08 in America/New_York is the nonexistent hour; Std still
-	// returns a time.Time at the literal slot (Go's time.Date normalizes).
-	dst := MustLoadZone("America/New_York")
-	literal := mustTime(2, 30, 0).Std(mustDate(2026, gtime.March, 8), dst)
-	if literal.IsZero() {
-		t.Error("Std should produce a non-zero time.Time even at DST gap")
-	}
-}

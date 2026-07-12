@@ -43,28 +43,28 @@ github.com/agentable/go-time/
 ├── current.go          # Current-time helpers: Now / NowIn / TodayIn (no Today() — must specify zone)
 ├── options.go          # Parse options: WithInputLocale(language.Tag), WithZone, WithReference
 ├── instant.go          # Instant (absolute UTC; UnixSeconds/Millis/Nanos short forms; Add(Duration) only)
-├── datetime.go         # DateTime (zoned local time; Add(Duration)+AddPeriod(Period); .Clock()→Time)
+├── datetime.go         # DateTime (zoned local time; checked Add; AddPeriod→LocalResolution; .Clock()→Time)
 ├── local_datetime.go   # LocalDateTime (date + clock before zone resolution; Resolve(Zone)→candidates)
-├── date.go             # Date (calendar date; Add(Period) only; .Std(z)→time.Time)
-├── time.go             # Time (clock time; .Std(on, z)→time.Time)
+├── date.go             # Date (calendar date; checked Add(Period); unresolved until paired with Time + Zone)
+├── time.go             # Time (clock time; unresolved until paired with Date + Zone)
 ├── duration.go         # Duration = type Duration time.Duration (no Day constant); .Decompose()→DurationComponents
 ├── period.go           # Period = struct{Years, Months, Days int32} (EOM clamp); fields exported directly, no Decompose
 ├── interval.go         # Interval (half-open [start, end); .StdRange()→(time.Time, time.Time))
-├── zone.go             # Zone (IANA only in JSON; Snapshot(at) for offset/abbr)
+├── zone.go             # Zone identity + stdlib Location bridge (IANA only in JSON)
 ├── duration_components.go # DurationComponents struct — Hours…Nanoseconds slots for external formatters
 ├── parse.go            # Layer 2: ISO 8601 / RFC 3339 parsing + ParseResult tagged-sum
 ├── parse_typed.go      # Layer 2: ParseInstant/ParseDateTime/ParseLocalDateTime/.../ParseInterval (8 typed parsers)
 ├── parse_impl.go       # Layer 2/3: parse dispatch — P{date}→Period, PT{time}→Duration, mixed→Invalid
-├── parse_slash.go      # Layer 2: slash-date routing — locale-first, infer when unambiguous, else Ambiguous
+├── parse_slash.go      # Layer 2: closed slash-locale policy; otherwise 0 invalid, 1 resolved, 2 ambiguous
 ├── errors.go           # ErrorCode + *TimeError + sentinel Err* instances
 └── internal/
-    ├── natural/        # Layer 2 helper: NL time parsing (ar, en, hi, ja, ko, latin, zh)
-    └── zone/           # IANA timezone data + DST projection + Windows→IANA mapping
+    ├── natural/        # Layer 2 helper: NL grammar to civil components (ar, en, hi, ja, ko, latin, zh; no zone lookup)
+    └── zone/           # IANA data + DST projection + generated Windows→IANA mapping (`geniana/`, `genwindows/`)
 ```
 
 **Layer dependency rules:**
 
-- Layer 1 (value objects) — zero external imports. Exception: `zone.go` imports `internal/zone` for static IANA data (constants only, no I/O)
+- Layer 1 (value objects) — semantics and arithmetic use stdlib only; wire methods use the single `go-json-experiment/json` dependency. `zone.go` also imports `internal/zone` for static generated data.
 - Layer 2 (`parse.go`, `internal/natural/`) — depends only on Layer 1 + stdlib + `golang.org/x/text/language`
 - Layer 3 (arithmetic methods on value objects) — depends only on Layer 1
 - User-visible API is `gotime.*` only — no internal dependencies leak
@@ -105,10 +105,10 @@ Specification documents in [`SPECS/`](SPECS/) — system contracts, data formats
 | [`10-domain-model.md`](SPECS/10-domain-model.md) | Core value objects (Duration/Period split), JSON schemas, **Wire Format Invariance** |
 | [`20-parsing.md`](SPECS/20-parsing.md) | `Parse` + 8 typed `Parse*` functions, tagged-sum result, P/PT dispatch, ambiguity via Candidates |
 | [`30-formatting.md`](SPECS/30-formatting.md) | Why this library doesn't format — stdlib bridge contract (`.Std()` / `.Decompose()`) |
-| [`40-computation.md`](SPECS/40-computation.md) | `Add(Duration)` vs `AddPeriod(Period)`, EOM clamp, half-open intervals, iter.Seq |
+| [`40-computation.md`](SPECS/40-computation.md) | Checked exact/calendar arithmetic, EOM clamp, and half-open interval operations |
 | [`50-timezone.md`](SPECS/50-timezone.md) | IANA zones, deterministic JSON, DST nonexistent/duplicate handling |
 | [`60-errors.md`](SPECS/60-errors.md) | Sentinel `Err*` + typed `*TimeError`, `ErrorCode` JSON metadata |
-| [`70-api-surface.md`](SPECS/70-api-surface.md) | Public API surface, factory naming, short `Unix*` forms, `var UTC`/`Local`, single `MustLoadZone` |
+| [`70-api-surface.md`](SPECS/70-api-surface.md) | Public API surface, factory naming, short `Unix*` forms, `var UTC`, single `MustLoadZone` |
 | [`80-integration.md`](SPECS/80-integration.md) | Integration boundaries for CLIs, services, and upstream systems |
 
 When public behavior changes, update the relevant spec in the same work cycle.
@@ -165,14 +165,19 @@ Operational corollaries:
 - **Calendar math is `AddPeriod(Period)`; exact math is `Add(Duration)`** — `dt.Add(gotime.Months(1))` must fail at compile time. The type system is load-bearing here.
 - `Duration` is `type Duration time.Duration` — `Nanosecond` through `Hour` are typed constants supporting `5 * gotime.Minute` arithmetic. No `Day` constant (24h is `24 * Hour`; calendar day is `Days(n)` on Period). No `Hours(n)` / `Days(n float64)` constructors.
 - `Period` fields (`Years`, `Months`, `Days`) are exported — literal initialization is the canonical form. Constructors `Years(n)` / `Months(n)` / `Days(n)` are sugar.
+- `Period.Add`, `Sub`, `Negate`, and `Abs` are checked and return `ErrOverflow`; calendar component arithmetic must never wrap.
 - `Period` month/year add applies end-of-month clamping (Jan 31 + Months(1) = Feb 28/29). Never overflow.
 - Intervals are half-open `[start, end)` — `Contains` excludes end, `Overlaps` excludes touching endpoints, use `Adjacent` for boundary detection
 - `Interval.Expand(before, after)` returns `(Interval, error)` — reject negative expansion durations and preserve the same `end >= start` invariant as constructors.
 - `Interval` carries no zone field — projection zone belongs to the rendering layer (which is outside this module)
 - Use `ResolveZone` for fuzzy timezone resolution (Windows names and case-insensitive IANA names) — use `LoadZone` for strict IANA-only. Fixed offsets are not zones; RFC3339 numeric offsets parse to `Instant`.
+- Treat `internal/zone/catalog.go` and `internal/zone/windows.go` as generated artifacts. Regenerate Windows mappings only from the CLDR release pinned in `SPECS/50-timezone.md`; never hand-edit or canonicalize its territory `001` targets.
 - `.Std()` returns stdlib types (`time.Time` / `time.Duration`); `.Clock()` returns a `Time`; `Duration.Decompose()` returns `DurationComponents` (clock slots only). Naming is load-bearing: stdlib vs. clock vs. structured slot. `Period` has no `Decompose` — read `p.Years` / `p.Months` / `p.Days` directly (exported fields), no parallel struct.
 - `Zone.Location()` is total — the zero `Zone` falls back to `UTC`; do not reintroduce parallel fallback helpers
-- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC` — never call `time.Now()` during marshal. Time-dependent offset and abbreviation use `Zone.Snapshot(at Instant)`.
+- Parse option presence is explicit: `WithZone(Zone{})` means UTC and `WithReference(Instant{})` means the Go zero instant; never infer presence with `IsZero`.
+- Relative natural dates/datetimes require both `WithReference` and `WithZone`; formal floating datetimes may omit `WithZone` and remain `LocalDateTime`.
+- `internal/natural` receives an already-projected civil reference and returns civil components only; `LocalDateTime.Resolve` at the gotime boundary is the sole owner of natural datetime zone resolution.
+- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC` — never call `time.Now()` during marshal. Time-dependent offset and abbreviation projection belongs to stdlib `time.Time.Zone`.
 - `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
 - `ParseResult` has no public `Value() any` escape hatch — dispatch unknown input with `Status`, `Kind`, and comma-ok accessors.
 - `ParseResult.HasZone` indicates whether the input explicitly included timezone/offset information — use this to detect floating times
@@ -278,7 +283,7 @@ GitHub Actions (`ci.yml`): test + lint on push/PR to main. Separate security job
 
 ## Pre-commit Hooks
 
-Lefthook with parallel hooks: trailing-whitespace, gitleaks (secret detection), lint (`task lint`), test (`task test`), markdownlint, yamllint.
+Lefthook with parallel hooks: trailing-whitespace, gitleaks (secret detection), lint (`task lint`), test (`task test`), and yamllint.
 
 ## Dependency Issue Reporting
 

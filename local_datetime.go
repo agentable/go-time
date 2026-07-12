@@ -28,33 +28,43 @@ func (ldt LocalDateTime) String() string {
 	return ldt.Date.String() + "T" + ldt.Time.String()
 }
 
-// MarshalJSON encodes ldt as {"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS","calendar":"iso8601"}.
+// MarshalJSON encodes ldt as {"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS"}.
 func (ldt LocalDateTime) MarshalJSON() ([]byte, error) {
+	if msg := validateDateComponents(ldt.Date.year, int(ldt.Date.month), ldt.Date.day); msg != "" {
+		return nil, newTimeError(
+			ErrInvalidDate,
+			msg,
+			ldt.String(),
+			"marshal a LocalDateTime containing a Date constructed with NewDate",
+		)
+	}
+	if msg := validateTimeComponents(ldt.Time.hour, ldt.Time.minute, ldt.Time.second, ldt.Time.nanosecond); msg != "" {
+		return nil, newTimeError(
+			ErrInvalidTime,
+			msg,
+			ldt.String(),
+			"marshal a LocalDateTime containing a Time constructed with NewTime or NewTimeNanos",
+		)
+	}
 	return json.Marshal(struct {
-		Kind     string `json:"kind"`
-		Value    string `json:"value"`
-		Calendar string `json:"calendar"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
 	}{
-		Kind:     "local_datetime",
-		Value:    ldt.String(),
-		Calendar: "iso8601",
+		Kind:  "local_datetime",
+		Value: ldt.String(),
 	})
 }
 
 // UnmarshalJSON decodes ldt from {"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS[.fraction]"}.
 func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 	var wire struct {
-		Kind     string `json:"kind"`
-		Value    string `json:"value"`
-		Calendar string `json:"calendar"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
 	}
 	if err := unmarshalJSONWire(b, &wire); err != nil {
 		return err
 	}
 	if err := requireJSONKind("local_datetime", wire.Kind, "local_datetime"); err != nil {
-		return err
-	}
-	if err := requireJSONCalendar("local_datetime", wire.Calendar); err != nil {
 		return err
 	}
 	if err := requireJSONString("local_datetime", "value", wire.Value); err != nil {
@@ -64,7 +74,11 @@ func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return fmt.Errorf("gotime: invalid local datetime value %q: %w", wire.Value, err)
 	}
-	*ldt = NewLocalDateTime(DateFromTime(parsed), TimeFromTime(parsed))
+	date, err := DateFromTime(parsed)
+	if err != nil {
+		return err
+	}
+	*ldt = NewLocalDateTime(date, TimeFromTime(parsed))
 	return nil
 }
 

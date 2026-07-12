@@ -1,7 +1,8 @@
 package gotime
 
 import (
-	"strings"
+	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/go-json-experiment/json"
@@ -13,7 +14,7 @@ func TestTimeMarshalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"time","value":"13:30:45","precision":"second"}`
+	want := `{"kind":"time","value":"13:30:45"}`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -25,14 +26,9 @@ func TestTimeMarshalJSON_WithNanoseconds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	if !strings.Contains(string(b), `"kind":"time"`) {
-		t.Errorf("missing kind field: %s", b)
-	}
-	if !strings.Contains(string(b), "123456789") {
-		t.Errorf("missing nanoseconds in output: %s", b)
-	}
-	if !strings.Contains(string(b), `"precision":"nanosecond"`) {
-		t.Errorf("expected nanosecond precision: %s", b)
+	const want = `{"kind":"time","value":"13:30:45.123456789"}`
+	if string(b) != want {
+		t.Errorf("Marshal() = %s, want %s", b, want)
 	}
 }
 
@@ -42,8 +38,9 @@ func TestTimeMarshalJSON_MillisecondPrecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	if !strings.Contains(string(b), `"precision":"millisecond"`) {
-		t.Errorf("expected millisecond precision: %s", b)
+	const want = `{"kind":"time","value":"13:30:45.5"}`
+	if string(b) != want {
+		t.Errorf("Marshal() = %s, want %s", b, want)
 	}
 }
 
@@ -53,14 +50,15 @@ func TestTimeMarshalJSON_MicrosecondPrecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	if !strings.Contains(string(b), `"precision":"microsecond"`) {
-		t.Errorf("expected microsecond precision: %s", b)
+	const want = `{"kind":"time","value":"13:30:45.0005"}`
+	if string(b) != want {
+		t.Errorf("Marshal() = %s, want %s", b, want)
 	}
 }
 
 func TestTimeUnmarshalJSON(t *testing.T) {
 	var tm Time
-	if err := json.Unmarshal([]byte(`{"kind":"time","value":"13:30:45","precision":"second"}`), &tm); err != nil {
+	if err := json.Unmarshal([]byte(`{"kind":"time","value":"13:30:45"}`), &tm); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	if tm.Hour() != 13 || tm.Minute() != 30 || tm.Second() != 45 {
@@ -70,24 +68,57 @@ func TestTimeUnmarshalJSON(t *testing.T) {
 
 func TestTimeJSONRoundTrip(t *testing.T) {
 	orig := mustTime(9, 0, 0)
-	b, _ := json.Marshal(orig)
+	b, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
 	var got Time
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("round-trip: %v", err)
 	}
 	if !orig.Equal(got) {
 		t.Errorf("round-trip mismatch: got %v, want %v", got, orig)
+	}
+	again, err := json.Marshal(got)
+	if err != nil || !bytes.Equal(again, b) {
+		t.Fatalf("second Marshal() = %s, %v; want %s", again, err, b)
 	}
 }
 
 func TestTimeJSONRoundTrip_WithNanoseconds(t *testing.T) {
 	orig := mustTimeNanos(13, 30, 45, 123456789)
-	b, _ := json.Marshal(orig)
+	b, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
 	var got Time
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("round-trip: %v", err)
 	}
 	if !orig.Equal(got) {
 		t.Errorf("round-trip mismatch: got %v, want %v", got, orig)
+	}
+	again, err := json.Marshal(got)
+	if err != nil || !bytes.Equal(again, b) {
+		t.Fatalf("second Marshal() = %s, %v; want %s", again, err, b)
+	}
+}
+
+func TestTimeMarshalJSON_RejectsInvalidValue(t *testing.T) {
+	_, err := json.Marshal(Time{hour: 24})
+	if !errors.Is(err, ErrInvalidTime) {
+		t.Fatalf("Marshal(invalid Time) error = %v, want ErrInvalidTime", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) || te.Hint == "" {
+		t.Fatalf("Marshal(invalid Time) error = %#v, want TimeError with hint", err)
+	}
+}
+
+func TestTimeUnmarshalJSON_RejectsNonCanonicalValue(t *testing.T) {
+	var tm Time
+	err := json.Unmarshal([]byte(`{"kind":"time","value":"13:30:45.500000000"}`), &tm)
+	if !errors.Is(err, ErrInvalidFormat) {
+		t.Fatalf("Unmarshal(non-canonical Time) error = %v, want ErrInvalidFormat", err)
 	}
 }

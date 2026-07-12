@@ -280,3 +280,20 @@ func TestParseResultError_InvalidWithoutErrorHasHint(t *testing.T) {
 		t.Fatal("TimeError.Hint is empty")
 	}
 }
+
+func TestParseResultError_DuplicateCauseDoesNotDependOnWarnings(t *testing.T) {
+	t.Parallel()
+
+	r := Parse("2026-11-01T01:30:00", WithZone(MustLoadZone("America/New_York")))
+	if r.Status != StatusAmbiguous {
+		t.Fatalf("Parse() status = %q, want ambiguous", r.Status)
+	}
+	r.Warnings = nil
+	for i := range r.Candidates {
+		r.Candidates[i].Warnings = nil
+	}
+	err := parseResultError(r, KindDateTime)
+	if !errors.Is(err, ErrDuplicateTime) {
+		t.Fatalf("parseResultError() error = %v, want ErrDuplicateTime", err)
+	}
+}

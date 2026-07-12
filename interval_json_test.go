@@ -3,6 +3,7 @@ package gotime
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/go-json-experiment/json"
 )
@@ -46,6 +47,44 @@ func TestIntervalJSONRoundTrip(t *testing.T) {
 	}
 	if !orig.Start().Equal(got.Start()) || !orig.End().Equal(got.End()) {
 		t.Errorf("round-trip mismatch: got %v, want %v", got, orig)
+	}
+}
+
+func TestIntervalMarshalJSON_RejectsInvalidPrivateValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		iv   Interval
+		want error
+	}{
+		{
+			name: "reversed",
+			iv:   Interval{start: UnixSeconds(1), end: UnixSeconds(0)},
+			want: ErrIntervalReversed,
+		},
+		{
+			name: "endpoint outside wire domain",
+			iv: Interval{
+				start: InstantFromTime(time.Date(10_000, time.January, 1, 0, 0, 0, 0, time.UTC)),
+				end:   InstantFromTime(time.Date(10_000, time.January, 2, 0, 0, 0, 0, time.UTC)),
+			},
+			want: ErrOverflow,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := json.Marshal(tc.iv)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Marshal() error = %v, want %v", err, tc.want)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) || te.Hint == "" {
+				t.Fatalf("Marshal() error = %#v, want TimeError with hint", err)
+			}
+		})
 	}
 }
 

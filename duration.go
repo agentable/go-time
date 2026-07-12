@@ -63,10 +63,7 @@ func (d Duration) IsNegative() bool { return d < 0 }
 
 // Abs returns the absolute value of d.
 func (d Duration) Abs() Duration {
-	if d < 0 {
-		return -d
-	}
-	return d
+	return Duration(time.Duration(d).Abs())
 }
 
 // String returns d in the same format as time.Duration.String() ("1h30m0s",
@@ -76,17 +73,16 @@ func (d Duration) String() string { return time.Duration(d).String() }
 
 // decomposeDuration breaks nanoseconds into sign, hours, minutes, seconds, and sub-second ns.
 func decomposeDuration(ns int64) (neg bool, h, m, s, subsecNs int64) {
-	if ns < 0 {
-		neg = true
-		ns = -ns
-	}
 	h = ns / int64(time.Hour)
-	ns -= h * int64(time.Hour)
+	ns %= int64(time.Hour)
 	m = ns / int64(time.Minute)
-	ns -= m * int64(time.Minute)
+	ns %= int64(time.Minute)
 	s = ns / int64(time.Second)
-	ns -= s * int64(time.Second)
-	subsecNs = ns
+	subsecNs = ns % int64(time.Second)
+	if h < 0 || m < 0 || s < 0 || subsecNs < 0 {
+		neg = true
+		h, m, s, subsecNs = -h, -m, -s, -subsecNs
+	}
 	return
 }
 
@@ -139,7 +135,12 @@ func parseISO8601Duration(s string) (Duration, error) {
 		return 0, fmt.Errorf("duration %q: %w", s, errInvalidISO8601Duration)
 	}
 
-	var totalNs int64
+	negative := m[1] == "-"
+	limit := uint64(1<<63 - 1)
+	if negative {
+		limit++
+	}
+	var totalNs uint64
 	for _, component := range []struct {
 		raw  string
 		name string
@@ -156,17 +157,20 @@ func parseISO8601Duration(s string) (Duration, error) {
 		if !ok {
 			return 0, fmt.Errorf("duration %s component %q: %w", component.name, component.raw, errInvalidISO8601Duration)
 		}
-		var addOK bool
-		totalNs, addOK = checkedAddInt64(totalNs, ns)
-		if !addOK {
+		magnitude := uint64(ns) //nolint:gosec // parseDurationComponent returns only non-negative values.
+		if magnitude > limit-totalNs {
 			return 0, fmt.Errorf("duration %q overflows nanoseconds: %w", s, errInvalidISO8601Duration)
 		}
+		totalNs += magnitude
 	}
 
-	if m[1] == "-" {
-		totalNs = -totalNs
+	if !negative {
+		return Duration(totalNs), nil
 	}
-	return Duration(totalNs), nil
+	if totalNs == uint64(1)<<63 {
+		return Duration(-1 << 63), nil
+	}
+	return Duration(-int64(totalNs)), nil
 }
 
 // Decompose breaks d into renderable slots: Hours, Minutes, Seconds,

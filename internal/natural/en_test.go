@@ -5,19 +5,16 @@ import (
 	"time"
 )
 
-func enCtx(zoneID string) Context {
-	loc := locForZone(zoneID)
-	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc) // Monday
+func enCtx() Context {
 	return Context{
 		Locale:     "en",
-		ZoneID:     zoneID,
-		RelativeTo: ref,
+		RelativeTo: time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC), // Monday
 	}
 }
 
 func TestEn_RelativeDate(t *testing.T) {
-	ctx := enCtx("America/New_York")
-	loc := locForZone("America/New_York")
+	ctx := enCtx()
+	loc := mustLoadLocation(t, "America/New_York")
 	ref := time.Date(2026, 3, 30, 12, 0, 0, 0, loc)
 	today := time.Date(ref.Year(), ref.Month(), ref.Day(), 0, 0, 0, 0, loc)
 
@@ -43,11 +40,8 @@ func TestEn_RelativeDate(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.DateOnly {
-				t.Error("DateOnly = false, want true")
-			}
-			if !r.Time.Equal(tt.want) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.want)
+			if !equalCivil(r, tt.want) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.want)
 			}
 		})
 	}
@@ -55,8 +49,8 @@ func TestEn_RelativeDate(t *testing.T) {
 
 func TestEn_WeekRelative(t *testing.T) {
 	// RelativeTo = 2026-03-30 (Monday)
-	ctx := enCtx("America/New_York")
-	loc := locForZone("America/New_York")
+	ctx := enCtx()
+	loc := mustLoadLocation(t, "America/New_York")
 
 	tests := []struct {
 		input    string
@@ -79,16 +73,16 @@ func TestEn_WeekRelative(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantDate) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
+			if !equalCivil(r, tt.wantDate) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
 			}
 		})
 	}
 }
 
 func TestEn_DateTime(t *testing.T) {
-	ctx := enCtx("America/New_York")
-	loc := locForZone("America/New_York")
+	ctx := enCtx()
+	loc := mustLoadLocation(t, "America/New_York")
 	today := time.Date(2026, 3, 30, 0, 0, 0, 0, loc)
 	tomorrow := today.AddDate(0, 0, 1)
 
@@ -110,15 +104,15 @@ func TestEn_DateTime(t *testing.T) {
 			if r.Kind != KindDateTime {
 				t.Fatalf("Kind = %v, want KindDateTime", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantTime) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantTime)
+			if !equalCivil(r, tt.wantTime) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantTime)
 			}
 		})
 	}
 }
 
 func TestEn_Duration(t *testing.T) {
-	ctx := enCtx("")
+	ctx := enCtx()
 	hour := int64(time.Hour)
 	minute := int64(time.Minute)
 
@@ -148,7 +142,7 @@ func TestEn_Duration(t *testing.T) {
 }
 
 func TestEn_Period(t *testing.T) {
-	ctx := enCtx("")
+	ctx := enCtx()
 	tests := []struct {
 		input    string
 		wantDays int32
@@ -175,7 +169,7 @@ func TestEn_Period(t *testing.T) {
 }
 
 func TestEn_NonMatch(t *testing.T) {
-	ctx := enCtx("")
+	ctx := enCtx()
 	tests := []string{
 		"今天",
 		"明天",
@@ -194,7 +188,7 @@ func TestEn_NonMatch(t *testing.T) {
 }
 
 func TestEn_NonEnLocale(t *testing.T) {
-	ctx := Context{Locale: "zh-Hans", ZoneID: "", RelativeTo: time.Now()}
+	ctx := Context{Locale: "zh-Hans", RelativeTo: time.Now()}
 	_, ok := Parse("today", ctx)
 	if ok {
 		t.Error("en parser should not handle 'zh-Hans' locale")
@@ -204,8 +198,8 @@ func TestEn_NonEnLocale(t *testing.T) {
 func TestEn_WeekRelative_AdditionalWeekdays(t *testing.T) {
 	t.Parallel()
 
-	ctx := enCtx("America/New_York")
-	loc := locForZone("America/New_York")
+	ctx := enCtx()
+	loc := mustLoadLocation(t, "America/New_York")
 	tests := []struct {
 		input    string
 		wantDate time.Time
@@ -228,32 +222,8 @@ func TestEn_WeekRelative_AdditionalWeekdays(t *testing.T) {
 			if r.Kind != KindDate {
 				t.Fatalf("Kind = %v, want KindDate", r.Kind)
 			}
-			if !r.Time.Equal(tt.wantDate) {
-				t.Errorf("Time = %v, want %v", r.Time, tt.wantDate)
-			}
-		})
-	}
-}
-
-func TestLocForZone(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		zoneID string
-		want   string
-	}{
-		{name: "resolved zone", zoneID: "America/New_York", want: "America/New_York"},
-		{name: "fallback to utc", zoneID: "Not/AZone", want: "UTC"},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := locForZone(tt.zoneID).String(); got != tt.want {
-				t.Fatalf("locForZone(%q) = %q, want %q", tt.zoneID, got, tt.want)
+			if !equalCivil(r, tt.wantDate) {
+				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
 			}
 		})
 	}

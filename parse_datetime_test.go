@@ -129,6 +129,25 @@ func TestParse_DateTime_NoOffset_WithZoneOption(t *testing.T) {
 	}
 }
 
+func TestParse_DateTime_ExplicitZeroZoneMeansUTC(t *testing.T) {
+	t.Parallel()
+
+	r := Parse("2026-03-27T13:00:00", WithZone(Zone{}))
+	if r.Status != StatusResolved || r.Kind != KindDateTime {
+		t.Fatalf("Parse() status/kind = %q/%q, want resolved/datetime", r.Status, r.Kind)
+	}
+	dt, ok := r.DateTime()
+	if !ok {
+		t.Fatal("DateTime() ok=false, want true")
+	}
+	if !dt.Zone().Equal(UTC) {
+		t.Fatalf("DateTime zone = %q, want UTC", dt.Zone().ID())
+	}
+	if !hasWarning(r.Warnings, WarnAssumedZone) {
+		t.Fatalf("warnings = %v, want WarnAssumedZone", r.Warnings)
+	}
+}
+
 func TestParse_DateTime_ExplicitOffsetIsInstantAndIgnoresZoneOption(t *testing.T) {
 	t.Parallel()
 

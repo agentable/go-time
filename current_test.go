@@ -38,7 +38,10 @@ func TestNowIn_NonUTCZone(t *testing.T) {
 func TestTodayIn_Zone(t *testing.T) {
 	z := MustLoadZone("America/New_York")
 	got := TodayIn(z)
-	want := DateFromTime(time.Now().In(z.Location()))
+	want, err := DateFromTime(time.Now().In(z.Location()))
+	if err != nil {
+		t.Fatalf("DateFromTime(time.Now()) error = %v", err)
+	}
 	if !got.Equal(want) {
 		t.Errorf("TodayIn(America/New_York) = %v, want %v", got, want)
 	}

@@ -3,7 +3,9 @@ package gotime
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/go-json-experiment/json"
@@ -57,24 +59,66 @@ func (p Period) IsNegative() bool {
 	return p.Years < 0 || p.Months < 0 || p.Days < 0
 }
 
-// Negate returns -p (all fields flipped).
-func (p Period) Negate() Period {
-	return Period{Years: -p.Years, Months: -p.Months, Days: -p.Days}
+// Negate returns -p (all fields flipped), or ErrOverflow when a component is math.MinInt32.
+func (p Period) Negate() (Period, error) {
+	if p.Years == math.MinInt32 || p.Months == math.MinInt32 || p.Days == math.MinInt32 {
+		return Period{}, newTimeError(
+			ErrOverflow,
+			"period negation overflows int32",
+			fmt.Sprintf("years=%d months=%d days=%d", p.Years, p.Months, p.Days),
+			"use smaller period components before negating",
+		)
+	}
+	return Period{Years: -p.Years, Months: -p.Months, Days: -p.Days}, nil
 }
 
-// Abs returns p with all fields made non-negative.
-func (p Period) Abs() Period {
-	return Period{Years: absInt32(p.Years), Months: absInt32(p.Months), Days: absInt32(p.Days)}
+// Abs returns p with all fields made non-negative, or ErrOverflow when a component is math.MinInt32.
+func (p Period) Abs() (Period, error) {
+	if p.Years == math.MinInt32 || p.Months == math.MinInt32 || p.Days == math.MinInt32 {
+		return Period{}, newTimeError(
+			ErrOverflow,
+			"period absolute value overflows int32",
+			fmt.Sprintf("years=%d months=%d days=%d", p.Years, p.Months, p.Days),
+			"use smaller period components before taking the absolute value",
+		)
+	}
+	return Period{Years: int32Magnitude(p.Years), Months: int32Magnitude(p.Months), Days: int32Magnitude(p.Days)}, nil
 }
 
-// Add returns p + other (componentwise).
-func (p Period) Add(other Period) Period {
-	return Period{Years: p.Years + other.Years, Months: p.Months + other.Months, Days: p.Days + other.Days}
+// Add returns p + other componentwise, or ErrOverflow when a component exceeds int32.
+func (p Period) Add(other Period) (Period, error) {
+	result, ok := periodFromInt64(
+		int64(p.Years)+int64(other.Years),
+		int64(p.Months)+int64(other.Months),
+		int64(p.Days)+int64(other.Days),
+	)
+	if !ok {
+		return Period{}, newTimeError(
+			ErrOverflow,
+			"period addition overflows int32",
+			fmt.Sprintf("left=%s right=%s", p.ISO8601(), other.ISO8601()),
+			"use smaller period components before adding",
+		)
+	}
+	return result, nil
 }
 
-// Sub returns p - other (componentwise).
-func (p Period) Sub(other Period) Period {
-	return Period{Years: p.Years - other.Years, Months: p.Months - other.Months, Days: p.Days - other.Days}
+// Sub returns p - other componentwise, or ErrOverflow when a component exceeds int32.
+func (p Period) Sub(other Period) (Period, error) {
+	result, ok := periodFromInt64(
+		int64(p.Years)-int64(other.Years),
+		int64(p.Months)-int64(other.Months),
+		int64(p.Days)-int64(other.Days),
+	)
+	if !ok {
+		return Period{}, newTimeError(
+			ErrOverflow,
+			"period subtraction overflows int32",
+			fmt.Sprintf("left=%s right=%s", p.ISO8601(), other.ISO8601()),
+			"use smaller period components before subtracting",
+		)
+	}
+	return result, nil
 }
 
 // ISO8601 returns the ISO 8601 representation of p, e.g. "P1Y3M7D".
@@ -83,7 +127,6 @@ func (p Period) ISO8601() string {
 	if p.IsZero() {
 		return "P0D"
 	}
-	abs := p.Abs()
 	neg := p.Years < 0 || p.Months < 0 || p.Days < 0
 	mixed := neg && (p.Years > 0 || p.Months > 0 || p.Days > 0)
 
@@ -99,14 +142,14 @@ func (p Period) ISO8601() string {
 		writeSigned(&b, p.Days, 'D')
 		return b.String()
 	}
-	if abs.Years != 0 {
-		fmt.Fprintf(&b, "%dY", abs.Years)
+	if p.Years != 0 {
+		fmt.Fprintf(&b, "%dY", int64Magnitude(p.Years))
 	}
-	if abs.Months != 0 {
-		fmt.Fprintf(&b, "%dM", abs.Months)
+	if p.Months != 0 {
+		fmt.Fprintf(&b, "%dM", int64Magnitude(p.Months))
 	}
-	if abs.Days != 0 {
-		fmt.Fprintf(&b, "%dD", abs.Days)
+	if p.Days != 0 {
+		fmt.Fprintf(&b, "%dD", int64Magnitude(p.Days))
 	}
 	return b.String()
 }
@@ -117,19 +160,18 @@ func (p Period) String() string {
 		return "0d"
 	}
 	var b strings.Builder
-	abs := p.Abs()
 	allNeg := !p.IsZero() && p.Years <= 0 && p.Months <= 0 && p.Days <= 0
 	if allNeg {
 		b.WriteByte('-')
 	}
-	if abs.Years != 0 {
-		fmt.Fprintf(&b, "%dy", abs.Years)
+	if p.Years != 0 {
+		fmt.Fprintf(&b, "%dy", int64Magnitude(p.Years))
 	}
-	if abs.Months != 0 {
-		fmt.Fprintf(&b, "%dmo", abs.Months)
+	if p.Months != 0 {
+		fmt.Fprintf(&b, "%dmo", int64Magnitude(p.Months))
 	}
-	if abs.Days != 0 {
-		fmt.Fprintf(&b, "%dd", abs.Days)
+	if p.Days != 0 {
+		fmt.Fprintf(&b, "%dd", int64Magnitude(p.Days))
 	}
 	return b.String()
 }
@@ -186,44 +228,73 @@ func parseISO8601Period(s string) (Period, error) {
 		return Period{}, fmt.Errorf("period %q: %w", s, errInvalidISO8601Period)
 	}
 	neg := m[1] == "-"
-	y, ok := parsePeriodJSONComponent(m[2])
+	y, ok := parsePeriodWireComponent(m[2], neg)
 	if !ok {
 		return Period{}, fmt.Errorf("period years component %q: %w", m[2], errInvalidISO8601Period)
 	}
-	mo, ok := parsePeriodJSONComponent(m[3])
+	mo, ok := parsePeriodWireComponent(m[3], neg)
 	if !ok {
 		return Period{}, fmt.Errorf("period months component %q: %w", m[3], errInvalidISO8601Period)
 	}
-	w, ok := parsePeriodJSONComponent(m[4])
+	w, ok := parsePeriodWireMagnitude(m[4])
 	if !ok {
 		return Period{}, fmt.Errorf("period weeks component %q: %w", m[4], errInvalidISO8601Period)
 	}
-	d, ok := parsePeriodJSONComponent(m[5])
+	d, ok := parsePeriodWireMagnitude(m[5])
 	if !ok {
 		return Period{}, fmt.Errorf("period days component %q: %w", m[5], errInvalidISO8601Period)
 	}
-	totalDays := int64(w)*7 + int64(d)
-	if totalDays > maxInt32 || totalDays < -maxInt32-1 {
+	totalDays := w*7 + d
+	if neg {
+		totalDays = -totalDays
+	}
+	if totalDays > math.MaxInt32 || totalDays < math.MinInt32 {
 		return Period{}, fmt.Errorf("period days component overflows int32: %w", errInvalidISO8601Period)
 	}
-	if neg {
-		y, mo, totalDays = -y, -mo, -totalDays
-	}
-	return Period{Years: y, Months: mo, Days: int32(totalDays)}, nil //nolint:gosec // checked above against int32 bounds
+	return Period{Years: y, Months: mo, Days: int32(totalDays)}, nil
 }
 
-func parsePeriodJSONComponent(s string) (int32, bool) {
+func parsePeriodWireComponent(s string, negative bool) (int32, bool) {
+	n, ok := parsePeriodWireMagnitude(s)
+	if !ok {
+		return 0, false
+	}
+	if negative {
+		n = -n
+	}
+	if n < math.MinInt32 || n > math.MaxInt32 {
+		return 0, false
+	}
+	return int32(n), true
+}
+
+func parsePeriodWireMagnitude(s string) (int64, bool) {
 	if s == "" {
 		return 0, true
 	}
-	return parsePeriodComponent(s)
+	if strings.ContainsAny(s, ".,") {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n < math.MinInt32 || n > int64(math.MaxInt32)+1 {
+		return 0, false
+	}
+	return n, true
 }
 
-func absInt32(n int32) int32 {
+func int32Magnitude(n int32) int32 {
 	if n < 0 {
 		return -n
 	}
 	return n
+}
+
+func int64Magnitude(n int32) int64 {
+	v := int64(n)
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 func writeSigned(b *strings.Builder, n int32, suffix byte) {
@@ -231,4 +302,13 @@ func writeSigned(b *strings.Builder, n int32, suffix byte) {
 		return
 	}
 	fmt.Fprintf(b, "%+d%c", n, suffix)
+}
+
+func periodFromInt64(years, months, days int64) (Period, bool) {
+	if years < math.MinInt32 || years > math.MaxInt32 ||
+		months < math.MinInt32 || months > math.MaxInt32 ||
+		days < math.MinInt32 || days > math.MaxInt32 {
+		return Period{}, false
+	}
+	return Period{Years: int32(years), Months: int32(months), Days: int32(days)}, true
 }

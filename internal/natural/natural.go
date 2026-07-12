@@ -5,8 +5,6 @@ package natural
 import (
 	"strings"
 	"time"
-
-	ianazone "github.com/agentable/go-time/internal/zone"
 )
 
 // Kind classifies the semantic output of natural language parsing.
@@ -15,7 +13,7 @@ type Kind uint8
 const (
 	// KindDate is a calendar date without a clock time.
 	KindDate Kind = iota + 1
-	// KindDateTime is a zoned local date-time.
+	// KindDateTime is unresolved civil date-time intent.
 	KindDateTime
 	// KindDuration is an elapsed relative duration.
 	KindDuration
@@ -31,9 +29,7 @@ const (
 type Context struct {
 	// Locale is the BCP 47 locale tag used to select a parser.
 	Locale string
-	// ZoneID is the IANA zone ID used for relative expressions.
-	ZoneID string
-	// RelativeTo is the reference time for relative expressions.
+	// RelativeTo carries already-projected civil fields in UTC for safe calendar math.
 	RelativeTo time.Time
 }
 
@@ -41,12 +37,14 @@ type Context struct {
 type Result struct {
 	// Kind classifies the parsed value.
 	Kind Kind
-	// Time is the resolved time for KindDate and KindDateTime results.
-	Time time.Time
-	// DateOnly reports whether Time should be interpreted as a date without a clock time.
-	DateOnly bool
-	// ZoneID is the zone associated with the result when one applies.
-	ZoneID string
+	// Civil components hold Date and DateTime results without resolving a zone.
+	Year       int
+	Month      time.Month
+	Day        int
+	Hour       int
+	Minute     int
+	Second     int
+	Nanosecond int
 	// NeedsReference reports whether the result was resolved from Context.RelativeTo.
 	NeedsReference bool
 	// DurNanos is the parsed duration when Kind is KindDuration.
@@ -105,19 +103,9 @@ func matchesLocalePrefix(locale, prefix string) bool {
 	return ok && strings.HasPrefix(rest, "-")
 }
 
-// locForZone returns a *time.Location for zoneID.
-// Falls back to UTC if the zone cannot be loaded.
-func locForZone(zoneID string) *time.Location {
-	if _, loc, ok := ianazone.ResolveLocation(zoneID); ok {
-		return loc
-	}
-	return time.UTC
-}
-
-// midnightInLoc returns t truncated to midnight in loc.
-func midnightInLoc(t time.Time, loc *time.Location) time.Time {
-	t = t.In(loc)
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+// midnight returns the reference's civil date in the UTC carrier location.
+func midnight(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // nextWeekday returns the next occurrence of wd strictly after base.
@@ -156,23 +144,13 @@ func lastWeekday(base time.Time, wd time.Weekday) time.Time {
 	return base.AddDate(0, 0, -diff)
 }
 
-// dateResult builds a KindDate Result at midnight in the given location.
-func dateResult(t time.Time, zoneID string) Result {
+// dateResult builds a KindDate Result from civil components.
+func dateResult(t time.Time) Result {
 	return Result{
 		Kind:           KindDate,
-		Time:           t,
-		DateOnly:       true,
-		ZoneID:         zoneID,
-		NeedsReference: true,
-	}
-}
-
-// datetimeResult builds a KindDateTime Result.
-func datetimeResult(t time.Time, zoneID string) Result {
-	return Result{
-		Kind:           KindDateTime,
-		Time:           t,
-		ZoneID:         zoneID,
+		Year:           t.Year(),
+		Month:          t.Month(),
+		Day:            t.Day(),
 		NeedsReference: true,
 	}
 }
@@ -205,9 +183,16 @@ func invalidResult(code, message, hint string) Result {
 }
 
 // datetimeAt builds a KindDateTime Result at hour:min on the given date.
-func datetimeAt(dateBase time.Time, hour, min int, loc *time.Location, zoneID string) Result {
-	t := time.Date(dateBase.Year(), dateBase.Month(), dateBase.Day(), hour, min, 0, 0, loc)
-	return datetimeResult(t, zoneID)
+func datetimeAt(dateBase time.Time, hour, min int) Result {
+	return Result{
+		Kind:           KindDateTime,
+		Year:           dateBase.Year(),
+		Month:          dateBase.Month(),
+		Day:            dateBase.Day(),
+		Hour:           hour,
+		Minute:         min,
+		NeedsReference: true,
+	}
 }
 
 // applyHourPeriod converts a 12-hour clock value to 0–23 using AM/PM markers.

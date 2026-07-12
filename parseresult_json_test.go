@@ -23,7 +23,7 @@ func TestParseResultMarshalResolved(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"下周五下午三点","value_kind":"datetime","value":{"kind":"datetime","value":"2026-03-27T13:00:00+09:00","zone":"Asia/Tokyo","calendar":"iso8601"},"zone":"Asia/Tokyo"}`
+	want := `{"kind":"parse_result","status":"resolved","input":"下周五下午三点","value_kind":"datetime","value":{"kind":"datetime","instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"},"zone":"Asia/Tokyo"}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -76,7 +76,7 @@ func TestParseResultMarshalAmbiguous(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"ambiguous","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"date order ambiguous"}],"value_kind":"date","candidates":[{"kind":"parse_result","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"month-first interpretation"}],"value_kind":"date","value":{"kind":"date","value":"2026-04-05","calendar":"iso8601"}}]}`
+	want := `{"kind":"parse_result","status":"ambiguous","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"date order ambiguous"}],"value_kind":"date","candidates":[{"kind":"parse_result","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"month-first interpretation"}],"value_kind":"date","value":{"kind":"date","value":"2026-04-05"}}]}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -96,7 +96,7 @@ func TestParseResultMarshalResolvedDate(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"2026-03-27","value_kind":"date","value":{"kind":"date","value":"2026-03-27","calendar":"iso8601"}}`
+	want := `{"kind":"parse_result","status":"resolved","input":"2026-03-27","value_kind":"date","value":{"kind":"date","value":"2026-03-27"}}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -116,7 +116,7 @@ func TestParseResultMarshalResolvedLocalDateTime(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"2026-03-27T13:00:00","value_kind":"local_datetime","value":{"kind":"local_datetime","value":"2026-03-27T13:00:00","calendar":"iso8601"}}`
+	want := `{"kind":"parse_result","status":"resolved","input":"2026-03-27T13:00:00","value_kind":"local_datetime","value":{"kind":"local_datetime","value":"2026-03-27T13:00:00"}}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -156,7 +156,7 @@ func TestParseResultMarshalResolvedInstant(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"1970-01-01T00:00:00Z","value_kind":"instant","value":{"kind":"instant","iso":"1970-01-01T00:00:00Z","epoch_ms":0}}`
+	want := `{"kind":"parse_result","status":"resolved","input":"1970-01-01T00:00:00Z","value_kind":"instant","value":{"kind":"instant","iso":"1970-01-01T00:00:00Z"}}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -176,7 +176,7 @@ func TestParseResultMarshalResolvedTime(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"13:30:45","value_kind":"time","value":{"kind":"time","value":"13:30:45","precision":"second"}}`
+	want := `{"kind":"parse_result","status":"resolved","input":"13:30:45","value_kind":"time","value":{"kind":"time","value":"13:30:45"}}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}

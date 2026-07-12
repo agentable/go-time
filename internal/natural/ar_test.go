@@ -8,7 +8,7 @@ import (
 var arBase = time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)
 
 func TestArabicRelativeDates(t *testing.T) {
-	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	ctx := Context{Locale: "ar", RelativeTo: arBase}
 	tests := []struct {
 		input    string
 		wantDays int
@@ -29,14 +29,14 @@ func TestArabicRelativeDates(t *testing.T) {
 			continue
 		}
 		wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
-		if !r.Time.Equal(wantDate) {
-			t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
+		if !equalCivil(r, wantDate) {
+			t.Errorf("Parse(%q) time=%v want %v", tt.input, civilTime(r), wantDate)
 		}
 	}
 }
 
 func TestArabicNumericFutureDuration(t *testing.T) {
-	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	ctx := Context{Locale: "ar", RelativeTo: arBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
@@ -61,7 +61,7 @@ func TestArabicNumericFutureDuration(t *testing.T) {
 }
 
 func TestArabicNumericFuturePeriod(t *testing.T) {
-	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	ctx := Context{Locale: "ar", RelativeTo: arBase}
 	tests := []struct {
 		input    string
 		wantDays int32
@@ -86,7 +86,7 @@ func TestArabicNumericFuturePeriod(t *testing.T) {
 }
 
 func TestArabicDualDuration(t *testing.T) {
-	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	ctx := Context{Locale: "ar", RelativeTo: arBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
@@ -112,7 +112,7 @@ func TestArabicDualDuration(t *testing.T) {
 }
 
 func TestArabicDualPeriod(t *testing.T) {
-	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	ctx := Context{Locale: "ar", RelativeTo: arBase}
 	tests := []struct {
 		input      string
 		wantDays   int32
@@ -142,7 +142,7 @@ func TestArabicDualPeriod(t *testing.T) {
 }
 
 func TestArabicPastDuration(t *testing.T) {
-	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	ctx := Context{Locale: "ar", RelativeTo: arBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
@@ -166,7 +166,7 @@ func TestArabicPastDuration(t *testing.T) {
 }
 
 func TestArabicPastPeriod(t *testing.T) {
-	ctx := Context{Locale: "ar", ZoneID: "UTC", RelativeTo: arBase}
+	ctx := Context{Locale: "ar", RelativeTo: arBase}
 	tests := []struct {
 		input    string
 		wantDays int32
@@ -200,7 +200,7 @@ func TestArabicLocalePrefixMatching(t *testing.T) {
 		{"ar-MA", "أمس"},
 	}
 	for _, tt := range tests {
-		ctx := Context{Locale: tt.locale, ZoneID: "UTC", RelativeTo: arBase}
+		ctx := Context{Locale: tt.locale, RelativeTo: arBase}
 		_, ok := Parse(tt.input, ctx)
 		if !ok {
 			t.Errorf("Parse(%q, locale=%q) not ok — locale prefix matching failed", tt.input, tt.locale)

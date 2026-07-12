@@ -36,6 +36,13 @@ const (
 	KindInterval Kind = "interval"
 )
 
+type ambiguityCause uint8
+
+const (
+	ambiguityDateOrder ambiguityCause = iota + 1
+	ambiguityDuplicateTime
+)
+
 // WarningCode classifies a parse warning. Warnings are non-fatal lossy
 // assumptions; they never change Status.
 type WarningCode string
@@ -97,6 +104,7 @@ type ParseResult struct {
 	duration      Duration
 	period        Period
 	interval      Interval
+	ambiguity     ambiguityCause
 }
 
 // Instant returns the parsed Instant. ok is false unless Status is Resolved and Kind == KindInstant.
@@ -171,7 +179,7 @@ func (r ParseResult) Interval() (Interval, bool) {
 // When you already know which concrete type you expect, prefer the typed
 // helpers ([ParseInstant], [ParseDateTime], [ParseLocalDateTime], [ParseDate],
 // [ParseTime], [ParseDuration], [ParsePeriod], [ParseInterval]) — they return
-// (T, error) directly and skip the Status / Kind dispatch entirely.
+// (T, error) directly by narrowing the same shared parse result.
 //
 // Reach for Parse when you need any of:
 //

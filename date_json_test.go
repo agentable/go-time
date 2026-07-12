@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ func TestDateMarshalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"date","value":"2026-03-27","calendar":"iso8601"}`
+	want := `{"kind":"date","value":"2026-03-27"}`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -22,7 +23,7 @@ func TestDateMarshalJSON(t *testing.T) {
 
 func TestDateUnmarshalJSON(t *testing.T) {
 	var d Date
-	if err := json.Unmarshal([]byte(`{"kind":"date","value":"2026-03-27","calendar":"iso8601"}`), &d); err != nil {
+	if err := json.Unmarshal([]byte(`{"kind":"date","value":"2026-03-27"}`), &d); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	want := mustDate(2026, 3, 27)
@@ -32,20 +33,43 @@ func TestDateUnmarshalJSON(t *testing.T) {
 }
 
 func TestDateJSONRoundTrip(t *testing.T) {
-	orig := mustDate(2026, 3, 27)
-	b, _ := json.Marshal(orig)
-	var got Date
-	if err := json.Unmarshal(b, &got); err != nil {
-		t.Fatalf("round-trip unmarshal: %v", err)
+	for _, orig := range []Date{
+		mustDate(0, time.January, 1),
+		mustDate(2026, time.March, 27),
+		mustDate(9999, time.December, 31),
+	} {
+		b, err := json.Marshal(orig)
+		if err != nil {
+			t.Fatalf("Marshal(%v) error = %v", orig, err)
+		}
+		var got Date
+		if err := json.Unmarshal(b, &got); err != nil {
+			t.Fatalf("Unmarshal(%s) error = %v", b, err)
+		}
+		if !orig.Equal(got) {
+			t.Errorf("round-trip mismatch: got %v, want %v", got, orig)
+		}
+		again, err := json.Marshal(got)
+		if err != nil || !bytes.Equal(again, b) {
+			t.Fatalf("second Marshal(%v) = %s, %v; want %s", got, again, err, b)
+		}
 	}
-	if !orig.Equal(got) {
-		t.Errorf("round-trip mismatch: got %v, want %v", got, orig)
+}
+
+func TestDateMarshalJSON_RejectsInvalidValue(t *testing.T) {
+	_, err := json.Marshal(Date{})
+	if !errors.Is(err, ErrInvalidDate) {
+		t.Fatalf("Marshal(Date{}) error = %v, want ErrInvalidDate", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) || te.Hint == "" {
+		t.Fatalf("Marshal(Date{}) error = %#v, want TimeError with hint", err)
 	}
 }
 
 func TestDateUnmarshalJSON_InvalidValue(t *testing.T) {
 	var d Date
-	err := json.Unmarshal([]byte(`{"kind":"date","value":"not-a-date","calendar":"iso8601"}`), &d)
+	err := json.Unmarshal([]byte(`{"kind":"date","value":"not-a-date"}`), &d)
 	if err == nil {
 		t.Error("expected error for invalid date value, got nil")
 	}

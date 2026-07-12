@@ -107,6 +107,16 @@ func TestDuration_Abs(t *testing.T) {
 	}
 }
 
+func TestDuration_AbsMinimumMatchesStdlib(t *testing.T) {
+	t.Parallel()
+
+	d := Duration(math.MinInt64)
+	want := Duration(time.Duration(math.MinInt64).Abs())
+	if got := d.Abs(); got != want {
+		t.Fatalf("Duration(math.MinInt64).Abs() = %v, want %v", got, want)
+	}
+}
+
 func TestDuration_ISO8601(t *testing.T) {
 	tests := []struct {
 		d    Duration
@@ -129,6 +139,15 @@ func TestDuration_ISO8601(t *testing.T) {
 		if got := tc.d.ISO8601(); got != tc.want {
 			t.Errorf("(%v).ISO8601() = %q, want %q", tc.d, got, tc.want)
 		}
+	}
+}
+
+func TestDuration_ISO8601Minimum(t *testing.T) {
+	t.Parallel()
+
+	const want = "-PT2562047H47M16.854775808S"
+	if got := Duration(math.MinInt64).ISO8601(); got != want {
+		t.Fatalf("Duration(math.MinInt64).ISO8601() = %q, want %q", got, want)
 	}
 }
 
@@ -174,6 +193,36 @@ func TestDuration_Decompose_SubSecond(t *testing.T) {
 	c := d.Decompose()
 	if c.Seconds != 1 || c.Milliseconds != 500 || c.Microseconds != 250 || c.Nanoseconds != 125 {
 		t.Errorf("Decompose() sub-second slots = %+v", c)
+	}
+}
+
+func TestDuration_DecomposeExtrema(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		d    Duration
+		want DurationComponents
+	}{
+		{
+			name: "minimum",
+			d:    Duration(math.MinInt64),
+			want: DurationComponents{Hours: -2562047, Minutes: -47, Seconds: -16, Milliseconds: -854, Microseconds: -775, Nanoseconds: -808},
+		},
+		{
+			name: "maximum",
+			d:    Duration(math.MaxInt64),
+			want: DurationComponents{Hours: 2562047, Minutes: 47, Seconds: 16, Milliseconds: 854, Microseconds: 775, Nanoseconds: 807},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tc.d.Decompose(); got != tc.want {
+				t.Fatalf("Duration(%d).Decompose() = %+v, want %+v", tc.d, got, tc.want)
+			}
+		})
 	}
 }
 

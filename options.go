@@ -4,9 +4,11 @@ import "golang.org/x/text/language"
 
 // config accumulates option values for Parse.
 type config struct {
-	lang       language.Tag
-	zone       Zone
-	relativeTo Instant
+	lang         language.Tag
+	zone         Zone
+	zoneSet      bool
+	relativeTo   Instant
+	referenceSet bool
 }
 
 // Option is a functional option for Parse.
@@ -27,22 +29,32 @@ type Option func(*config)
 // language.TraditionalChinese (zh-Hant). The bare language.Chinese ("zh")
 // tag does not activate the Chinese natural-language parser.
 //
-// For slash dates (e.g. "04/05/2026"), the locale also disambiguates
-// month-first (en-US, en-CA, en-AU) vs day-first ordering. With no locale,
-// only-valid interpretations resolve, otherwise the result is Ambiguous
-// with both candidates.
+// For slash dates (e.g. "04/05/2026"), en-US selects month-first while en-GB
+// and en-AU select day-first. Unsupported tags, including bare en and en-CA,
+// use validity inference: one valid interpretation resolves, two are
+// Ambiguous, and zero are Invalid. Unicode -u- extensions do not change the
+// supported locale's order.
 func WithInputLocale(tag language.Tag) Option {
 	return func(c *config) { c.lang = tag }
 }
 
 // WithZone sets the timezone used when the input has no explicit offset.
+// Relative natural date and datetime expressions require it so WithReference's
+// instant can be interpreted in an explicit calendar frame.
 func WithZone(zone Zone) Option {
-	return func(c *config) { c.zone = zone }
+	return func(c *config) {
+		c.zone = zone
+		c.zoneSet = true
+	}
 }
 
 // WithReference sets the reference instant for relative-time expressions.
+// Relative natural date and datetime expressions also require WithZone.
 func WithReference(t Instant) Option {
-	return func(c *config) { c.relativeTo = t }
+	return func(c *config) {
+		c.relativeTo = t
+		c.referenceSet = true
+	}
 }
 
 // applyOptions applies a slice of options to a config and returns the result.

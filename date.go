@@ -33,7 +33,20 @@ func dateFromComponents(year int, month time.Month, day int) Date {
 }
 
 // DateFromTime extracts the date from a time.Time using its location.
-func DateFromTime(t time.Time) Date {
+// It returns ErrOverflow when the projected year is outside 0000..9999.
+func DateFromTime(t time.Time) (Date, error) {
+	if year := t.Year(); year < 0 || year > 9999 {
+		return Date{}, newTimeError(
+			ErrOverflow,
+			"date year is outside the supported civil domain",
+			fmt.Sprintf("year=%d", year),
+			"use a time whose projected year is between 0000 and 9999",
+		)
+	}
+	return dateFromTimeTrusted(t), nil
+}
+
+func dateFromTimeTrusted(t time.Time) Date {
 	return dateFromComponents(t.Year(), t.Month(), t.Day())
 }
 
@@ -61,10 +74,47 @@ func (d Date) Before(other Date) bool { return d.Compare(other) < 0 }
 func (d Date) After(other Date) bool { return d.Compare(other) > 0 }
 
 // Add returns a new Date advanced by p (calendar arithmetic).
-// Month/year arithmetic applies end-of-month clamping. To move back,
-// pass a negated Period: d.Add(gotime.Days(3).Negate()).
-func (d Date) Add(p Period) Date {
-	return DateFromTime(clampAddDate(d.toTime(), int(p.Years), int(p.Months), int(p.Days)))
+// Month/year arithmetic applies end-of-month clamping. To move back, pass a
+// negative Period literal or handle the error returned by Period.Negate.
+// Add returns ErrInvalidDate for an invalid receiver and ErrOverflow when the
+// result would leave the supported civil year domain.
+func (d Date) Add(p Period) (Date, error) {
+	if msg := validateDateComponents(d.year, int(d.month), d.day); msg != "" {
+		return Date{}, newTimeError(
+			ErrInvalidDate,
+			msg,
+			d.String(),
+			"construct Date with NewDate before applying calendar arithmetic",
+		)
+	}
+
+	monthIndex := int64(d.month) - 1 + int64(p.Months)
+	year := int64(d.year) + int64(p.Years) + monthIndex/12
+	monthIndex %= 12
+	if monthIndex < 0 {
+		monthIndex += 12
+		year--
+	}
+	if year < 0 || year > 9999 {
+		return dateAddOverflow(d, p)
+	}
+
+	month := time.Month(monthIndex + 1)
+	day := min(d.day, daysInMonth(int(year), month))
+	result := time.Date(int(year), month, day, 0, 0, 0, 0, time.UTC).AddDate(0, 0, int(p.Days))
+	if result.Year() < 0 || result.Year() > 9999 {
+		return dateAddOverflow(d, p)
+	}
+	return dateFromTimeTrusted(result), nil
+}
+
+func dateAddOverflow(d Date, p Period) (Date, error) {
+	return Date{}, newTimeError(
+		ErrOverflow,
+		"date addition leaves the supported civil domain",
+		fmt.Sprintf("date=%s period=%s", d, p.ISO8601()),
+		"use a smaller period so the resulting year remains between 0000 and 9999",
+	)
 }
 
 // DaysUntil returns the signed number of calendar days from d to other.
@@ -74,9 +124,26 @@ func (d Date) DaysUntil(other Date) int {
 
 // PeriodUntil returns the signed greedy calendar period from d to other.
 // It prefers years, then months, then days; use DaysUntil for exact day counts.
-func (d Date) PeriodUntil(other Date) Period {
+// It returns ErrInvalidDate if either endpoint is invalid.
+func (d Date) PeriodUntil(other Date) (Period, error) {
+	if msg := validateDateComponents(d.year, int(d.month), d.day); msg != "" {
+		return Period{}, newTimeError(
+			ErrInvalidDate,
+			msg,
+			d.String(),
+			"construct the start Date with NewDate before calculating a period",
+		)
+	}
+	if msg := validateDateComponents(other.year, int(other.month), other.day); msg != "" {
+		return Period{}, newTimeError(
+			ErrInvalidDate,
+			msg,
+			other.String(),
+			"construct the end Date with NewDate before calculating a period",
+		)
+	}
 	if d.Equal(other) {
-		return Period{}
+		return Period{}, nil
 	}
 
 	start, end := d, other
@@ -85,20 +152,34 @@ func (d Date) PeriodUntil(other Date) Period {
 		start, end = other, d
 	}
 	years := end.year - start.year
-	if start.Add(Period{Years: int32(years)}).After(end) { //nolint:gosec // normalized calendar year delta fits Period's int32 fields
+	yearBase, err := start.Add(Period{Years: int32(years)}) //nolint:gosec // normalized calendar year delta fits Period's int32 fields
+	if err != nil {
+		return Period{}, err
+	}
+	if yearBase.After(end) {
 		years--
 	}
 	months := 0
-	for start.Add(Period{Years: int32(years), Months: int32(months + 1)}).Compare(end) <= 0 { //nolint:gosec // normalized calendar month delta is bounded by 0..11
+	for {
+		next, err := start.Add(Period{Years: int32(years), Months: int32(months + 1)}) //nolint:gosec // normalized calendar deltas fit in int32
+		if err != nil {
+			return Period{}, err
+		}
+		if next.Compare(end) > 0 {
+			break
+		}
 		months++
 	}
-	base := start.Add(Period{Years: int32(years), Months: int32(months)}) //nolint:gosec // calendar deltas fit in int32
+	base, err := start.Add(Period{Years: int32(years), Months: int32(months)}) //nolint:gosec // calendar deltas fit in int32
+	if err != nil {
+		return Period{}, err
+	}
 	days := base.DaysUntil(end)
 	period := Period{Years: int32(years), Months: int32(months), Days: int32(days)} //nolint:gosec // calendar deltas fit in int32
 	if neg {
-		return period.Negate()
+		return Period{Years: -period.Years, Months: -period.Months, Days: -period.Days}, nil
 	}
-	return period
+	return period, nil
 }
 
 func (d Date) dayNumber() int {
@@ -142,12 +223,6 @@ func (d Date) toTime() time.Time {
 	return time.Date(d.year, d.month, d.day, 0, 0, 0, 0, time.UTC)
 }
 
-// Std returns the Date as a time.Time at 00:00:00 in zone z. Use this to
-// bridge a Date to any API expecting a stdlib time.Time.
-func (d Date) Std(z Zone) time.Time {
-	return time.Date(d.year, d.month, d.day, 0, 0, 0, 0, z.Location())
-}
-
 // Weekday returns the day of the week (Sunday = 0 through Saturday = 6).
 func (d Date) Weekday() time.Weekday { return d.toTime().Weekday() }
 
@@ -170,29 +245,32 @@ func (d Date) String() string {
 	return fmt.Sprintf("%04d-%02d-%02d", d.year, int(d.month), d.day)
 }
 
-// MarshalJSON encodes d as {"kind":"date","value":"YYYY-MM-DD","calendar":"iso8601"}.
+// MarshalJSON encodes d as {"kind":"date","value":"YYYY-MM-DD"}.
 func (d Date) MarshalJSON() ([]byte, error) {
+	if msg := validateDateComponents(d.year, int(d.month), d.day); msg != "" {
+		return nil, newTimeError(
+			ErrInvalidDate,
+			msg,
+			d.String(),
+			"marshal a Date constructed with NewDate",
+		)
+	}
 	return json.Marshal(struct {
-		Kind     string `json:"kind"`
-		Value    string `json:"value"`
-		Calendar string `json:"calendar"`
-	}{Kind: "date", Value: d.String(), Calendar: "iso8601"})
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
+	}{Kind: "date", Value: d.String()})
 }
 
-// UnmarshalJSON decodes d from {"kind":"date","value":"YYYY-MM-DD"[,"calendar":"..."]}.
+// UnmarshalJSON decodes d from {"kind":"date","value":"YYYY-MM-DD"}.
 func (d *Date) UnmarshalJSON(b []byte) error {
 	var wire struct {
-		Kind     string `json:"kind"`
-		Value    string `json:"value"`
-		Calendar string `json:"calendar"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
 	}
 	if err := unmarshalJSONWire(b, &wire); err != nil {
 		return err
 	}
 	if err := requireJSONKind("date", wire.Kind, "date"); err != nil {
-		return err
-	}
-	if err := requireJSONCalendar("date", wire.Calendar); err != nil {
 		return err
 	}
 	if err := requireJSONString("date", "value", wire.Value); err != nil {

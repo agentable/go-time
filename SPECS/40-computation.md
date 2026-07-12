@@ -10,8 +10,8 @@ go-time separates exact arithmetic from calendar arithmetic.
 The method names carry the distinction:
 
 ```go
-dt.Add(2 * gotime.Hour)        // exact
-dt.AddPeriod(gotime.Days(1))   // calendar
+next, err := dt.Add(2 * gotime.Hour)                // exact
+resolution, err := dt.AddPeriod(gotime.Days(1))    // calendar
 ```
 
 `dt.Add(gotime.Months(1))` does not compile.
@@ -20,28 +20,36 @@ dt.AddPeriod(gotime.Days(1))   // calendar
 
 ```go
 func (i Instant) Add(d Duration) Instant
-func (dt DateTime) Add(d Duration) DateTime
+func (dt DateTime) Add(d Duration) (DateTime, error)
 ```
 
 Move backward by passing a negative duration:
 
 ```go
-dt.Add(-30 * gotime.Minute)
+previous, err := dt.Add(-30 * gotime.Minute)
 ```
+
+`DateTime.Add` returns `ErrOverflow` if the exact result would leave the civil
+year domain. `Instant.Add` remains total because `Instant` carries no civil
+projection.
 
 There is no `Sub(Duration)` form. `Sub` means exact difference between two timeline values.
 
 ## Calendar Arithmetic
 
 ```go
-func (dt DateTime) AddPeriod(p Period) DateTime
-func (d Date) Add(p Period) Date
+func (dt DateTime) AddPeriod(p Period) (LocalResolution, error)
+func (d Date) Add(p Period) (Date, error)
 ```
 
-Move backward with `p.Negate()`:
+Move backward with a checked negation:
 
 ```go
-dt.AddPeriod(gotime.Months(1).Negate())
+backward, err := gotime.Months(1).Negate()
+if err != nil {
+    return err
+}
+resolution, err := dt.AddPeriod(backward)
 ```
 
 Month and year arithmetic uses end-of-month clamping:
@@ -50,11 +58,19 @@ Month and year arithmetic uses end-of-month clamping:
 jan31, _ := gotime.NewDate(2026, time.January, 31)
 leap, _ := gotime.NewDate(2024, time.February, 29)
 
-jan31.Add(gotime.Months(1)) // 2026-02-28
-leap.Add(gotime.Years(1))   // 2025-02-28
+feb28, err := jan31.Add(gotime.Months(1)) // 2026-02-28
+next, err := leap.Add(gotime.Years(1))     // 2025-02-28
 ```
 
-`DateTime.AddPeriod` preserves local wall-clock time across DST transitions. `DateTime.Add(Duration)` preserves elapsed nanoseconds, so wall-clock time may shift across DST boundaries.
+`Date.Add` returns `ErrInvalidDate` for an invalid receiver and `ErrOverflow`
+instead of leaving the civil year domain.
+
+`DateTime.AddPeriod` preserves local wall-clock intent across DST transitions.
+The target may resolve to zero, one, or multiple candidates; callers use
+`LocalResolution.Only()` only when exactly one result is required. A civil-year
+overflow returns `ErrOverflow` before a resolution is exposed.
+`DateTime.Add(Duration)` preserves elapsed nanoseconds, so wall-clock time may
+shift across DST boundaries.
 
 ## Difference
 
@@ -62,11 +78,21 @@ leap.Add(gotime.Years(1))   // 2025-02-28
 func (i Instant) Sub(other Instant) Duration
 func (dt DateTime) Sub(other DateTime) Duration
 func (d Date) DaysUntil(other Date) int
-func (d Date) PeriodUntil(other Date) Period
-func (p Period) Sub(other Period) Period
+func (d Date) PeriodUntil(other Date) (Period, error)
+func (p Period) Add(other Period) (Period, error)
+func (p Period) Sub(other Period) (Period, error)
+func (p Period) Negate() (Period, error)
+func (p Period) Abs() (Period, error)
 ```
 
-Date differences are named by policy: `DaysUntil` returns a signed calendar-day count, while `PeriodUntil` returns a signed greedy years/months/days period. Between January 31 and February 28, `DaysUntil` is 28 and `PeriodUntil` is `Period{Months: 1}`.
+Period component arithmetic returns `ErrOverflow` rather than wrapping an
+`int32` component. ISO rendering remains total and supports the full signed
+component domain.
+
+Date differences are named by policy: `DaysUntil` returns a signed calendar-day
+count, while `PeriodUntil` returns a signed greedy years/months/days period and
+rejects an invalid endpoint with `ErrInvalidDate`. Between January 31 and
+February 28, `DaysUntil` is 28 and `PeriodUntil` is `Period{Months: 1}`.
 
 ## Comparison
 

@@ -2,6 +2,7 @@ package gotime
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"golang.org/x/text/language"
@@ -253,6 +254,18 @@ func TestParse_Period_Overflow(t *testing.T) {
 	}
 	if r.Error.Code != CodeOverflow {
 		t.Errorf("error code = %q, want %q", r.Error.Code, CodeOverflow)
+	}
+}
+
+func TestParse_Period_Minimum(t *testing.T) {
+	t.Parallel()
+
+	p, err := ParsePeriod("-P2147483648Y")
+	if err != nil {
+		t.Fatalf("ParsePeriod(minimum) error = %v", err)
+	}
+	if p != (Period{Years: math.MinInt32}) {
+		t.Fatalf("ParsePeriod(minimum) = %+v, want Years=%d", p, int32(math.MinInt32))
 	}
 }
 

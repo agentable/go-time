@@ -22,11 +22,13 @@ Everything user-facing goes through a bridge.
 ```go
 func (i  Instant)  Std() time.Time
 func (dt DateTime) Std() time.Time
-func (d  Date)     Std(z Zone) time.Time
-func (t  Time)     Std(on Date, z Zone) time.Time
 func (iv Interval) StdRange() (start, end time.Time)
 func (d  Duration) Std() time.Duration
 ```
+
+`Date` and `Time` are unresolved civil values, so they do not have total stdlib
+bridges. Combine them as `LocalDateTime`, call `Resolve(Zone)`, and bridge only a
+chosen `DateTime` candidate through `DateTime.Std()`.
 
 `Duration` also exposes clock slots:
 

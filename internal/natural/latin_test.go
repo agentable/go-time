@@ -10,7 +10,7 @@ var latinBase = time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)
 // ── French ───────────────────────────────────────────────────────────────────
 
 func TestFrenchRelativeDates(t *testing.T) {
-	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "fr", RelativeTo: latinBase}
 	tests := []struct {
 		input    string
 		wantDays int
@@ -30,14 +30,14 @@ func TestFrenchRelativeDates(t *testing.T) {
 			continue
 		}
 		wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
-		if !r.Time.Equal(wantDate) {
-			t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
+		if !equalCivil(r, wantDate) {
+			t.Errorf("Parse(%q) time=%v want %v", tt.input, civilTime(r), wantDate)
 		}
 	}
 }
 
 func TestFrenchFutureDuration(t *testing.T) {
-	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "fr", RelativeTo: latinBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
@@ -62,7 +62,7 @@ func TestFrenchFutureDuration(t *testing.T) {
 }
 
 func TestFrenchFuturePeriod(t *testing.T) {
-	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "fr", RelativeTo: latinBase}
 	tests := []struct {
 		input    string
 		wantDays int32
@@ -87,7 +87,7 @@ func TestFrenchFuturePeriod(t *testing.T) {
 }
 
 func TestFrenchPastDuration(t *testing.T) {
-	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "fr", RelativeTo: latinBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
@@ -111,7 +111,7 @@ func TestFrenchPastDuration(t *testing.T) {
 }
 
 func TestFrenchPastPeriod(t *testing.T) {
-	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "fr", RelativeTo: latinBase}
 	r, ok := Parse("il y a 3 jours", ctx)
 	if !ok {
 		t.Fatal("Parse returned ok=false")
@@ -127,7 +127,7 @@ func TestFrenchPastPeriod(t *testing.T) {
 // ── German ───────────────────────────────────────────────────────────────────
 
 func TestGermanTier2(t *testing.T) {
-	ctx := Context{Locale: "de", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "de", RelativeTo: latinBase}
 	tests := []struct {
 		input     string
 		wantKind  Kind
@@ -155,8 +155,8 @@ func TestGermanTier2(t *testing.T) {
 		switch tt.wantKind {
 		case KindDate:
 			wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
-			if !r.Time.Equal(wantDate) {
-				t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
+			if !equalCivil(r, wantDate) {
+				t.Errorf("Parse(%q) time=%v want %v", tt.input, civilTime(r), wantDate)
 			}
 		case KindPeriod:
 			if r.PeriodDays != int32(tt.wantDays) {
@@ -175,7 +175,7 @@ func TestGermanTier2(t *testing.T) {
 // ── Spanish ──────────────────────────────────────────────────────────────────
 
 func TestSpanishTier2(t *testing.T) {
-	ctx := Context{Locale: "es", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "es", RelativeTo: latinBase}
 	tests := []struct {
 		input     string
 		wantKind  Kind
@@ -203,8 +203,8 @@ func TestSpanishTier2(t *testing.T) {
 		switch tt.wantKind {
 		case KindDate:
 			wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
-			if !r.Time.Equal(wantDate) {
-				t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
+			if !equalCivil(r, wantDate) {
+				t.Errorf("Parse(%q) time=%v want %v", tt.input, civilTime(r), wantDate)
 			}
 		case KindPeriod:
 			if r.PeriodDays != int32(tt.wantDays) {
@@ -223,7 +223,7 @@ func TestSpanishTier2(t *testing.T) {
 // ── Portuguese ───────────────────────────────────────────────────────────────
 
 func TestPortugueseTier2(t *testing.T) {
-	ctx := Context{Locale: "pt", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "pt", RelativeTo: latinBase}
 	tests := []struct {
 		input     string
 		wantKind  Kind
@@ -251,8 +251,8 @@ func TestPortugueseTier2(t *testing.T) {
 		switch tt.wantKind {
 		case KindDate:
 			wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
-			if !r.Time.Equal(wantDate) {
-				t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
+			if !equalCivil(r, wantDate) {
+				t.Errorf("Parse(%q) time=%v want %v", tt.input, civilTime(r), wantDate)
 			}
 		case KindPeriod:
 			if r.PeriodDays != int32(tt.wantDays) {
@@ -271,7 +271,7 @@ func TestPortugueseTier2(t *testing.T) {
 // ── Russian ───────────────────────────────────────────────────────────────────
 
 func TestRussianTier2(t *testing.T) {
-	ctx := Context{Locale: "ru", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "ru", RelativeTo: latinBase}
 	tests := []struct {
 		input     string
 		wantKind  Kind
@@ -299,8 +299,8 @@ func TestRussianTier2(t *testing.T) {
 		switch tt.wantKind {
 		case KindDate:
 			wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
-			if !r.Time.Equal(wantDate) {
-				t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
+			if !equalCivil(r, wantDate) {
+				t.Errorf("Parse(%q) time=%v want %v", tt.input, civilTime(r), wantDate)
 			}
 		case KindPeriod:
 			if r.PeriodDays != int32(tt.wantDays) {
@@ -319,7 +319,7 @@ func TestRussianTier2(t *testing.T) {
 // ── exact seconds and calendar months ────────────────────────────────────────
 
 func TestFrenchSecondsAndMonths(t *testing.T) {
-	ctx := Context{Locale: "fr", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "fr", RelativeTo: latinBase}
 	durationTests := []struct {
 		input string
 		want  int64
@@ -368,7 +368,7 @@ func TestFrenchSecondsAndMonths(t *testing.T) {
 // ── Russian prefix-based unit lookup ─────────────────────────────────────────
 
 func TestRussianUnitPrefixes(t *testing.T) {
-	ctx := Context{Locale: "ru", ZoneID: "UTC", RelativeTo: latinBase}
+	ctx := Context{Locale: "ru", RelativeTo: latinBase}
 	tests := []struct {
 		input      string
 		wantNanos  int64
@@ -443,7 +443,7 @@ func TestLatinLocalePrefixMatching(t *testing.T) {
 		{"ru-RU", "сегодня"},
 	}
 	for _, tt := range tests {
-		ctx := Context{Locale: tt.locale, ZoneID: "UTC", RelativeTo: latinBase}
+		ctx := Context{Locale: tt.locale, RelativeTo: latinBase}
 		_, ok := Parse(tt.input, ctx)
 		if !ok {
 			t.Errorf("Parse(%q, locale=%q) not ok — locale prefix matching failed", tt.input, tt.locale)

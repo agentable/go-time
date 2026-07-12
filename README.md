@@ -12,7 +12,7 @@ A Go time semantics library for parsing, computing, and serializing precise time
 - **One concept per type**: `Duration` is exact nanoseconds, `Period` is calendar Y/M/D — `P1Y` parses as Period, `PT1H` as Duration, mixed inputs are rejected
 - **Stdlib bridges**: `.Std()`, `.Clock()`, `Duration.Decompose()` send values back to `time.Time` / `time.Duration` / structured clock slots so any formatter can consume them
 - **Timezone-aware semantics**: Strict IANA zones, fuzzy zone resolution, explicit local-time resolution, floating-time detection (`ParseResult.HasZone`)
-- **Calendar-safe computation**: `Duration.Add` is exact; `AddPeriod` is calendar-aware with end-of-month clamping and DST-stable wall-clock preservation
+- **Calendar-safe computation**: `DateTime.Add` is exact; `AddPeriod` applies end-of-month clamping and exposes DST gaps/overlaps as a resolution
 - **Stable JSON schemas**: Deterministic wire formats with strict decoding; no schema depends on `time.Now()` or runtime locale
 - **No display locale stack**: This package ships no formatter types, CLDR data, or message-format dependency. Parsing includes small, controlled input phrase grammars selected by `language.Tag`; display remains the caller's choice.
 
@@ -54,9 +54,9 @@ func main() {
 
 ### Natural language
 
-Pass a locale and an explicit reference instant for natural date/datetime
-phrases. Product code chooses "now" at the boundary; tests pin a fixed
-reference:
+Pass a locale, an explicit reference instant, and the zone whose calendar
+defines natural date/datetime phrases. Product code chooses "now" and its
+calendar frame at the boundary; tests pin both:
 
 ```go
 zone := gotime.MustLoadZone("America/New_York")
@@ -68,6 +68,11 @@ dt, err := gotime.ParseDateTime("tomorrow at 3pm",
 	gotime.WithReference(now),
 )
 ```
+
+Natural datetimes keep their wall-clock intent until the same
+`LocalDateTime.Resolve` path used by formal local input applies the zone. A DST
+gap returns `ErrNonexistentTime`; a fold remains ambiguous through
+`ParseResult.Candidates` and typed parsing returns `ErrDuplicateTime`.
 
 ### Deterministic tests
 
@@ -165,15 +170,20 @@ kind matches the accessor.
 
 | Option | Purpose |
 |--------|---------|
-| `WithInputLocale(tag language.Tag)` | Language hint for natural-language input. Also disambiguates slash-date order (e.g. `04/05/2026` is May 4 in `en-GB`, April 5 in `en-US`). |
-| `WithZone(zone)` | Resolve floating datetimes into `DateTime`; without it they remain `LocalDateTime` |
-| `WithReference(instant)` | Anchor natural date/datetime expressions such as `tomorrow` or `next Friday` |
+| `WithInputLocale(tag language.Tag)` | Language hint for natural-language input. Supported slash policies make `04/05/2026` May 4 in `en-GB`/`en-AU` and April 5 in `en-US`; unsupported tags remain ambiguity-aware. |
+| `WithZone(zone)` | Resolve formal floating datetimes; also supplies the required calendar frame for relative natural dates/datetimes |
+| `WithReference(instant)` | Anchor relative natural date/datetime expressions such as `tomorrow` or `next Friday`; use with `WithZone` |
 
 Ambiguity is surfaced through `ParseResult.Candidates`, not pre-selected by an option — callers decide. There is no `WithStrategy` knob.
 
+Relative natural dates and datetimes require both `WithReference` and
+`WithZone`: omitting the reference returns `ErrInvalidFormat`; omitting its
+calendar zone returns `ErrInvalidZone`. Exact natural durations and periods do
+not require either option.
+
 `WithInputLocale` takes [`golang.org/x/text/language.Tag`](https://pkg.go.dev/golang.org/x/text/language#Tag) — the de facto Go BCP-47 type. Only the language subtag is used; Unicode `-u-` extensions (hour cycle, calendar) belong to the rendering layer, not the parser.
 
-`ParseResult.HasZone` reports whether the input itself included an explicit zone or offset. Floating datetime input without `WithZone` stays as `KindLocalDateTime`; adding `WithZone` resolves it into a zoned `DateTime`.
+`ParseResult.HasZone` reports whether the input itself included an explicit zone or offset. Formal floating datetime input without `WithZone` stays as `KindLocalDateTime`; adding `WithZone` resolves it into a zoned `DateTime`. Relative natural dates and datetimes are different: their reference instant has no calendar meaning until `WithZone` is supplied.
 
 When the zone identifier comes from user input, resolve it at the call site:
 
@@ -245,12 +255,21 @@ calendarSlots := struct {
 | `Instant.Std()` | `time.Time` (UTC) |
 | `DateTime.Std()` | `time.Time` in the DateTime's zone |
 | `DateTime.Clock()` | `gotime.Time` (clock-time accessor) |
-| `Date.Std(z Zone)` | `time.Time` at 00:00 in `z` |
-| `Time.Std(on Date, z Zone)` | `time.Time` |
 | `Interval.StdRange()` | `(start, end time.Time)` |
 | `Duration.Std()` | `time.Duration` |
 | `Duration.Decompose()` | `DurationComponents` (clock slots) |
 | `Period.Years` / `.Months` / `.Days` | `int32` fields (no Decompose) |
+
+Civil `Date` and `Time` values must be resolved before crossing to stdlib:
+
+```go
+resolution := gotime.NewLocalDateTime(date, clock).Resolve(zone)
+dt, err := resolution.Only()
+if err != nil {
+	return err
+}
+std := dt.Std()
+```
 
 See [`SPECS/30-formatting.md`](SPECS/30-formatting.md) for the full contract.
 
@@ -268,6 +287,11 @@ See [`SPECS/30-formatting.md`](SPECS/30-formatting.md) for the full contract.
 | `Interval` | Half-open range `[start, end)` |
 | `Zone` | IANA timezone identity for persisted zones |
 | `DurationComponents` | Clock-slot decomposition of `Duration` (Hours…Nanoseconds) — bridge to external duration formatters |
+
+Checked civil values use the fixed wire-compatible year domain `0000..9999`.
+`DateFromTime`, `DateTimeFromTime`, `Instant.In`, `DateTime.In`, and checked
+calendar/exact arithmetic return `ErrOverflow` instead of producing a value
+that cannot round-trip through JSON.
 
 ## Duration vs Period
 
@@ -290,11 +314,17 @@ There is intentionally no `gotime.Day` constant. `24 * gotime.Hour` is exact 24 
 
 `DateTime` exposes:
 
-- `dt.Add(d Duration)` — exact-time arithmetic; pass `-d` to move back
-- `dt.AddPeriod(p Period)` — calendar arithmetic with end-of-month clamping; pass `p.Negate()` to move back
+- `dt.Add(d Duration) (DateTime, error)` — checked exact-time arithmetic; pass `-d` to move back
+- `dt.AddPeriod(p Period) (LocalResolution, error)` — checked calendar arithmetic with end-of-month clamping and explicit DST resolution
 - `dt.Sub(other DateTime) Duration` — difference between two DateTimes (mirrors `time.Time.Sub`)
 
-`Date.Add(p Period) Date` handles calendar arithmetic. For differences, use the name that matches your intent: `d.DaysUntil(other)` for signed calendar-day counts, or `d.PeriodUntil(other)` for a greedy years/months/days period. `Instant.Add(d Duration) Instant` and `Instant.Sub(other Instant) Duration` round out the exact-time trio. The compiler enforces the distinction between Duration and Period — `dt.Add(gotime.Months(1))` is a compile error.
+`Date.Add(p Period) (Date, error)` handles checked calendar arithmetic. For
+differences, use the name that matches your intent: `d.DaysUntil(other)` for
+signed calendar-day counts, or `d.PeriodUntil(other)` for a checked greedy
+years/months/days period. `Instant.Add(d Duration) Instant` and
+`Instant.Sub(other Instant) Duration` round out the exact-time trio. The
+compiler enforces the distinction between Duration and Period —
+`dt.Add(gotime.Months(1))` is a compile error.
 
 ## Common Operations
 
@@ -328,9 +358,26 @@ if resolution.Status == gotime.LocalAmbiguous {
 	fmt.Println("choose between", resolution.Candidates)
 }
 
-exact := dt.Add(24 * gotime.Hour)      // exact 24-hour span (Duration)
-calendar := dt.AddPeriod(gotime.Days(1)) // 1 calendar day, DST-safe (Period)
-shifted := dt.In(tokyo)
+exact, err := dt.Add(24 * gotime.Hour) // exact 24-hour span (Duration)
+if err != nil {
+	fmt.Println("exact arithmetic error:", err)
+	return
+}
+calendarResolution, err := dt.AddPeriod(gotime.Days(1))
+if err != nil {
+	fmt.Println("calendar arithmetic error:", err)
+	return
+}
+calendar, err := calendarResolution.Only()
+if err != nil {
+	fmt.Println("calendar resolution error:", err)
+	return
+}
+shifted, err := dt.In(tokyo)
+if err != nil {
+	fmt.Println("zone projection error:", err)
+	return
+}
 
 iv, err := gotime.NewInterval(dt.Instant(), exact.Instant())
 if err != nil {
@@ -367,7 +414,8 @@ tokyo, err := gotime.LoadZone("Asia/Tokyo")
 if err != nil {
 	return err
 }
-fmt.Println(tokyo.ID(), tokyo.OffsetAt(gotime.Now()))
+name, offsetSeconds := gotime.Now().Std().In(tokyo.Location()).Zone()
+fmt.Println(tokyo.ID(), name, offsetSeconds)
 fmt.Println(len(gotime.Zones()), gotime.ZoneCatalogVersion())
 ```
 
@@ -403,7 +451,10 @@ See `SPECS/60-errors.md` for the full code list.
 
 ## JSON
 
-All value objects implement stable JSON encoding via `github.com/go-json-experiment/json`. Decoding is strict: wrong `kind`, missing required fields, unknown fields, unsupported calendars, and contradictory derived fields are rejected.
+All value objects implement stable JSON encoding via
+`github.com/go-json-experiment/json`. Decoding is strict: wrong `kind`, missing
+required fields, unknown fields, non-canonical values, and invalid identities
+are rejected.
 
 ```go
 b, err := json.Marshal(dt)
@@ -416,15 +467,15 @@ fmt.Println(string(b))
 Representative shapes:
 
 ```json
-{"kind":"datetime","value":"2026-03-27T09:00:00-04:00","zone":"America/New_York","calendar":"iso8601"}
-{"kind":"local_datetime","value":"2026-03-27T09:00:00","calendar":"iso8601"}
+{"kind":"datetime","instant":"2026-03-27T13:00:00Z","zone":"America/New_York"}
+{"kind":"local_datetime","value":"2026-03-27T09:00:00"}
 {"kind":"duration","iso":"PT1H30M"}
 {"kind":"period","iso":"P1Y3M7D"}
 {"kind":"zone","id":"America/New_York"}
 ```
 
 - `Duration` / `Period` carry **only** `kind` + `iso` — no `components` / `years` / `months` / `days` mirror fields. `Duration` sub-second ISO text uses decimal seconds, never scientific notation. Run `Duration.Decompose()` for clock slots; read `Period.Years` / `.Months` / `.Days` directly.
-- `Zone` JSON contains only `{"kind":"zone","id":"…"}`. A zero `Zone` encodes as `{"kind":"zone","id":"UTC"}`. Time-dependent display data (offset and abbreviation) lives in `Zone.Snapshot(at Instant)` — never on the marshalled value, so the same `Zone` encodes byte-identical regardless of when you call `Marshal`.
+- `Zone` JSON contains only `{"kind":"zone","id":"…"}`. A zero `Zone` encodes as `{"kind":"zone","id":"UTC"}`. Obtain time-dependent abbreviations and numeric offsets through `instant.Std().In(zone.Location()).Zone()`; they are never marshalled with zone identity.
 
 ## API Reference
 

@@ -93,46 +93,27 @@ func (t Time) String() string {
 	return fmt.Sprintf("%02d:%02d:%02d.%s", t.hour, t.minute, t.second, frac)
 }
 
-// Std returns the clock time projected onto Date d in Zone z as a time.Time.
-// Use this to bridge a clock Time to any API expecting a stdlib time.Time.
-func (t Time) Std(on Date, z Zone) time.Time {
-	return time.Date(on.year, on.month, on.day, t.hour, t.minute, t.second, t.nanosecond, z.Location())
-}
-
-// timePrecision returns the finest precision of the clock time as a string.
-func timePrecision(nanosecond int) string {
-	switch {
-	case nanosecond == 0:
-		return "second"
-	case nanosecond%1_000_000 == 0:
-		return "millisecond"
-	case nanosecond%1_000 == 0:
-		return "microsecond"
-	default:
-		return "nanosecond"
-	}
-}
-
-// MarshalJSON encodes t as {"kind":"time","value":"HH:MM:SS","precision":"second"} or
-// with sub-second value and appropriate precision when nanoseconds are non-zero.
+// MarshalJSON encodes t as {"kind":"time","value":"HH:MM:SS[.fraction]"}.
 func (t Time) MarshalJSON() ([]byte, error) {
-	v := t.String()
-	if t.nanosecond != 0 {
-		v = fmt.Sprintf("%02d:%02d:%02d.%09d", t.hour, t.minute, t.second, t.nanosecond)
+	if msg := validateTimeComponents(t.hour, t.minute, t.second, t.nanosecond); msg != "" {
+		return nil, newTimeError(
+			ErrInvalidTime,
+			msg,
+			t.String(),
+			"marshal a Time constructed with NewTime or NewTimeNanos",
+		)
 	}
 	return json.Marshal(struct {
-		Kind      string `json:"kind"`
-		Value     string `json:"value"`
-		Precision string `json:"precision"`
-	}{Kind: "time", Value: v, Precision: timePrecision(t.nanosecond)})
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
+	}{Kind: "time", Value: t.String()})
 }
 
 // UnmarshalJSON decodes t from {"kind":"time","value":"HH:MM:SS[.nnnnnnnnn]"}.
 func (t *Time) UnmarshalJSON(b []byte) error {
 	var wire struct {
-		Kind      string `json:"kind"`
-		Value     string `json:"value"`
-		Precision string `json:"precision"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
 	}
 	if err := unmarshalJSONWire(b, &wire); err != nil {
 		return err
@@ -143,25 +124,20 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 	if err := requireJSONString("time", "value", wire.Value); err != nil {
 		return err
 	}
-	if err := requireJSONString("time", "precision", wire.Precision); err != nil {
-		return err
-	}
-	parsed, err := time.Parse("15:04:05.000000000", wire.Value)
+	parsed, err := time.Parse("15:04:05", wire.Value)
 	if err != nil {
-		parsed, err = time.Parse("15:04:05", wire.Value)
-		if err != nil {
-			return fmt.Errorf("gotime: invalid time value %q: %w", wire.Value, err)
-		}
+		return fmt.Errorf("gotime: invalid time value %q: %w", wire.Value, err)
 	}
-	if got, want := wire.Precision, timePrecision(parsed.Nanosecond()); got != want {
+	parsedTime := TimeFromTime(parsed)
+	if canonical := parsedTime.String(); wire.Value != canonical {
 		return newTimeError(
 			ErrInvalidFormat,
-			"time precision does not match value",
-			fmt.Sprintf("value=%s precision=%s", wire.Value, got),
-			fmt.Sprintf("use precision %q for this time value", want),
+			"time value is not canonical",
+			wire.Value,
+			fmt.Sprintf("use %q for this time value", canonical),
 		)
 	}
-	*t = TimeFromTime(parsed)
+	*t = parsedTime
 	return nil
 }
 

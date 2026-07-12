@@ -50,16 +50,15 @@ func (p *koParser) canHandle(locale string) bool {
 }
 
 func (p *koParser) parse(input string, ctx Context) (Result, bool) {
-	loc := locForZone(ctx.ZoneID)
-	base := midnightInLoc(ctx.RelativeTo, loc)
+	base := midnight(ctx.RelativeTo)
 
 	if m := reKoRelativeDate.FindStringSubmatch(input); m != nil {
-		return dateResult(koRelativeDateOffset(base, m[1]), ctx.ZoneID), true
+		return dateResult(koRelativeDateOffset(base, m[1])), true
 	}
 
 	if m := reKoWeekRelative.FindStringSubmatch(input); m != nil {
 		t := koWeekDate(base, m[1], m[2])
-		return dateResult(t, ctx.ZoneID), true
+		return dateResult(t), true
 	}
 
 	if m := reKoDateTime.FindStringSubmatch(input); m != nil {
@@ -83,7 +82,7 @@ func (p *koParser) parse(input string, ctx Context) (Result, bool) {
 		if minStr != "" {
 			min, _ = strconv.Atoi(minStr)
 		}
-		return datetimeAt(dateBase, hour, min, loc, ctx.ZoneID), true
+		return datetimeAt(dateBase, hour, min), true
 	}
 
 	if m := reKoRelativeDur.FindStringSubmatch(input); m != nil {

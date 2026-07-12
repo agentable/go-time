@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -23,7 +24,14 @@ func TestDate_Add_NegatedPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := tc.d.Add(tc.p.Negate())
+			negated, err := tc.p.Negate()
+			if err != nil {
+				t.Fatalf("Negate() error = %v", err)
+			}
+			got, err := tc.d.Add(negated)
+			if err != nil {
+				t.Fatalf("Add(%v.Negate()) error = %v", tc.p, err)
+			}
 			if !got.Equal(tc.want) {
 				t.Errorf("Add(%v.Negate()) = %v, want %v", tc.p, got, tc.want)
 			}
@@ -76,9 +84,31 @@ func TestDate_PeriodUntil(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := tc.d.PeriodUntil(tc.other)
+			got, err := tc.d.PeriodUntil(tc.other)
+			if err != nil {
+				t.Fatalf("PeriodUntil() error = %v", err)
+			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("PeriodUntil() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDate_PeriodUntilRejectsInvalidEndpoint(t *testing.T) {
+	valid := mustDate(2026, time.March, 27)
+	for _, tc := range []struct {
+		name  string
+		start Date
+		end   Date
+	}{
+		{name: "invalid start", start: Date{}, end: valid},
+		{name: "invalid end", start: valid, end: Date{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.start.PeriodUntil(tc.end)
+			if !errors.Is(err, ErrInvalidDate) {
+				t.Fatalf("PeriodUntil() error = %v, want ErrInvalidDate", err)
 			}
 		})
 	}
@@ -88,12 +118,104 @@ func TestDateTime_AddPeriod_Negated(t *testing.T) {
 	t.Parallel()
 
 	dt := makeDateTime(2026, time.March, 31, 9, 30, 0, UTC)
-	got := dt.AddPeriod(Months(1).Negate())
+	negated, err := Months(1).Negate()
+	if err != nil {
+		t.Fatalf("Negate() error = %v", err)
+	}
+	got := mustDateTimeAddPeriod(t, dt, negated)
 	want := makeDateTime(2026, time.February, 28, 9, 30, 0, UTC)
 	if !got.Equal(want) {
 		t.Errorf("AddPeriod(Months(1).Negate()) = %v, want %v", got, want)
 	}
 	if !got.Clock().Equal(dt.Clock()) {
 		t.Errorf("calendar subtraction changed wall-clock time: got %v, want %v", got.Clock(), dt.Clock())
+	}
+}
+
+func TestDateTime_AddPeriodMatchesExplicitLocalResolution(t *testing.T) {
+	tests := []struct {
+		name       string
+		dt         DateTime
+		period     Period
+		wantStatus LocalResolutionStatus
+	}{
+		{
+			name:       "end of month",
+			dt:         makeDateTime(2026, time.January, 31, 12, 0, 0, testZoneNewYork),
+			period:     Months(1),
+			wantStatus: LocalResolved,
+		},
+		{
+			name:       "spring gap",
+			dt:         makeDateTime(2026, time.March, 7, 2, 30, 0, testZoneNewYork),
+			period:     Days(1),
+			wantStatus: LocalNonexistent,
+		},
+		{
+			name:       "fall overlap",
+			dt:         makeDateTime(2026, time.October, 31, 1, 30, 0, testZoneNewYork),
+			period:     Days(1),
+			wantStatus: LocalAmbiguous,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.dt.AddPeriod(tc.period)
+			if err != nil {
+				t.Fatalf("AddPeriod(%v) error = %v", tc.period, err)
+			}
+			targetDate, err := tc.dt.Date().Add(tc.period)
+			if err != nil {
+				t.Fatalf("Date.Add(%v) error = %v", tc.period, err)
+			}
+			want := NewLocalDateTime(targetDate, tc.dt.Clock()).Resolve(tc.dt.Zone())
+			if got.Status != tc.wantStatus || got.Status != want.Status {
+				t.Fatalf("AddPeriod(%v) status = %v, want %v", tc.period, got.Status, tc.wantStatus)
+			}
+			if !got.Zone.Equal(want.Zone) || !got.Local.Date.Equal(want.Local.Date) || !got.Local.Time.Equal(want.Local.Time) {
+				t.Fatalf("AddPeriod(%v) context = %+v, want %+v", tc.period, got, want)
+			}
+			if len(got.Candidates) != len(want.Candidates) {
+				t.Fatalf("AddPeriod(%v) candidates = %d, want %d", tc.period, len(got.Candidates), len(want.Candidates))
+			}
+			for i := range got.Candidates {
+				if !got.Candidates[i].Equal(want.Candidates[i]) {
+					t.Fatalf("AddPeriod(%v) candidate %d = %v, want %v", tc.period, i, got.Candidates[i], want.Candidates[i])
+				}
+				if i > 0 && !got.Candidates[i-1].Before(got.Candidates[i]) {
+					t.Fatalf("AddPeriod(%v) candidates are not chronological: %v", tc.period, got.Candidates)
+				}
+			}
+			switch tc.wantStatus {
+			case LocalResolved:
+				if _, err := got.Only(); err != nil {
+					t.Fatalf("AddPeriod(%v).Only() error = %v", tc.period, err)
+				}
+			case LocalNonexistent:
+				if _, err := got.Only(); !errors.Is(err, ErrNonexistentTime) {
+					t.Fatalf("AddPeriod(%v).Only() error = %v, want ErrNonexistentTime", tc.period, err)
+				}
+			case LocalAmbiguous:
+				if _, err := got.Only(); !errors.Is(err, ErrDuplicateTime) {
+					t.Fatalf("AddPeriod(%v).Only() error = %v, want ErrDuplicateTime", tc.period, err)
+				}
+			case LocalInvalid:
+				t.Fatalf("AddPeriod(%v) returned unexpected LocalInvalid", tc.period)
+			default:
+				t.Fatalf("AddPeriod(%v) returned unknown status %q", tc.period, tc.wantStatus)
+			}
+		})
+	}
+}
+
+func TestDateTime_AddPeriodRejectsCivilDomainOverflow(t *testing.T) {
+	dt := makeDateTime(9999, time.December, 31, 12, 0, 0, UTC)
+	resolution, err := dt.AddPeriod(Days(1))
+	if !errors.Is(err, ErrOverflow) {
+		t.Fatalf("AddPeriod(Days(1)) error = %v, want ErrOverflow", err)
+	}
+	if resolution.Status != "" || !resolution.Zone.IsZero() || resolution.Local != (LocalDateTime{}) || len(resolution.Candidates) != 0 {
+		t.Fatalf("AddPeriod(Days(1)) resolution = %+v, want zero", resolution)
 	}
 }

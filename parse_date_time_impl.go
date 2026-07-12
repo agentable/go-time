@@ -45,7 +45,13 @@ func tryParseDate(input string, cfg *config) (ParseResult, bool) {
 				fmt.Sprintf("ordinal day %d does not exist in year %d", doy, year),
 				"Use 366 only for leap years; otherwise use an ordinal day between 1 and 365"), true
 		}
-		return resolvedDateResult(input, DateFromTime(t), cfg), true
+		d, err := DateFromTime(t)
+		if err != nil {
+			return invalidResult(input, ErrOverflow,
+				fmt.Sprintf("ordinal date falls outside the supported civil domain: %q", input),
+				"Use a date whose year is between 0000 and 9999"), true
+		}
+		return resolvedDateResult(input, d, cfg), true
 	}
 	if m := reWeekDate.FindStringSubmatch(input); m != nil {
 		year, week := atoi(m[1]), atoi(m[2])
@@ -70,7 +76,13 @@ func tryParseDate(input string, cfg *config) (ParseResult, bool) {
 				fmt.Sprintf("ISO week %d does not exist in year %d", week, year),
 				"Use an ISO week that exists in the requested year"), true
 		}
-		return resolvedDateResult(input, DateFromTime(t), cfg), true
+		d, err := DateFromTime(t)
+		if err != nil {
+			return invalidResult(input, ErrOverflow,
+				fmt.Sprintf("ISO week date falls outside the supported civil domain: %q", input),
+				"Use a date whose year is between 0000 and 9999"), true
+		}
+		return resolvedDateResult(input, d, cfg), true
 	}
 	return ParseResult{}, false
 }

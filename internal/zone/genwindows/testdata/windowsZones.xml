@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<supplementalData>
+  <windowsZones>
+    <mapTimezones>
+      <mapZone other="Zulu Standard Time" territory="001" type="Etc/UTC"/>
+      <mapZone other="Ignored Regional Time" territory="CA" type="America/Toronto America/Iqaluit"/>
+      <mapZone other="Alpha Standard Time" territory="001" type="America/Godthab"/>
+    </mapTimezones>
+  </windowsZones>
+</supplementalData>

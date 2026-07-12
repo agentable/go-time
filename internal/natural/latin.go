@@ -165,16 +165,15 @@ func (p *latinParser) parse(input string, ctx Context) (Result, bool) {
 	}
 
 	lower := strings.ToLower(strings.TrimSpace(input))
-	loc := locForZone(ctx.ZoneID)
-	base := midnightInLoc(ctx.RelativeTo, loc)
+	base := midnight(ctx.RelativeTo)
 
 	switch lower {
 	case strings.ToLower(v.today):
-		return dateResult(base, ctx.ZoneID), true
+		return dateResult(base), true
 	case strings.ToLower(v.tomorrow):
-		return dateResult(base.AddDate(0, 0, 1), ctx.ZoneID), true
+		return dateResult(base.AddDate(0, 0, 1)), true
 	case strings.ToLower(v.yesterday):
-		return dateResult(base.AddDate(0, 0, -1), ctx.ZoneID), true
+		return dateResult(base.AddDate(0, 0, -1)), true
 	}
 
 	if v.futurePat != nil {

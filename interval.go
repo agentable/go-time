@@ -173,14 +173,25 @@ func (iv Interval) String() string {
 
 // MarshalJSON encodes iv as {"kind":"interval","start":"<RFC3339Nano>","end":"<RFC3339Nano>"}.
 func (iv Interval) MarshalJSON() ([]byte, error) {
+	if _, err := NewInterval(iv.start, iv.end); err != nil {
+		return nil, err
+	}
+	start, err := iv.start.wireISO()
+	if err != nil {
+		return nil, err
+	}
+	end, err := iv.end.wireISO()
+	if err != nil {
+		return nil, err
+	}
 	return json.Marshal(struct {
 		Kind  string `json:"kind"`
 		Start string `json:"start"`
 		End   string `json:"end"`
 	}{
 		Kind:  "interval",
-		Start: iv.start.String(),
-		End:   iv.end.String(),
+		Start: start,
+		End:   end,
 	})
 }
 

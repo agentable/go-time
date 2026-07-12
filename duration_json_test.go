@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -80,6 +81,8 @@ func TestDurationJSONRoundTrip(t *testing.T) {
 		name string
 		orig Duration
 	}{
+		{name: "minimum", orig: Duration(math.MinInt64)},
+		{name: "maximum", orig: Duration(math.MaxInt64)},
 		{name: "whole units", orig: 90 * Minute},
 		{name: "nanosecond", orig: Nanosecond},
 		{name: "fractional second", orig: Second + Nanosecond},

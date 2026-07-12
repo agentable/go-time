@@ -15,15 +15,6 @@ func TestUTC(t *testing.T) {
 	}
 }
 
-func TestLocal(t *testing.T) {
-	if UTC.ID() == "" {
-		t.Error("Local.ID() must not be empty")
-	}
-	if Local.Location() == nil {
-		t.Error("Local.Location() must not be nil")
-	}
-}
-
 func TestZone_Equal(t *testing.T) {
 	z1 := MustLoadZone("Asia/Tokyo")
 	z2 := MustLoadZone("Asia/Tokyo")
@@ -49,79 +40,19 @@ func TestZone_String(t *testing.T) {
 	}
 }
 
-// Phase 1: Zone query methods
-
-var (
-	summerInstant = InstantFromTime(time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC))
-	winterInstant = InstantFromTime(time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC))
-)
-
-func TestZone_OffsetAt_Tokyo(t *testing.T) {
-	z := MustLoadZone("Asia/Tokyo")
-	if got := z.OffsetAt(summerInstant); got != "+09:00" {
-		t.Errorf("OffsetAt = %q, want +09:00", got)
-	}
-}
-
-func TestZone_OffsetAt_NewYork_Summer(t *testing.T) {
-	z := MustLoadZone("America/New_York")
-	if got := z.OffsetAt(summerInstant); got != "-04:00" {
-		t.Errorf("OffsetAt = %q, want -04:00", got)
-	}
-}
-
-func TestZone_OffsetAt_NewYork_Winter(t *testing.T) {
-	z := MustLoadZone("America/New_York")
-	if got := z.OffsetAt(winterInstant); got != "-05:00" {
-		t.Errorf("OffsetAt = %q, want -05:00", got)
-	}
-}
-
-func TestZone_OffsetAt_UTC(t *testing.T) {
-	if got := UTC.OffsetAt(summerInstant); got != "+00:00" {
-		t.Errorf("UTC.OffsetAt = %q, want +00:00", got)
-	}
-}
-
-func TestZone_Abbreviation_Tokyo(t *testing.T) {
-	z := MustLoadZone("Asia/Tokyo")
-	if got := z.Abbreviation(summerInstant); got != "JST" {
-		t.Errorf("Abbreviation = %q, want JST", got)
-	}
-}
-
-func TestZone_Abbreviation_NewYork_Summer(t *testing.T) {
-	z := MustLoadZone("America/New_York")
-	if got := z.Abbreviation(summerInstant); got != "EDT" {
-		t.Errorf("Abbreviation = %q, want EDT", got)
-	}
-}
-
-func TestZone_Abbreviation_NewYork_Winter(t *testing.T) {
-	z := MustLoadZone("America/New_York")
-	if got := z.Abbreviation(winterInstant); got != "EST" {
-		t.Errorf("Abbreviation = %q, want EST", got)
-	}
-}
-
-func TestZone_Abbreviation_UTC(t *testing.T) {
-	if got := UTC.Abbreviation(summerInstant); got != "UTC" {
-		t.Errorf("UTC.Abbreviation = %q, want UTC", got)
-	}
-}
-
 func TestZone_ZeroValue_NoPanic(t *testing.T) {
 	var z Zone
+	if got := z.ID(); got != "UTC" {
+		t.Fatalf("zero Zone ID() = %q, want UTC", got)
+	}
+	if got := z.String(); got != "UTC" {
+		t.Fatalf("zero Zone String() = %q, want UTC", got)
+	}
+	if !z.Equal(UTC) {
+		t.Fatal("zero Zone Equal(UTC) = false, want true")
+	}
 	if z.Location() != time.UTC {
 		t.Errorf("zero Zone Location() = %v, want UTC", z.Location())
-	}
-	offset := z.OffsetAt(summerInstant)
-	abbr := z.Abbreviation(summerInstant)
-	if offset != "+00:00" {
-		t.Errorf("zero Zone OffsetAt = %q, want +00:00", offset)
-	}
-	if abbr != "UTC" {
-		t.Errorf("zero Zone Abbreviation = %q, want UTC", abbr)
 	}
 }
 
@@ -260,8 +191,8 @@ func TestLoadZone_SpecExample(t *testing.T) {
 	tokyo := MustLoadZone("Asia/Tokyo")
 	ny := MustLoadZone("America/New_York")
 	instant := Now()
-	tokyoTime := instant.In(tokyo)
-	nyTime := tokyoTime.In(ny)
+	tokyoTime := mustInstantIn(t, instant, tokyo)
+	nyTime := mustDateTimeIn(t, tokyoTime, ny)
 	// Both should represent the same underlying UTC moment
 	if !tokyoTime.Instant().Equal(nyTime.Instant()) {
 		t.Error("zone conversion must preserve the underlying Instant")

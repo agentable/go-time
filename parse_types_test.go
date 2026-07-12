@@ -208,6 +208,9 @@ func TestWithZone(t *testing.T) {
 	cfg := &config{}
 	zone := MustLoadZone("Asia/Tokyo")
 	WithZone(zone)(cfg)
+	if !cfg.zoneSet {
+		t.Fatal("WithZone did not record option presence")
+	}
 	if !cfg.zone.Equal(zone) {
 		t.Errorf("WithZone set zone = %q, want %q", cfg.zone.ID(), zone.ID())
 	}
@@ -217,6 +220,9 @@ func TestWithReference(t *testing.T) {
 	now := Now()
 	cfg := &config{}
 	WithReference(now)(cfg)
+	if !cfg.referenceSet {
+		t.Fatal("WithReference did not record option presence")
+	}
 	if !cfg.relativeTo.Equal(now) {
 		t.Error("WithReference did not set relativeTo correctly")
 	}

@@ -94,7 +94,7 @@ func intOrZero(s string) int {
 
 func localDateTimeWarnings(cfg *config, z Zone, truncated bool) []Warning {
 	var warnings []Warning
-	if !cfg.zone.IsZero() {
+	if cfg.zoneSet {
 		warnings = append(warnings, assumedZoneWarning(z))
 	}
 	if truncated {
@@ -120,10 +120,9 @@ func truncatedPrecisionWarning() Warning {
 }
 
 func duplicateTimeWarning(t time.Time) Warning {
-	abbr, offset := t.Zone()
 	return Warning{
 		Code:    WarnDuplicateTime,
-		Message: fmt.Sprintf("%s (%s)", abbr, formatOffset(offset)),
+		Message: t.Format("MST (-07:00)"),
 		Hint:    "Choose this candidate when its offset matches the intended occurrence.",
 	}
 }

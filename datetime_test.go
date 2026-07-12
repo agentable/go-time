@@ -75,7 +75,10 @@ func TestNewDateTime_NonexistentLocalDate(t *testing.T) {
 
 func TestDateTimeFromTime_RoundTrip(t *testing.T) {
 	ts := time.Date(2026, 3, 27, 13, 0, 0, 0, testZoneTokyo.Location())
-	dt := DateTimeFromTime(ts, testZoneTokyo)
+	dt, err := DateTimeFromTime(ts, testZoneTokyo)
+	if err != nil {
+		t.Fatalf("DateTimeFromTime() error = %v", err)
+	}
 
 	want := InstantFromTime(ts)
 	if !dt.Instant().Equal(want) {
@@ -83,9 +86,41 @@ func TestDateTimeFromTime_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestDateTimeFromTime_RejectsProjectedYearOutsideCivilDomain(t *testing.T) {
+	tests := []struct {
+		name string
+		t    time.Time
+		zone Zone
+	}{
+		{
+			name: "below minimum after westward projection",
+			t:    time.Date(0, time.January, 1, 0, 0, 0, 0, time.UTC),
+			zone: testZoneNewYork,
+		},
+		{
+			name: "above maximum after eastward projection",
+			t:    time.Date(9999, time.December, 31, 23, 59, 59, 0, time.UTC),
+			zone: testZoneTokyo,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := DateTimeFromTime(tc.t, tc.zone)
+			if !errors.Is(err, ErrOverflow) {
+				t.Fatalf("DateTimeFromTime(%v, %v) error = %v, want ErrOverflow", tc.t, tc.zone, err)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) || te.Hint == "" {
+				t.Fatalf("DateTimeFromTime(%v, %v) error = %#v, want TimeError with hint", tc.t, tc.zone, err)
+			}
+		})
+	}
+}
+
 func TestDateTime_Instant_In_RoundTrip(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
-	roundTripped := dt.Instant().In(testZoneTokyo)
+	roundTripped := mustInstantIn(t, dt.Instant(), testZoneTokyo)
 	if !roundTripped.Equal(dt) {
 		t.Errorf("Instant().In(zone) round-trip failed: got %v, want %v", roundTripped, dt)
 	}
@@ -93,7 +128,7 @@ func TestDateTime_Instant_In_RoundTrip(t *testing.T) {
 
 func TestDateTime_In_SameMoment(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
-	dtUTC := dt.In(UTC)
+	dtUTC := mustDateTimeIn(t, dt, UTC)
 
 	if !dtUTC.Instant().Equal(dt.Instant()) {
 		t.Error("In(UTC).Instant() should equal original Instant()")
@@ -105,23 +140,93 @@ func TestDateTime_In_SameMoment(t *testing.T) {
 
 func TestDateTime_In_ChangesZone(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
-	dtNY := dt.In(testZoneNewYork)
+	dtNY := mustDateTimeIn(t, dt, testZoneNewYork)
 	if !dtNY.Zone().Equal(testZoneNewYork) {
 		t.Errorf("Zone after In(NY) = %v, want New_York", dtNY.Zone())
 	}
 }
 
+func TestDateTime_InRejectsProjectedYearOutsideCivilDomain(t *testing.T) {
+	tests := []struct {
+		name string
+		dt   DateTime
+		zone Zone
+	}{
+		{
+			name: "below minimum after westward projection",
+			dt:   makeDateTime(0, time.January, 1, 0, 0, 0, UTC),
+			zone: testZoneNewYork,
+		},
+		{
+			name: "above maximum after eastward projection",
+			dt:   makeDateTime(9999, time.December, 31, 23, 59, 59, UTC),
+			zone: testZoneTokyo,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.dt.In(tc.zone)
+			if !errors.Is(err, ErrOverflow) {
+				t.Fatalf("DateTime.In(%v) error = %v, want ErrOverflow", tc.zone, err)
+			}
+		})
+	}
+}
+
 func TestDateTime_Add_Sub(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
-	dt2 := dt.Add(2 * Hour)
+	dt2 := mustDateTimeAdd(t, dt, 2*Hour)
 	if got := dt2.Sub(dt); got.InHours() != 2.0 {
 		t.Errorf("Add(2*Hour).Sub() = %v hours, want 2.0", got.InHours())
 	}
 }
 
+func TestDateTime_AddRejectsCivilDomainOverflow(t *testing.T) {
+	maxDate := mustDate(9999, time.December, 31)
+	maxClock := mustTimeNanos(23, 59, 59, 999_999_999)
+	maxDateTime := mustDateTime(maxDate, maxClock, UTC)
+	tests := []struct {
+		name string
+		dt   DateTime
+		add  Duration
+	}{
+		{
+			name: "below minimum",
+			dt:   makeDateTime(0, time.January, 1, 0, 0, 0, UTC),
+			add:  -Nanosecond,
+		},
+		{
+			name: "above maximum",
+			dt:   maxDateTime,
+			add:  Nanosecond,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.dt.Add(tc.add)
+			if !errors.Is(err, ErrOverflow) {
+				t.Fatalf("DateTime.Add(%v) error = %v, want ErrOverflow", tc.add, err)
+			}
+		})
+	}
+}
+
+func TestDateTime_AddZeroPreservesCivilBoundary(t *testing.T) {
+	dt := makeDateTime(0, time.January, 1, 0, 0, 0, UTC)
+	got, err := dt.Add(0)
+	if err != nil {
+		t.Fatalf("DateTime.Add(0) error = %v", err)
+	}
+	if !got.Equal(dt) || !got.Zone().Equal(dt.Zone()) || !got.Clock().Equal(dt.Clock()) {
+		t.Fatalf("DateTime.Add(0) = %v, want exact boundary value %v", got, dt)
+	}
+}
+
 func TestDateTime_Sub_Negative(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
-	dt2 := dt.Add(-30 * Minute)
+	dt2 := mustDateTimeAdd(t, dt, -30*Minute)
 	if got := dt2.Sub(dt); got.InMinutes() != -30.0 {
 		t.Errorf("Add(-30*Minute).Sub() = %v minutes, want -30.0", got.InMinutes())
 	}
@@ -142,7 +247,7 @@ func TestDateTime_BeforeAfter(t *testing.T) {
 func TestDateTime_Equal_AcrossZones(t *testing.T) {
 	// Same absolute moment, different zones
 	dt1 := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo) // UTC+9 → 04:00 UTC
-	dt2 := dt1.In(UTC)
+	dt2 := mustDateTimeIn(t, dt1, UTC)
 	if !dt1.Equal(dt2) {
 		t.Error("same absolute moment in different zones should be Equal")
 	}
@@ -178,7 +283,7 @@ func TestDateTime_AddCalendar_Basic(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
 
 	// +1 calendar day: same H:M:S, next date
-	dt1 := dt.AddPeriod(Days(1))
+	dt1 := mustDateTimeAddPeriod(t, dt, Days(1))
 	if !dt1.Date().Equal(mustDate(2026, time.March, 28)) {
 		t.Errorf("AddPeriod(+1) date = %v, want 2026-03-28", dt1.Date())
 	}
@@ -192,7 +297,7 @@ func TestDateTime_AddCalendar_Basic(t *testing.T) {
 
 func TestDateTime_AddCalendar_Negative(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
-	dt1 := dt.AddPeriod(Days(-1))
+	dt1 := mustDateTimeAddPeriod(t, dt, Days(-1))
 	if !dt1.Date().Equal(mustDate(2026, time.March, 26)) {
 		t.Errorf("AddPeriod(-1) date = %v, want 2026-03-26", dt1.Date())
 	}
@@ -203,7 +308,7 @@ func TestDateTime_AddCalendar_Negative(t *testing.T) {
 
 func TestDateTime_AddCalendar_Zero(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
-	dt0 := dt.AddPeriod(Days(0))
+	dt0 := mustDateTimeAddPeriod(t, dt, Days(0))
 	if !dt0.Equal(dt) {
 		t.Errorf("AddPeriod(0) = %v, want %v", dt0, dt)
 	}
@@ -214,7 +319,7 @@ func TestDateTime_AddCalendar_DST(t *testing.T) {
 	// A datetime at 01:30 on 2026-03-08 should produce 01:30 on 2026-03-09 after +1 calendar day
 	zoneNY := testZoneNewYork
 	dt := makeDateTime(2026, time.March, 8, 1, 30, 0, zoneNY)
-	dt1 := dt.AddPeriod(Days(1))
+	dt1 := mustDateTimeAddPeriod(t, dt, Days(1))
 
 	want := mustDate(2026, time.March, 9)
 	if !dt1.Date().Equal(want) {
@@ -230,7 +335,7 @@ func TestDateTime_AddCalendar_DST(t *testing.T) {
 func TestDateTime_AddCalendar_Months_Simple(t *testing.T) {
 	// Jan 15 + 1 month = Feb 15 (no clamping needed)
 	dt := makeDateTime(2026, time.January, 15, 10, 0, 0, UTC)
-	got := dt.AddPeriod(Months(1))
+	got := mustDateTimeAddPeriod(t, dt, Months(1))
 	want := makeDateTime(2026, time.February, 15, 10, 0, 0, UTC)
 	if !got.Equal(want) {
 		t.Errorf("AddPeriod(Months(1)) = %v, want %v", got, want)
@@ -240,7 +345,7 @@ func TestDateTime_AddCalendar_Months_Simple(t *testing.T) {
 func TestDateTime_AddCalendar_Months_CrossYear(t *testing.T) {
 	// Nov 15 + 2 months = Jan 15 next year
 	dt := makeDateTime(2025, time.November, 15, 10, 0, 0, UTC)
-	got := dt.AddPeriod(Months(2))
+	got := mustDateTimeAddPeriod(t, dt, Months(2))
 	want := makeDateTime(2026, time.January, 15, 10, 0, 0, UTC)
 	if !got.Equal(want) {
 		t.Errorf("AddPeriod(Months(2)) = %v, want %v", got, want)
@@ -250,7 +355,7 @@ func TestDateTime_AddCalendar_Months_CrossYear(t *testing.T) {
 func TestDateTime_AddCalendar_Months_Negative(t *testing.T) {
 	// Mar 15 - 1 month = Feb 15
 	dt := makeDateTime(2026, time.March, 15, 10, 0, 0, UTC)
-	got := dt.AddPeriod(Months(-1))
+	got := mustDateTimeAddPeriod(t, dt, Months(-1))
 	want := makeDateTime(2026, time.February, 15, 10, 0, 0, UTC)
 	if !got.Equal(want) {
 		t.Errorf("AddPeriod(Months(-1)) = %v, want %v", got, want)
@@ -297,7 +402,7 @@ func TestDateTime_AddCalendar_EndOfMonth_Clamping(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.dt.AddPeriod(tc.d)
+			got := mustDateTimeAddPeriod(t, tc.dt, tc.d)
 			if !got.Date().Equal(tc.wantDate) {
 				t.Errorf("got date %v, want %v", got.Date(), tc.wantDate)
 			}
@@ -311,7 +416,7 @@ func TestDateTime_AddCalendar_EndOfMonth_Clamping(t *testing.T) {
 
 func TestDateTime_AddCalendar_Years_Simple(t *testing.T) {
 	dt := makeDateTime(2024, time.March, 15, 10, 0, 0, UTC)
-	got := dt.AddPeriod(Years(1))
+	got := mustDateTimeAddPeriod(t, dt, Years(1))
 	want := makeDateTime(2025, time.March, 15, 10, 0, 0, UTC)
 	if !got.Equal(want) {
 		t.Errorf("AddPeriod(Years(1)) = %v, want %v", got, want)
@@ -340,7 +445,7 @@ func TestDateTime_AddCalendar_Months_LargeDelta(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.dt.AddPeriod(tc.p)
+			got := mustDateTimeAddPeriod(t, tc.dt, tc.p)
 			if !got.Equal(tc.want) {
 				t.Errorf("AddPeriod(%v) = %v, want %v", tc.p, got, tc.want)
 			}
@@ -353,7 +458,7 @@ func TestDateTime_AddCalendar_Months_DST(t *testing.T) {
 	// (wall-clock preserved; result is in DST zone, 2026-03-08 is after spring-forward)
 	zoneNY := testZoneNewYork
 	dt := makeDateTime(2026, time.February, 8, 1, 30, 0, zoneNY)
-	got := dt.AddPeriod(Months(1))
+	got := mustDateTimeAddPeriod(t, dt, Months(1))
 	wantDate := mustDate(2026, time.March, 8)
 	wantTime := mustTime(1, 30, 0)
 	if !got.Date().Equal(wantDate) {

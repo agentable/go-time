@@ -47,11 +47,11 @@ func parseDuration(input string, cfg *config) ParseResult {
 
 func parseISOPeriodMatch(input string, m []string, cfg *config) ParseResult {
 	neg := m[1] == "-"
-	var years, months, weeks, days int32
+	var years, months, weeks, days int64
 	for _, component := range []struct {
 		raw    string
 		name   string
-		target *int32
+		target *int64
 	}{
 		{m[2], "year", &years},
 		{m[3], "month", &months},
@@ -61,27 +61,22 @@ func parseISOPeriodMatch(input string, m []string, cfg *config) ParseResult {
 		if component.raw == "" {
 			continue
 		}
-		n, ok := parsePeriodComponent(component.raw)
+		n, ok := parsePeriodWireMagnitude(component.raw)
 		if !ok {
 			return invalidPeriodComponent(input, component.name, component.raw)
 		}
 		*component.target = n
 	}
 
-	totalDays, ok := checkedAddInt64(int64(weeks)*7, int64(days))
-	if !ok || totalDays > maxInt32 {
+	totalDays := weeks*7 + days
+	if neg {
+		years, months, totalDays = -years, -months, -totalDays
+	}
+	p, ok := periodFromInt64(years, months, totalDays)
+	if !ok {
 		return invalidResult(input, ErrOverflow,
 			fmt.Sprintf("period component overflows int32: %q", input),
 			"Use smaller year, month, week, or day components")
-	}
-
-	p := Period{
-		Years:  years,
-		Months: months,
-		Days:   int32(totalDays), //nolint:gosec // checked above against maxInt32
-	}
-	if neg {
-		p = p.Negate()
 	}
 	r := resolvedResult(input, KindPeriod, cfg)
 	r.period = p
@@ -119,17 +114,6 @@ func parseISODurationMatch(input string, m []string, cfg *config) ParseResult {
 	r := resolvedResult(input, KindDuration, cfg)
 	r.duration = Duration(totalNs)
 	return r
-}
-
-func parsePeriodComponent(raw string) (int32, bool) {
-	if strings.ContainsAny(raw, ".,") {
-		return 0, false
-	}
-	n, err := strconv.ParseInt(raw, 10, 32)
-	if err != nil {
-		return 0, false
-	}
-	return int32(n), true
 }
 
 func invalidPeriodComponent(input, component, raw string) ParseResult {

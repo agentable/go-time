@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -116,9 +117,40 @@ func TestInstant_IsZero(t *testing.T) {
 
 func TestInstant_In(t *testing.T) {
 	i := UnixNanos(0)
-	dt := i.In(UTC)
+	dt, err := i.In(UTC)
+	if err != nil {
+		t.Fatalf("In(UTC) error = %v", err)
+	}
 	if !dt.Instant().Equal(i) {
 		t.Error("In(UTC).Instant() should round-trip")
+	}
+}
+
+func TestInstant_InRejectsProjectedYearOutsideCivilDomain(t *testing.T) {
+	tests := []struct {
+		name    string
+		instant Instant
+		zone    Zone
+	}{
+		{
+			name:    "below minimum after westward projection",
+			instant: InstantFromTime(time.Date(0, time.January, 1, 0, 0, 0, 0, time.UTC)),
+			zone:    MustLoadZone("America/New_York"),
+		},
+		{
+			name:    "above maximum after eastward projection",
+			instant: InstantFromTime(time.Date(9999, time.December, 31, 23, 59, 59, 0, time.UTC)),
+			zone:    MustLoadZone("Asia/Tokyo"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.instant.In(tc.zone)
+			if !errors.Is(err, ErrOverflow) {
+				t.Fatalf("Instant.In(%v) error = %v, want ErrOverflow", tc.zone, err)
+			}
+		})
 	}
 }
 

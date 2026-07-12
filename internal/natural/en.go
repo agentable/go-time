@@ -42,16 +42,15 @@ func (p *enParser) canHandle(locale string) bool {
 
 func (p *enParser) parse(input string, ctx Context) (Result, bool) {
 	lower := strings.ToLower(strings.TrimSpace(input))
-	loc := locForZone(ctx.ZoneID)
-	base := midnightInLoc(ctx.RelativeTo, loc)
+	base := midnight(ctx.RelativeTo)
 
 	if m := reEnRelativeDate.FindStringSubmatch(lower); m != nil {
-		return dateResult(enRelativeDateOffset(base, m[1]), ctx.ZoneID), true
+		return dateResult(enRelativeDateOffset(base, m[1])), true
 	}
 
 	if m := reEnWeekRelative.FindStringSubmatch(lower); m != nil {
 		t := enWeekDate(base, m[1], m[2])
-		return dateResult(t, ctx.ZoneID), true
+		return dateResult(t), true
 	}
 
 	if m := reEnDateTime.FindStringSubmatch(lower); m != nil {
@@ -75,7 +74,7 @@ func (p *enParser) parse(input string, ctx Context) (Result, bool) {
 			min, _ = strconv.Atoi(minStr)
 		}
 		hour = applyHourPeriod(hour, ampm, "am", "pm")
-		return datetimeAt(dateBase, hour, min, loc, ctx.ZoneID), true
+		return datetimeAt(dateBase, hour, min), true
 	}
 
 	if m := reEnRelativeDurFuture.FindStringSubmatch(lower); m != nil {

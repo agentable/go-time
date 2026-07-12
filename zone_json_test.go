@@ -51,6 +51,18 @@ func TestZoneMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
 	}
 }
 
+func TestZoneMarshalJSON_RejectsUnknownPrivateID(t *testing.T) {
+	z := Zone{id: "Mars/Olympus", loc: time.UTC}
+	_, err := json.Marshal(z)
+	if !errors.Is(err, ErrInvalidZone) {
+		t.Fatalf("Marshal error = %v, want ErrInvalidZone", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) || te.Hint == "" {
+		t.Fatalf("Marshal error = %#v, want TimeError with hint", err)
+	}
+}
+
 func TestZoneUnmarshalJSON(t *testing.T) {
 	var z Zone
 	if err := json.Unmarshal([]byte(`{"kind":"zone","id":"Asia/Tokyo"}`), &z); err != nil {

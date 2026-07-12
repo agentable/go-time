@@ -81,10 +81,20 @@ func ExampleDateTime_AddPeriod() {
 		mustTime(12, 0, 0),
 		zone,
 	)
-	feb := jan31.AddPeriod(gotime.Months(1))
+	febResolution, err := jan31.AddPeriod(gotime.Months(1))
+	if err != nil {
+		panic(err)
+	}
+	feb, err := febResolution.Only()
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Jan 31 + 1 month:", feb.Date())
 
-	exact := jan31.Add(48 * gotime.Hour)
+	exact, err := jan31.Add(48 * gotime.Hour)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Jan 31 + 48h:", exact.Date(), exact.Clock())
 
 	// Output:
@@ -139,8 +149,7 @@ func Example_jsonRoundTrip() {
 	// Output:
 	// {
 	//   "kind": "datetime",
-	//   "value": "2026-03-27T13:00:00+09:00",
-	//   "zone": "Asia/Tokyo",
-	//   "calendar": "iso8601"
+	//   "instant": "2026-03-27T04:00:00Z",
+	//   "zone": "Asia/Tokyo"
 	// }
 }

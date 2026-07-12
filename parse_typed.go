@@ -133,32 +133,13 @@ func parseResultError(r ParseResult, want Kind) error {
 }
 
 func ambiguousErrorForResult(r ParseResult) (string, error) {
-	if hasWarningCode(r, WarnDuplicateTime) {
+	switch r.ambiguity {
+	case ambiguityDuplicateTime:
 		return "call Parse to inspect candidates and choose the intended offset", ErrDuplicateTime
-	}
-	return "add WithInputLocale or call Parse to inspect candidates", ambiguousSentinelForKind(r.Kind)
-}
-
-func hasWarningCode(r ParseResult, code WarningCode) bool {
-	for _, w := range r.Warnings {
-		if w.Code == code {
-			return true
-		}
-	}
-	for i := range r.Candidates {
-		if hasWarningCode(r.Candidates[i], code) {
-			return true
-		}
-	}
-	return false
-}
-
-func ambiguousSentinelForKind(k Kind) error {
-	switch k {
-	case KindDate, KindDateTime, KindLocalDateTime, KindInstant, KindInterval:
-		return ErrAmbiguousDate
+	case ambiguityDateOrder:
+		return "add WithInputLocale or call Parse to inspect candidates", ErrAmbiguousDate
 	default:
-		return ErrAmbiguousDate
+		return "call Parse to inspect candidates", ErrAmbiguousDate
 	}
 }
 

@@ -45,21 +45,20 @@ func (p *zhParser) canHandle(locale string) bool {
 }
 
 func (p *zhParser) parse(input string, ctx Context) (Result, bool) {
-	loc := locForZone(ctx.ZoneID)
-	base := midnightInLoc(ctx.RelativeTo, loc)
+	base := midnight(ctx.RelativeTo)
 
 	if m := reZhRelativeDate.FindStringSubmatch(input); m != nil {
-		return dateResult(zhRelativeDateOffset(base, m[1]), ctx.ZoneID), true
+		return dateResult(zhRelativeDateOffset(base, m[1])), true
 	}
 
 	if m := reZhWeekRelative.FindStringSubmatch(input); m != nil {
 		t := zhWeekDate(base, m[1], m[3])
-		return dateResult(t, ctx.ZoneID), true
+		return dateResult(t), true
 	}
 
 	if m := reZhMonthRelative.FindStringSubmatch(input); m != nil {
 		t := zhMonthDate(base, m[1])
-		return dateResult(t, ctx.ZoneID), true
+		return dateResult(t), true
 	}
 
 	if m := reZhDateTime.FindStringSubmatch(input); m != nil {
@@ -81,7 +80,7 @@ func (p *zhParser) parse(input string, ctx Context) (Result, bool) {
 		hour := zhHourToInt(hourStr)
 		hour = zhApplyTimeWord(hour, timeWord)
 		min := zhMinutes(halfOrMin, digitMin)
-		return datetimeAt(dateBase, hour, min, loc, ctx.ZoneID), true
+		return datetimeAt(dateBase, hour, min), true
 	}
 
 	if m := reZhRelativeDur.FindStringSubmatch(input); m != nil {

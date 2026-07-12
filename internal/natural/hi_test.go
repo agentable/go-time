@@ -8,7 +8,7 @@ import (
 var hiBase = time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)
 
 func TestHindiRelativeDates(t *testing.T) {
-	ctx := Context{Locale: "hi", ZoneID: "UTC", RelativeTo: hiBase}
+	ctx := Context{Locale: "hi", RelativeTo: hiBase}
 	tests := []struct {
 		input    string
 		wantDays int
@@ -28,14 +28,14 @@ func TestHindiRelativeDates(t *testing.T) {
 			continue
 		}
 		wantDate := time.Date(2026, 3, 2+tt.wantDays, 0, 0, 0, 0, time.UTC)
-		if !r.Time.Equal(wantDate) {
-			t.Errorf("Parse(%q) time=%v want %v", tt.input, r.Time, wantDate)
+		if !equalCivil(r, wantDate) {
+			t.Errorf("Parse(%q) time=%v want %v", tt.input, civilTime(r), wantDate)
 		}
 	}
 }
 
 func TestHindiFutureDuration(t *testing.T) {
-	ctx := Context{Locale: "hi", ZoneID: "UTC", RelativeTo: hiBase}
+	ctx := Context{Locale: "hi", RelativeTo: hiBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
@@ -61,7 +61,7 @@ func TestHindiFutureDuration(t *testing.T) {
 }
 
 func TestHindiFuturePeriod(t *testing.T) {
-	ctx := Context{Locale: "hi", ZoneID: "UTC", RelativeTo: hiBase}
+	ctx := Context{Locale: "hi", RelativeTo: hiBase}
 	tests := []struct {
 		input    string
 		wantDays int32
@@ -86,7 +86,7 @@ func TestHindiFuturePeriod(t *testing.T) {
 }
 
 func TestHindiPastDuration(t *testing.T) {
-	ctx := Context{Locale: "hi", ZoneID: "UTC", RelativeTo: hiBase}
+	ctx := Context{Locale: "hi", RelativeTo: hiBase}
 	tests := []struct {
 		input     string
 		wantNanos int64
@@ -111,7 +111,7 @@ func TestHindiPastDuration(t *testing.T) {
 }
 
 func TestHindiPastPeriod(t *testing.T) {
-	ctx := Context{Locale: "hi", ZoneID: "UTC", RelativeTo: hiBase}
+	ctx := Context{Locale: "hi", RelativeTo: hiBase}
 	r, ok := Parse("3 दिन पहले", ctx)
 	if !ok {
 		t.Fatal("Parse returned ok=false")
@@ -125,7 +125,7 @@ func TestHindiPastPeriod(t *testing.T) {
 }
 
 func TestHindiLocalePrefixMatching(t *testing.T) {
-	ctx := Context{Locale: "hi-IN", ZoneID: "UTC", RelativeTo: hiBase}
+	ctx := Context{Locale: "hi-IN", RelativeTo: hiBase}
 	_, ok := Parse("आज", ctx)
 	if !ok {
 		t.Error("Parse(आज, locale=hi-IN) not ok — locale prefix matching failed")
