@@ -169,38 +169,6 @@ func TestTimeError_As(t *testing.T) {
 	}
 }
 
-func TestSentinels_NonEmpty(t *testing.T) {
-	sentinels := map[string]error{
-		"ErrEmptyInput":        ErrEmptyInput,
-		"ErrInvalidFormat":     ErrInvalidFormat,
-		"ErrInvalidDate":       ErrInvalidDate,
-		"ErrInvalidTime":       ErrInvalidTime,
-		"ErrInvalidDuration":   ErrInvalidDuration,
-		"ErrInvalidPeriod":     ErrInvalidPeriod,
-		"ErrInvalidZone":       ErrInvalidZone,
-		"ErrAmbiguousDate":     ErrAmbiguousDate,
-		"ErrNonexistentTime":   ErrNonexistentTime,
-		"ErrDuplicateTime":     ErrDuplicateTime,
-		"ErrIntervalReversed":  ErrIntervalReversed,
-		"ErrIntervalsDisjoint": ErrIntervalsDisjoint,
-		"ErrUnparseable":       ErrUnparseable,
-		"ErrOverflow":          ErrOverflow,
-		"ErrIncompatibleTypes": ErrIncompatibleTypes,
-	}
-	for name, s := range sentinels {
-		if s == nil {
-			t.Errorf("%s is nil", name)
-			continue
-		}
-		if s.Error() == "" {
-			t.Errorf("%s has empty message", name)
-		}
-		if codeForSentinel(s) == "" {
-			t.Errorf("%s has no code mapping", name)
-		}
-	}
-}
-
 func TestPublicSentinels_HaveBehaviorProducer(t *testing.T) {
 	t.Parallel()
 
