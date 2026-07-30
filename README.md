@@ -447,6 +447,10 @@ if errors.Is(err, gotime.ErrAmbiguousDate) {
 ```
 
 `*TimeError` unwraps its `Err` sentinel for control flow; `Code` remains JSON/log metadata.
+`Error()` contains only the fixed code and sentinel category. Inspect
+`Message`, `Input`, and `Hint` through `errors.As`; those structured fields may
+contain caller-provided data and require the application's logging and
+redaction policy.
 See `SPECS/60-errors.md` for the full code list.
 
 ## JSON

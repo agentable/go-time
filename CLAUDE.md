@@ -272,6 +272,7 @@ if errors.As(err, &te) { log.Printf("code=%s hint=%s", te.Code, te.Hint) }
 ```
 
 `*TimeError` unwraps its `Err` sentinel, so `errors.Is` follows the standard unwrap chain; `Code` does not drive matching.
+`TimeError.Error()` exposes only the fixed code and sentinel text. `Message`, `Input`, and `Hint` remain structured fields and require caller-owned redaction before logging.
 
 ## Linting
 

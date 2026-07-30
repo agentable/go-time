@@ -16,14 +16,30 @@ func TestTimeError_Error(t *testing.T) {
 		Input:   "not a time",
 		Hint:    "use ISO 8601 format",
 	}
-	got := e.Error()
-	if got == "" {
-		t.Fatal("Error() must not return empty string")
+	if got, want := e.Error(), "UNPARSEABLE: unparseable"; got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
 	}
-	for _, want := range []string{string(CodeUnparseable), "cannot parse input", "not a time"} {
-		if !contains(got, want) {
-			t.Errorf("Error() = %q, want it to contain %q", got, want)
-		}
+}
+
+func TestTimeError_ErrorKeepsStructuredDetailsOutOfText(t *testing.T) {
+	t.Parallel()
+
+	const sensitiveInput = "secret-token\n\x1b[31m"
+	err := newTimeError(
+		ErrUnparseable,
+		"cannot parse "+sensitiveInput,
+		sensitiveInput,
+		"use an explicit format",
+	)
+
+	if got, want := err.Error(), "UNPARSEABLE: unparseable"; got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+	if !errors.Is(err, ErrUnparseable) {
+		t.Fatal("errors.Is(err, ErrUnparseable) = false, want true")
+	}
+	if err.Input != sensitiveInput || err.Message != "cannot parse "+sensitiveInput {
+		t.Fatalf("structured details = (%q, %q), want original values", err.Input, err.Message)
 	}
 }
 
@@ -46,12 +62,17 @@ func TestTimeError_ErrorEdges(t *testing.T) {
 		{
 			name: "code only",
 			err:  &TimeError{Code: CodeInvalidFormat},
-			want: string(CodeInvalidFormat),
+			want: "INVALID_FORMAT: invalid format",
 		},
 		{
 			name: "message without input",
 			err:  &TimeError{Code: CodeInvalidFormat, Message: "bad format"},
-			want: string(CodeInvalidFormat) + ": bad format",
+			want: "INVALID_FORMAT: invalid format",
+		},
+		{
+			name: "unknown code",
+			err:  &TimeError{Code: ErrorCode("secret-code"), Message: "secret-message"},
+			want: "time error",
 		},
 	}
 
@@ -325,17 +346,4 @@ func TestPublicSentinels_HaveBehaviorProducer(t *testing.T) {
 			t.Fatalf("%s hint is empty", tc.name)
 		}
 	}
-}
-
-// contains reports whether s contains substr.
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		func() bool {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
-			return false
-		}())
 }

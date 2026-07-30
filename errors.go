@@ -1,9 +1,6 @@
 package gotime
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
 // ErrorCode is the stable machine-readable JSON/wire category.
 type ErrorCode string
@@ -47,6 +44,8 @@ const (
 // TimeError is the structured error type for every failure in this package.
 // It composes with the standard library: errors.Is matches the Err sentinel,
 // while errors.As extracts Input, Hint, Message, and Code for inspection.
+// Message and Input may contain caller-provided data; Error omits them and
+// returns only the fixed code and sentinel category.
 type TimeError struct {
 	// Code is the stable machine-readable error code.
 	Code ErrorCode `json:"code"`
@@ -75,13 +74,11 @@ func (e *TimeError) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
-	if e.Input == "" {
-		if e.Message == "" {
-			return string(e.Code)
-		}
-		return fmt.Sprintf("%s: %s", e.Code, e.Message)
+	sentinel := sentinelForCode(e.Code)
+	if sentinel == nil {
+		return "time error"
 	}
-	return fmt.Sprintf("%s: %s (input: %q)", e.Code, e.Message, e.Input)
+	return string(e.Code) + ": " + sentinel.Error()
 }
 
 // Unwrap returns the sentinel identity for errors.Is.

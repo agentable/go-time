@@ -46,6 +46,9 @@ type TimeError struct {
 ```
 
 Every package-generated `*TimeError` should include an actionable `Hint`.
+`Message` and `Input` may contain caller-provided data. `Error()` MUST exclude
+both fields and return only the fixed `ErrorCode` and matching sentinel text;
+unknown codes return `time error` rather than echoing untrusted fields.
 
 ## Sentinels
 
@@ -89,11 +92,13 @@ if errors.Is(err, gotime.ErrAmbiguousDate) {
 
 var te *gotime.TimeError
 if errors.As(err, &te) {
-    log.Printf("code=%s input=%q hint=%s", te.Code, te.Input, te.Hint)
+    log.Printf("code=%s hint=%s", te.Code, te.Hint)
 }
 ```
 
 Do not use `te.Code` for Go control flow when a sentinel exists.
+Apply an application-owned redaction policy before logging `te.Message` or
+`te.Input`.
 
 ## ParseResult Relationship
 
@@ -115,6 +120,8 @@ Empty input in `Parse` returns `ErrEmptyInput` with `CodeEmptyInput`.
 ```
 
 `ParseResult` embeds errors under `error` when invalid.
+JSON preserves `Message`, `Input`, and `Hint` for structured consumers; it is
+not a sanitized log payload.
 
 ## Public Panics
 
