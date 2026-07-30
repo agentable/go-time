@@ -2,6 +2,7 @@ package gotime
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,6 +131,16 @@ func TestErrorCodes_Unique(t *testing.T) {
 			t.Errorf("duplicate error code: %q", c)
 		}
 		seen[c] = true
+	}
+}
+
+func TestSentinelTextOmitsPackagePrefix(t *testing.T) {
+	t.Parallel()
+
+	for sentinel := range codeBySentinel {
+		if strings.HasPrefix(sentinel.Error(), "gotime:") {
+			t.Errorf("sentinel text %q has redundant package prefix", sentinel)
+		}
 	}
 }
 

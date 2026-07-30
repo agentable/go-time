@@ -71,6 +71,10 @@ var (
 )
 ```
 
+Sentinel text is a short, lowercase phrase without a `gotime:` package prefix.
+This keeps it composable when callers add operation context. Sentinel identity
+and `ErrorCode`, not the text, own programmatic classification.
+
 Use names by type:
 
 - `Code*` is machine-readable string metadata.
