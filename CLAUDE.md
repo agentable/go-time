@@ -54,7 +54,7 @@ github.com/agentable/go-time/
 ├── duration_components.go # DurationComponents struct — Hours…Nanoseconds slots for external formatters
 ├── parse.go            # Layer 2: ISO 8601 / RFC 3339 parsing + ParseResult tagged-sum
 ├── parse_typed.go      # Layer 2: ParseInstant/ParseDateTime/ParseLocalDateTime/.../ParseInterval (8 typed parsers)
-├── parse_impl.go       # Layer 2/3: parse dispatch — P{date}→Period, PT{time}→Duration, mixed→Invalid
+├── parse_pipeline.go   # Layer 2/3: parse dispatch — P{date}→Period, PT{time}→Duration, mixed→Invalid
 ├── parse_slash.go      # Layer 2: closed slash-locale policy; otherwise 0 invalid, 1 resolved, 2 ambiguous
 ├── errors.go           # ErrorCode + *TimeError + sentinel Err* instances
 └── internal/
