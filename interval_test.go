@@ -24,6 +24,16 @@ func mustInterval(t *testing.T, start, end Instant) Interval {
 	return iv
 }
 
+func mustIntervalLength(t *testing.T, iv Interval) Duration {
+	t.Helper()
+
+	length, err := iv.Length()
+	if err != nil {
+		t.Fatalf("Length() error = %v", err)
+	}
+	return length
+}
+
 func TestNewInterval_Valid(t *testing.T) {
 	iv, err := NewInterval(ivStart, ivEnd)
 	if err != nil {
@@ -46,7 +56,7 @@ func TestNewInterval_SameStartEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("zero-length interval should succeed: %v", err)
 	}
-	if !iv.Length().IsZero() {
+	if !mustIntervalLength(t, iv).IsZero() {
 		t.Error("zero-length interval should have zero Length()")
 	}
 }
@@ -56,8 +66,8 @@ func TestNewIntervalStartingAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewIntervalStartingAt() error = %v", err)
 	}
-	if iv.Length().InHours() != 9.0 {
-		t.Errorf("Length() = %v hours, want 9.0", iv.Length().InHours())
+	if got := mustIntervalLength(t, iv).InHours(); got != 9.0 {
+		t.Errorf("Length() = %v hours, want 9.0", got)
 	}
 }
 
@@ -90,8 +100,24 @@ func TestNewIntervalEndingAt_NegativeLength(t *testing.T) {
 
 func TestInterval_Length(t *testing.T) {
 	iv := mustInterval(t, ivStart, ivEnd)
-	if iv.Length().InHours() != 9.0 {
-		t.Errorf("Length() = %v hours, want 9.0", iv.Length().InHours())
+	if got := mustIntervalLength(t, iv).InHours(); got != 9.0 {
+		t.Errorf("Length() = %v hours, want 9.0", got)
+	}
+}
+
+func TestInterval_LengthRejectsOverflowWithoutInvalidatingInterval(t *testing.T) {
+	t.Parallel()
+
+	start := InstantFromTime(time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC))
+	end := InstantFromTime(time.Date(9999, time.December, 31, 23, 59, 59, 0, time.UTC))
+	iv := mustInterval(t, start, end)
+
+	_, err := iv.Length()
+	if !errors.Is(err, ErrOverflow) {
+		t.Fatalf("Length() error = %v, want ErrOverflow", err)
+	}
+	if _, err := json.Marshal(iv); err != nil {
+		t.Fatalf("Marshal(long interval) error = %v", err)
 	}
 }
 

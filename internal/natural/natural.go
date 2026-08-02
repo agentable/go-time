@@ -10,6 +10,16 @@ import (
 // Kind classifies the semantic output of natural language parsing.
 type Kind uint8
 
+// ErrorKind classifies failures recognized by the natural parser.
+type ErrorKind uint8
+
+const (
+	// ErrorOverflow means a parsed numeric value exceeds its target representation.
+	ErrorOverflow ErrorKind = iota + 1
+	// ErrorInvalidDuration means a recognized duration uses an unsupported unit.
+	ErrorInvalidDuration
+)
+
 const (
 	// KindDate is a calendar date without a clock time.
 	KindDate Kind = iota + 1
@@ -19,8 +29,6 @@ const (
 	KindDuration
 	// KindPeriod is a calendar relative period.
 	KindPeriod
-	// KindAmbiguous represents multiple valid interpretations.
-	KindAmbiguous
 	// KindInvalid represents a parse failure.
 	KindInvalid
 )
@@ -53,10 +61,8 @@ type Result struct {
 	PeriodYears  int32
 	PeriodMonths int32
 	PeriodDays   int32
-	// Candidates holds the alternative interpretations when Kind is KindAmbiguous.
-	Candidates []Result
-	// ErrCode is the stable error code when Kind is KindInvalid.
-	ErrCode string
+	// ErrorKind classifies the failure when Kind is KindInvalid.
+	ErrorKind ErrorKind
 	// ErrMessage is the human-readable error summary when Kind is KindInvalid.
 	ErrMessage string
 	// ErrHint explains how to fix the invalid input when Kind is KindInvalid.
@@ -173,10 +179,10 @@ func periodResult(years, months, days int32) Result {
 	}
 }
 
-func invalidResult(code, message, hint string) Result {
+func invalidResult(kind ErrorKind, message, hint string) Result {
 	return Result{
 		Kind:       KindInvalid,
-		ErrCode:    code,
+		ErrorKind:  kind,
 		ErrMessage: message,
 		ErrHint:    hint,
 	}
@@ -227,7 +233,7 @@ func relativeUnitResult(unit string, n int64) Result {
 	case "week":
 		days, ok := checkedMulInt64(n, 7)
 		if !ok {
-			return invalidResult("OVERFLOW", "calendar week count overflows int32 days", "use a smaller week count")
+			return invalidResult(ErrorOverflow, "calendar week count overflows int32 days", "use a smaller week count")
 		}
 		return checkedPeriodDays(days)
 	case "month":
@@ -237,11 +243,11 @@ func relativeUnitResult(unit string, n int64) Result {
 	case "second", "minute", "hour":
 		nanos, ok := checkedMulInt64(canonicalNanos(unit), n)
 		if !ok {
-			return invalidResult("OVERFLOW", "duration overflows nanoseconds", "use a smaller duration")
+			return invalidResult(ErrorOverflow, "duration overflows nanoseconds", "use a smaller duration")
 		}
 		return durationResult(nanos)
 	default:
-		return invalidResult("INVALID_DURATION", "unknown relative unit", "use second, minute, hour, day, week, month, or year")
+		return invalidResult(ErrorInvalidDuration, "unknown relative unit", "use second, minute, hour, day, week, month, or year")
 	}
 }
 
@@ -262,21 +268,21 @@ func canonicalNanos(unit string) int64 {
 
 func checkedPeriodYears(n int64) Result {
 	if n < minInt32 || n > maxInt32 {
-		return invalidResult("OVERFLOW", "calendar year count overflows int32", "use a smaller year count")
+		return invalidResult(ErrorOverflow, "calendar year count overflows int32", "use a smaller year count")
 	}
 	return periodResult(int32(n), 0, 0)
 }
 
 func checkedPeriodMonths(n int64) Result {
 	if n < minInt32 || n > maxInt32 {
-		return invalidResult("OVERFLOW", "calendar month count overflows int32", "use a smaller month count")
+		return invalidResult(ErrorOverflow, "calendar month count overflows int32", "use a smaller month count")
 	}
 	return periodResult(0, int32(n), 0)
 }
 
 func checkedPeriodDays(n int64) Result {
 	if n < minInt32 || n > maxInt32 {
-		return invalidResult("OVERFLOW", "calendar day count overflows int32", "use a smaller day count")
+		return invalidResult(ErrorOverflow, "calendar day count overflows int32", "use a smaller day count")
 	}
 	return periodResult(0, 0, int32(n))
 }

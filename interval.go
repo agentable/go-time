@@ -1,15 +1,11 @@
 package gotime
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-json-experiment/json"
 )
-
-// errInvalidIntervalValue is returned when an interval value string lacks the expected "<start>/<end>" format.
-var errInvalidIntervalValue = errors.New("invalid interval value: expected <start>/<end>")
 
 // Interval is a half-open time range [start, end) bounded by two Instants.
 // Interval is zone-free — projection zone for display is the caller's concern;
@@ -66,7 +62,8 @@ func (iv Interval) Start() Instant { return iv.start }
 func (iv Interval) End() Instant { return iv.end }
 
 // Length returns the duration of the interval.
-func (iv Interval) Length() Duration { return iv.end.Sub(iv.start) }
+// It returns ErrOverflow when the exact length does not fit Duration.
+func (iv Interval) Length() (Duration, error) { return iv.end.Sub(iv.start) }
 
 // StdRange returns the underlying start and end as stdlib time.Time values in UTC.
 // Use this to bridge an Interval to any API expecting (time.Time, time.Time).
@@ -208,16 +205,31 @@ func (iv *Interval) UnmarshalJSON(b []byte) error {
 	if err := requireJSONKind("interval", wire.Kind, "interval"); err != nil {
 		return err
 	}
-	if wire.Start == "" || wire.End == "" {
-		return fmt.Errorf("%w: missing start or end", errInvalidIntervalValue)
+	if err := requireJSONString("interval", "start", wire.Start); err != nil {
+		return err
+	}
+	if err := requireJSONString("interval", "end", wire.End); err != nil {
+		return err
 	}
 	st, err := time.Parse(time.RFC3339Nano, wire.Start)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid interval start %q: %w", wire.Start, err)
+		return newTimeErrorWithCause(
+			ErrInvalidFormat,
+			err,
+			"interval start is not valid RFC3339",
+			wire.Start,
+			"use an RFC3339 instant such as 2026-03-27T04:00:00Z",
+		)
 	}
 	et, err := time.Parse(time.RFC3339Nano, wire.End)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid interval end %q: %w", wire.End, err)
+		return newTimeErrorWithCause(
+			ErrInvalidFormat,
+			err,
+			"interval end is not valid RFC3339",
+			wire.End,
+			"use an RFC3339 instant such as 2026-03-27T05:00:00Z",
+		)
 	}
 	result, err := NewInterval(InstantFromTime(st), InstantFromTime(et))
 	if err != nil {

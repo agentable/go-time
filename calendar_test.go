@@ -4,8 +4,6 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
 )
 
 func TestDate_Add_NegatedPeriod(t *testing.T) {
@@ -58,44 +56,27 @@ func TestDate_DaysUntil(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := tc.d.DaysUntil(tc.other); got != tc.want {
+			got, err := tc.d.DaysUntil(tc.other)
+			if err != nil {
+				t.Fatalf("DaysUntil() error = %v", err)
+			}
+			if got != tc.want {
 				t.Errorf("DaysUntil() = %d, want %d", got, tc.want)
 			}
+			reverse, err := tc.other.DaysUntil(tc.d)
+			if err != nil {
+				t.Fatalf("reverse DaysUntil() error = %v", err)
+			}
+			if reverse != -tc.want {
+				t.Errorf("reverse DaysUntil() = %d, want %d", reverse, -tc.want)
+			}
 		})
 	}
 }
 
-func TestDate_PeriodUntil(t *testing.T) {
+func TestDate_DaysUntilRejectsInvalidEndpoint(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name  string
-		d     Date
-		other Date
-		want  Period
-	}{
-		{name: "same date", d: mustDate(2026, time.March, 27), other: mustDate(2026, time.March, 27), want: Period{}},
-		{name: "end of month clamp target", d: mustDate(2026, time.January, 31), other: mustDate(2026, time.February, 28), want: Period{Months: 1}},
-		{name: "borrows days", d: mustDate(2026, time.January, 31), other: mustDate(2026, time.March, 1), want: Period{Months: 1, Days: 1}},
-		{name: "negative", d: mustDate(2026, time.March, 1), other: mustDate(2026, time.January, 31), want: Period{Months: -1, Days: -1}},
-		{name: "across years", d: mustDate(2024, time.December, 31), other: mustDate(2026, time.March, 2), want: Period{Years: 1, Months: 2, Days: 2}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := tc.d.PeriodUntil(tc.other)
-			if err != nil {
-				t.Fatalf("PeriodUntil() error = %v", err)
-			}
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("PeriodUntil() mismatch (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestDate_PeriodUntilRejectsInvalidEndpoint(t *testing.T) {
 	valid := mustDate(2026, time.March, 27)
 	for _, tc := range []struct {
 		name  string
@@ -106,9 +87,15 @@ func TestDate_PeriodUntilRejectsInvalidEndpoint(t *testing.T) {
 		{name: "invalid end", start: valid, end: Date{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.start.PeriodUntil(tc.end)
+			t.Parallel()
+
+			_, err := tc.start.DaysUntil(tc.end)
 			if !errors.Is(err, ErrInvalidDate) {
-				t.Fatalf("PeriodUntil() error = %v, want ErrInvalidDate", err)
+				t.Fatalf("DaysUntil() error = %v, want ErrInvalidDate", err)
+			}
+			var detail *TimeError
+			if !errors.As(err, &detail) || detail.Hint == "" {
+				t.Fatalf("DaysUntil() error = %#v, want TimeError with hint", err)
 			}
 		})
 	}

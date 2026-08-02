@@ -269,6 +269,27 @@ func TestParse_Period_Minimum(t *testing.T) {
 	}
 }
 
+func TestParse_Period_RejectsLeadingAndComponentSigns(t *testing.T) {
+	t.Parallel()
+
+	for _, input := range []string{"-P-1Y", "-P+1Y", "-P-1W+2D"} {
+		t.Run(input, func(t *testing.T) {
+			t.Parallel()
+
+			r := Parse(input)
+			if r.Status != StatusInvalid || r.Error == nil {
+				t.Fatalf("Parse(%q) = %#v, want invalid result", input, r)
+			}
+			if !errors.Is(r.Error, ErrInvalidPeriod) {
+				t.Fatalf("Parse(%q) error = %v, want ErrInvalidPeriod", input, r.Error)
+			}
+			if _, err := ParsePeriod(input); !errors.Is(err, ErrInvalidPeriod) {
+				t.Fatalf("ParsePeriod(%q) error = %v, want ErrInvalidPeriod", input, err)
+			}
+		})
+	}
+}
+
 // ── Interval ──────────────────────────────────────────────────────────────
 
 func TestParse_Interval_DateToDate(t *testing.T) {
@@ -300,8 +321,12 @@ func TestParse_Interval_StartDuration(t *testing.T) {
 		t.Fatalf("kind = %v, want KindInterval", r.Kind)
 	}
 	iv, _ := r.Interval()
-	if iv.Length().InHours() != 12 {
-		t.Errorf("length = %v hours, want 12", iv.Length().InHours())
+	length, err := iv.Length()
+	if err != nil {
+		t.Fatalf("Length() error = %v", err)
+	}
+	if length.InHours() != 12 {
+		t.Errorf("length = %v hours, want 12", length.InHours())
 	}
 }
 
@@ -311,8 +336,12 @@ func TestParse_Interval_DurationEnd(t *testing.T) {
 		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
 	}
 	iv, _ := r.Interval()
-	if iv.Length().InHours() != 12 {
-		t.Errorf("length = %v hours, want 12", iv.Length().InHours())
+	length, err := iv.Length()
+	if err != nil {
+		t.Fatalf("Length() error = %v", err)
+	}
+	if length.InHours() != 12 {
+		t.Errorf("length = %v hours, want 12", length.InHours())
 	}
 }
 

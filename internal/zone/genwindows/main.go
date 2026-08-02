@@ -3,7 +3,7 @@
 //
 // Regenerate with an explicitly downloaded release source, for example:
 //
-//	go run ./internal/zone/genwindows -xml /path/to/windowsZones.xml -cldr release-48-1 -out internal/zone/windows.go
+//	go run ./internal/zone/genwindows -xml /path/to/windowsZones.xml -source-lock internal/zone/sources.json
 package main
 
 import (
@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/agentable/go-time/internal/zone/genlock"
 )
 
 type mapping struct {
@@ -27,31 +29,35 @@ type mapping struct {
 
 func main() {
 	var xmlPath string
-	var cldrRelease string
+	var sourceLockPath string
 	var outPath string
 	flag.StringVar(&xmlPath, "xml", "", "path to a pinned CLDR windowsZones.xml")
-	flag.StringVar(&cldrRelease, "cldr", "", "exact CLDR release tag")
+	flag.StringVar(&sourceLockPath, "source-lock", "internal/zone/sources.json", "path to timezone generator source lock")
 	flag.StringVar(&outPath, "out", "internal/zone/windows.go", "output Go file")
 	flag.Parse()
 
-	if err := run(xmlPath, cldrRelease, outPath); err != nil {
+	if err := run(xmlPath, sourceLockPath, outPath); err != nil {
 		fmt.Fprintf(os.Stderr, "genwindows: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(xmlPath, cldrRelease, outPath string) error {
+func run(xmlPath, sourceLockPath, outPath string) error {
 	if xmlPath == "" {
 		return errors.New("-xml is required")
 	}
-	if cldrRelease == "" {
-		return errors.New("-cldr is required")
+	lock, err := genlock.Load(sourceLockPath)
+	if err != nil {
+		return err
+	}
+	if err := lock.CLDRWindows.Verify(xmlPath); err != nil {
+		return fmt.Errorf("verify CLDR source: %w", err)
 	}
 	mappings, err := readMappings(xmlPath)
 	if err != nil {
 		return err
 	}
-	src, err := render(cldrRelease, filepath.Base(xmlPath), mappings)
+	src, err := render(lock.CLDRWindows.Version, lock.CLDRWindows.Filename(), mappings)
 	if err != nil {
 		return err
 	}

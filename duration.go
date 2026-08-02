@@ -232,7 +232,13 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 	parsed, err := parseISO8601Duration(wire.ISO)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid duration iso %q: %w", wire.ISO, err)
+		return newTimeErrorWithCause(
+			ErrInvalidDuration,
+			err,
+			"duration iso is not a valid exact duration",
+			wire.ISO,
+			"use an ISO 8601 clock duration such as PT1H30M",
+		)
 	}
 	*d = parsed
 	return nil

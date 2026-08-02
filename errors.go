@@ -55,17 +55,25 @@ type TimeError struct {
 	Input string `json:"input,omitzero"`
 	// Hint explains how to correct the input.
 	Hint string `json:"hint,omitzero"`
-	// Err is the sentinel identity for errors.Is.
+	// Err is the unwrap chain containing the sentinel and any underlying cause.
 	Err error `json:"-"`
 }
 
 func newTimeError(sentinel error, message, input, hint string) *TimeError {
+	return newTimeErrorWithCause(sentinel, nil, message, input, hint)
+}
+
+func newTimeErrorWithCause(sentinel, cause error, message, input, hint string) *TimeError {
+	err := sentinel
+	if cause != nil {
+		err = errors.Join(sentinel, cause)
+	}
 	return &TimeError{
 		Code:    codeForSentinel(sentinel),
 		Message: message,
 		Input:   input,
 		Hint:    hint,
-		Err:     sentinel,
+		Err:     err,
 	}
 }
 
@@ -81,7 +89,7 @@ func (e *TimeError) Error() string {
 	return string(e.Code) + ": " + sentinel.Error()
 }
 
-// Unwrap returns the sentinel identity for errors.Is.
+// Unwrap returns the chain containing the sentinel and any underlying cause.
 func (e *TimeError) Unwrap() error {
 	if e == nil {
 		return nil

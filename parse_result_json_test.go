@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -52,7 +53,7 @@ func TestParseResultMarshalInvalid(t *testing.T) {
 }
 
 func TestParseResultMarshalAmbiguous(t *testing.T) {
-	candidate := ParseResult{
+	monthFirst := ParseResult{
 		Status: StatusResolved,
 		Kind:   KindDate,
 		Input:  "04/05/2026",
@@ -60,7 +61,16 @@ func TestParseResultMarshalAmbiguous(t *testing.T) {
 			{Code: WarnInferredCalendar, Message: "month-first interpretation"},
 		},
 	}
-	candidate.date = mustDate(2026, time.April, 5)
+	monthFirst.date = mustDate(2026, time.April, 5)
+	dayFirst := ParseResult{
+		Status: StatusResolved,
+		Kind:   KindDate,
+		Input:  "04/05/2026",
+		Warnings: []Warning{
+			{Code: WarnInferredCalendar, Message: "day-first interpretation"},
+		},
+	}
+	dayFirst.date = mustDate(2026, time.May, 4)
 
 	r := ParseResult{
 		Status: StatusAmbiguous,
@@ -69,16 +79,63 @@ func TestParseResultMarshalAmbiguous(t *testing.T) {
 		Warnings: []Warning{
 			{Code: WarnInferredCalendar, Message: "date order ambiguous"},
 		},
-		Candidates: []ParseResult{candidate},
+		Candidates: []ParseResult{monthFirst, dayFirst},
 	}
 	b, err := json.Marshal(r)
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"ambiguous","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"date order ambiguous"}],"value_kind":"date","candidates":[{"kind":"parse_result","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"month-first interpretation"}],"value_kind":"date","value":{"kind":"date","value":"2026-04-05"}}]}`
+	want := `{"kind":"parse_result","status":"ambiguous","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"date order ambiguous"}],"value_kind":"date","candidates":[{"kind":"parse_result","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"month-first interpretation"}],"value_kind":"date","value":{"kind":"date","value":"2026-04-05"}},{"kind":"parse_result","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"day-first interpretation"}],"value_kind":"date","value":{"kind":"date","value":"2026-05-04"}}]}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
+	}
+}
+
+func TestParseResultMarshalRejectsContradictoryWireState(t *testing.T) {
+	t.Parallel()
+
+	candidate := ParseResult{Status: StatusResolved, Kind: KindDate, Input: "04/05/2026"}
+	candidate.date = mustDate(2026, time.April, 5)
+	otherKind := candidate
+	otherKind.Kind = KindTime
+	nested := ParseResult{
+		Status:     StatusAmbiguous,
+		Kind:       KindDate,
+		Candidates: []ParseResult{candidate, candidate},
+	}
+
+	tests := []struct {
+		name   string
+		result ParseResult
+	}{
+		{name: "unknown status", result: ParseResult{Status: Status("other")}},
+		{name: "resolved unknown kind", result: ParseResult{Status: StatusResolved, Kind: Kind("other")}},
+		{name: "invalid without error", result: ParseResult{Status: StatusInvalid}},
+		{name: "ambiguous unknown kind", result: ParseResult{Status: StatusAmbiguous, Kind: Kind("other"), Candidates: []ParseResult{candidate, candidate}}},
+		{name: "ambiguous without candidates", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate}},
+		{name: "ambiguous with one candidate", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate, Candidates: []ParseResult{candidate}}},
+		{name: "ambiguous with invalid candidate", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate, Candidates: []ParseResult{candidate, {Status: StatusInvalid}}}},
+		{name: "ambiguous with nested candidate", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate, Candidates: []ParseResult{candidate, nested}}},
+		{name: "ambiguous with different candidate kind", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate, Candidates: []ParseResult{candidate, otherKind}}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := json.Marshal(tc.result)
+			if !errors.Is(err, ErrInvalidFormat) {
+				t.Fatalf("json.Marshal() error = %v, want ErrInvalidFormat", err)
+			}
+			var detail *TimeError
+			if !errors.As(err, &detail) {
+				t.Fatalf("json.Marshal() error type = %T, want *TimeError", err)
+			}
+			if detail.Hint == "" {
+				t.Fatal("TimeError.Hint is empty")
+			}
+		})
 	}
 }
 
@@ -137,6 +194,26 @@ func TestParseResultMarshalResolvedDuration(t *testing.T) {
 	}
 	got := string(b)
 	want := `{"kind":"parse_result","status":"resolved","input":"PT2H","value_kind":"duration","value":{"kind":"duration","iso":"PT2H"}}`
+	if got != want {
+		t.Errorf("Marshal() = %s, want %s", got, want)
+	}
+}
+
+func TestParseResultMarshalResolvedPeriod(t *testing.T) {
+	p := Period{Years: 1, Months: -2, Days: 3}
+	r := ParseResult{
+		Status: StatusResolved,
+		Kind:   KindPeriod,
+		Input:  "P+1Y-2M+3D",
+		period: p,
+	}
+
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	got := string(b)
+	want := `{"kind":"parse_result","status":"resolved","input":"P+1Y-2M+3D","value_kind":"period","value":{"kind":"period","iso":"P+1Y-2M+3D"}}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}

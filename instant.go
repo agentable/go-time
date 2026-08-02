@@ -2,6 +2,7 @@ package gotime
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/go-json-experiment/json"
@@ -12,6 +13,13 @@ import (
 type Instant struct {
 	t time.Time // always UTC
 }
+
+var (
+	unixNanoMinTime    = time.Unix(0, math.MinInt64).UTC()
+	unixNanoMaxTime    = time.Unix(0, math.MaxInt64).UTC()
+	unixMilliMinTime   = time.UnixMilli(math.MinInt64).UTC()
+	unixMilliLimitTime = time.UnixMilli(math.MaxInt64).Add(time.Millisecond).UTC()
+)
 
 // InstantFromTime creates an Instant from a time.Time, forcing UTC.
 func InstantFromTime(t time.Time) Instant {
@@ -31,10 +39,32 @@ func UnixNanos(ns int64) Instant { return Instant{t: time.Unix(0, ns).UTC()} }
 func (i Instant) Std() time.Time { return i.t }
 
 // UnixNano returns the instant as Unix time in nanoseconds.
-func (i Instant) UnixNano() int64 { return i.t.UnixNano() }
+// It returns ErrOverflow when the value cannot be represented by int64.
+func (i Instant) UnixNano() (int64, error) {
+	if !i.t.Before(unixNanoMinTime) && !i.t.After(unixNanoMaxTime) {
+		return i.t.UnixNano(), nil
+	}
+	return 0, newTimeError(
+		ErrOverflow,
+		"instant is outside the Unix nanosecond range",
+		i.String(),
+		"use UnixMilli when millisecond precision is sufficient or keep the Instant value",
+	)
+}
 
 // UnixMilli returns the instant as Unix time in milliseconds.
-func (i Instant) UnixMilli() int64 { return i.t.UnixMilli() }
+// It returns ErrOverflow when the value cannot be represented by int64.
+func (i Instant) UnixMilli() (int64, error) {
+	if !i.t.Before(unixMilliMinTime) && i.t.Before(unixMilliLimitTime) {
+		return i.t.UnixMilli(), nil
+	}
+	return 0, newTimeError(
+		ErrOverflow,
+		"instant is outside the Unix millisecond range",
+		i.String(),
+		"keep the Instant value or use a wider scalar representation in the caller's domain",
+	)
+}
 
 // IsZero reports whether i is the zero value.
 func (i Instant) IsZero() bool { return i.t.IsZero() }
@@ -51,8 +81,18 @@ func (i Instant) Add(d Duration) Instant {
 }
 
 // Sub returns the Duration from other to i.
-func (i Instant) Sub(other Instant) Duration {
-	return Duration(i.t.Sub(other.t))
+// It returns ErrOverflow when the exact difference does not fit Duration.
+func (i Instant) Sub(other Instant) (Duration, error) {
+	d := i.t.Sub(other.t)
+	if other.t.Add(d).Equal(i.t) {
+		return Duration(d), nil
+	}
+	return 0, newTimeError(
+		ErrOverflow,
+		"instant difference exceeds the Duration range",
+		fmt.Sprintf("start=%s end=%s", other, i),
+		"use closer instants or keep the wider difference in the caller's domain",
+	)
 }
 
 // Before reports whether i is before other.
@@ -128,7 +168,13 @@ func (i *Instant) UnmarshalJSON(b []byte) error {
 	}
 	t, err := time.Parse(time.RFC3339Nano, wire.ISO)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid instant iso %q: %w", wire.ISO, err)
+		return newTimeErrorWithCause(
+			ErrInvalidFormat,
+			err,
+			"instant iso is not valid RFC3339",
+			wire.ISO,
+			"use an RFC3339 instant such as 2026-03-27T04:00:00Z",
+		)
 	}
 	*i = InstantFromTime(t)
 	return nil

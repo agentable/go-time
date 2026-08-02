@@ -96,10 +96,11 @@ func (dt DateTime) AddPeriod(p Period) (LocalResolution, error) {
 	return NewLocalDateTime(targetDate, dt.Clock()).Resolve(dt.zone), nil
 }
 
-// Sub returns the Duration from other to dt, mirroring time.Time.Sub.
+// Sub returns the Duration from other to dt.
 // Use Add for arithmetic — there is no Sub(Duration) form.
-func (dt DateTime) Sub(other DateTime) Duration {
-	return Duration(dt.t.Sub(other.t))
+// It returns ErrOverflow when the exact difference does not fit Duration.
+func (dt DateTime) Sub(other DateTime) (Duration, error) {
+	return dt.Instant().Sub(other.Instant())
 }
 
 // Before reports whether dt is before other.
@@ -173,10 +174,14 @@ func (dt *DateTime) UnmarshalJSON(b []byte) error {
 	if err := requireJSONString("datetime", "instant", wire.Instant); err != nil {
 		return err
 	}
+	if err := requireJSONString("datetime", "zone", wire.Zone); err != nil {
+		return err
+	}
 	t, err := time.Parse(time.RFC3339Nano, wire.Instant)
 	if err != nil {
-		return newTimeError(
+		return newTimeErrorWithCause(
 			ErrInvalidFormat,
+			err,
 			"datetime instant is not valid RFC3339",
 			wire.Instant,
 			"use a canonical UTC instant such as 2026-03-27T04:00:00Z",
@@ -189,14 +194,6 @@ func (dt *DateTime) UnmarshalJSON(b []byte) error {
 			"datetime instant is not canonical UTC",
 			wire.Instant,
 			fmt.Sprintf("use %q for this instant", canonical),
-		)
-	}
-	if wire.Zone == "" {
-		return newTimeError(
-			ErrInvalidZone,
-			"datetime zone is required",
-			wire.Instant,
-			"include an IANA zone id in the zone field, e.g. Asia/Tokyo",
 		)
 	}
 	z, err := LoadZone(wire.Zone)

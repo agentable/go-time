@@ -126,7 +126,13 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 	}
 	parsed, err := time.Parse("15:04:05", wire.Value)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid time value %q: %w", wire.Value, err)
+		return newTimeErrorWithCause(
+			ErrInvalidTime,
+			err,
+			"time value is not a valid clock time",
+			wire.Value,
+			"use a clock time such as 13:30:45 or 13:30:45.123",
+		)
 	}
 	parsedTime := TimeFromTime(parsed)
 	if canonical := parsedTime.String(); wire.Value != canonical {

@@ -123,8 +123,8 @@ func TestDateTimeUnmarshalJSON_NoZone(t *testing.T) {
 	var dt DateTime
 	input := `{"kind":"datetime","instant":"2026-03-27T04:00:00Z"}`
 	err := json.Unmarshal([]byte(input), &dt)
-	if !errors.Is(err, ErrInvalidZone) {
-		t.Fatalf("Unmarshal error = %v, want ErrInvalidZone", err)
+	if !errors.Is(err, ErrInvalidFormat) {
+		t.Fatalf("Unmarshal error = %v, want ErrInvalidFormat", err)
 	}
 }
 

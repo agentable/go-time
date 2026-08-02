@@ -154,26 +154,9 @@ func (p Period) ISO8601() string {
 	return b.String()
 }
 
-// String returns a compact human form, e.g. "1y3mo7d", "-2mo".
+// String returns the canonical ISO 8601 representation.
 func (p Period) String() string {
-	if p.IsZero() {
-		return "0d"
-	}
-	var b strings.Builder
-	allNeg := !p.IsZero() && p.Years <= 0 && p.Months <= 0 && p.Days <= 0
-	if allNeg {
-		b.WriteByte('-')
-	}
-	if p.Years != 0 {
-		fmt.Fprintf(&b, "%dy", int64Magnitude(p.Years))
-	}
-	if p.Months != 0 {
-		fmt.Fprintf(&b, "%dmo", int64Magnitude(p.Months))
-	}
-	if p.Days != 0 {
-		fmt.Fprintf(&b, "%dd", int64Magnitude(p.Days))
-	}
-	return b.String()
+	return p.ISO8601()
 }
 
 // MarshalJSON encodes p as {"kind":"period","iso":"<ISO8601>"}.
@@ -206,7 +189,13 @@ func (p *Period) UnmarshalJSON(b []byte) error {
 	}
 	parsed, err := parseISO8601Period(wire.ISO)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid period iso %q: %w", wire.ISO, err)
+		return newTimeErrorWithCause(
+			ErrInvalidPeriod,
+			err,
+			"period iso is not a valid calendar period",
+			wire.ISO,
+			"use an ISO 8601 date period such as P1Y2M3D",
+		)
 	}
 	*p = parsed
 	return nil
@@ -228,6 +217,9 @@ func parseISO8601Period(s string) (Period, error) {
 		return Period{}, fmt.Errorf("period %q: %w", s, errInvalidISO8601Period)
 	}
 	neg := m[1] == "-"
+	if neg && hasSignedPeriodComponent(m[2:6]) {
+		return Period{}, fmt.Errorf("period %q combines a leading sign with component signs: %w", s, errInvalidISO8601Period)
+	}
 	y, ok := parsePeriodWireComponent(m[2], neg)
 	if !ok {
 		return Period{}, fmt.Errorf("period years component %q: %w", m[2], errInvalidISO8601Period)
@@ -252,6 +244,15 @@ func parseISO8601Period(s string) (Period, error) {
 		return Period{}, fmt.Errorf("period days component overflows int32: %w", errInvalidISO8601Period)
 	}
 	return Period{Years: y, Months: mo, Days: int32(totalDays)}, nil
+}
+
+func hasSignedPeriodComponent(components []string) bool {
+	for _, component := range components {
+		if strings.HasPrefix(component, "+") || strings.HasPrefix(component, "-") {
+			return true
+		}
+	}
+	return false
 }
 
 func parsePeriodWireComponent(s string, negative bool) (int32, bool) {

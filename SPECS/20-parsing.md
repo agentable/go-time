@@ -28,6 +28,11 @@ There are two entry paths:
 | ISO interval | `2026-03-27T00:00:00Z/2026-03-28T00:00:00Z`, `2026-03-27T09:00:00Z/PT9H` | `KindInterval` |
 
 `P{date-only}` routes to `Period`. `PT{time-only}` routes to `Duration`. Mixed date/time duration forms such as `P1DT2H` are invalid because no single go-time type can carry both calendar and sub-day exact semantics.
+Date-only Period components may carry individual signs so every valid Period
+has a lossless public text round trip, for example `P+1Y-2M+3D`.
+A leading period sign applies to unsigned component magnitudes only. Inputs
+such as `-P-1Y`, `-P+1Y`, and `-P-1W+2D` are invalid because two sign layers
+would make the represented value unclear.
 
 ## Natural Language
 
@@ -107,6 +112,11 @@ type ParseResult struct {
 ```
 
 `Candidates` is recursive: each candidate is a resolved `ParseResult`. Access parsed values through comma-ok accessors.
+
+`ParseResult.MarshalJSON` rejects states that cannot form the tagged-sum wire
+contract: unknown statuses or resolved/ambiguous kinds, invalid results without
+an error, and ambiguous results with fewer than two resolved same-kind
+candidates. Fields omitted by the selected status do not affect the wire shape.
 
 ```go
 switch result.Status {
@@ -228,5 +238,7 @@ Natural-language interval boundaries are invalid even when `WithInputLocale` and
 - Natural and formal datetime inputs produce the same gap/fold status,
   chronological candidates, and typed sentinel for equivalent civil intent.
 - Slash-date and DST ambiguity surface through `StatusAmbiguous` and candidates, not a strategy option.
+- ParseResult JSON rejects contradictory tagged-sum states before emitting a
+  payload.
 - Invalid slash dates never surface as ambiguity with invalid candidates.
 - Interval tests prove date-only and natural-language boundaries are rejected unless a future spec deliberately changes the interval grammar.

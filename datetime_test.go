@@ -177,7 +177,11 @@ func TestDateTime_InRejectsProjectedYearOutsideCivilDomain(t *testing.T) {
 func TestDateTime_Add_Sub(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
 	dt2 := mustDateTimeAdd(t, dt, 2*Hour)
-	if got := dt2.Sub(dt); got.InHours() != 2.0 {
+	got, err := dt2.Sub(dt)
+	if err != nil {
+		t.Fatalf("Add(2*Hour).Sub() error = %v", err)
+	}
+	if got.InHours() != 2.0 {
 		t.Errorf("Add(2*Hour).Sub() = %v hours, want 2.0", got.InHours())
 	}
 }
@@ -227,8 +231,23 @@ func TestDateTime_AddZeroPreservesCivilBoundary(t *testing.T) {
 func TestDateTime_Sub_Negative(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
 	dt2 := mustDateTimeAdd(t, dt, -30*Minute)
-	if got := dt2.Sub(dt); got.InMinutes() != -30.0 {
+	got, err := dt2.Sub(dt)
+	if err != nil {
+		t.Fatalf("Add(-30*Minute).Sub() error = %v", err)
+	}
+	if got.InMinutes() != -30.0 {
 		t.Errorf("Add(-30*Minute).Sub() = %v minutes, want -30.0", got.InMinutes())
+	}
+}
+
+func TestDateTime_SubRejectsOverflow(t *testing.T) {
+	t.Parallel()
+
+	start := makeDateTime(0, time.January, 1, 0, 0, 0, UTC)
+	end := makeDateTime(9999, time.December, 31, 23, 59, 59, UTC)
+	_, err := end.Sub(start)
+	if !errors.Is(err, ErrOverflow) {
+		t.Fatalf("Sub() error = %v, want ErrOverflow", err)
 	}
 }
 

@@ -50,6 +50,9 @@ func UnixSeconds(s int64) Instant
 func UnixMillis(ms int64) Instant
 func UnixNanos(ns int64) Instant
 
+func (i Instant) UnixNano() (int64, error)
+func (i Instant) UnixMilli() (int64, error)
+
 func NewInterval(start, end Instant) (Interval, error)
 func NewIntervalStartingAt(start Instant, length Duration) (Interval, error)
 func NewIntervalEndingAt(end Instant, length Duration) (Interval, error)
@@ -60,10 +63,15 @@ func Months(n int32) Period
 func Days(n int32) Period
 ```
 
-Constructors and projections that can cross the civil domain return errors.
-They never normalize invalid dates, invalid clock times, DST gaps, duplicate
-local times, or years outside `0000..9999`. Use `DateTimeFromTime` when the
-caller already has a stdlib `time.Time` with the intended offset.
+Civil constructors and projections that can cross the supported domain return
+errors. They never normalize invalid dates, invalid clock times, DST gaps,
+duplicate local times, or years outside `0000..9999`. Use `DateTimeFromTime`
+when the caller already has a stdlib `time.Time` with the intended offset.
+
+Epoch construction accepts the full `int64` input range. Epoch projection is
+checked separately: `UnixNano` and `UnixMilli` match `ErrOverflow` when the
+selected scalar cannot represent the instant. `UnixMilli` preserves stdlib
+millisecond truncation for representable values.
 
 ```go
 func (i Instant) In(z Zone) (DateTime, error)
@@ -189,17 +197,16 @@ const (
 
 ```go
 func (i Instant) Add(d Duration) Instant
-func (i Instant) Sub(other Instant) Duration
+func (i Instant) Sub(other Instant) (Duration, error)
 func (i Instant) Compare(other Instant) int
 
 func (dt DateTime) Add(d Duration) (DateTime, error)
 func (dt DateTime) AddPeriod(p Period) (LocalResolution, error)
-func (dt DateTime) Sub(other DateTime) Duration
+func (dt DateTime) Sub(other DateTime) (Duration, error)
 func (dt DateTime) Compare(other DateTime) int
 
 func (d Date) Add(p Period) (Date, error)
-func (d Date) DaysUntil(other Date) int
-func (d Date) PeriodUntil(other Date) (Period, error)
+func (d Date) DaysUntil(other Date) (int, error)
 func (d Date) Compare(other Date) int
 
 func (p Period) Add(other Period) (Period, error)
@@ -215,7 +222,7 @@ Use `Compare` with stdlib helpers for selection. There are no `Min`, `Max`, or `
 ```go
 func (iv Interval) Start() Instant
 func (iv Interval) End() Instant
-func (iv Interval) Length() Duration
+func (iv Interval) Length() (Duration, error)
 func (iv Interval) StdRange() (start, end time.Time)
 func (iv Interval) Contains(i Instant) bool
 func (iv Interval) Overlaps(other Interval) bool
@@ -268,7 +275,7 @@ Stable value JSON:
 
 - `Instant`: `{"kind":"instant","iso":"..."}`
 - `DateTime`: `{"kind":"datetime","instant":"...Z","zone":"..."}`
-- `LocalDateTime`: `{"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS"}`
+- `LocalDateTime`: `{"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS[.fraction]"}`
 - `Date`: `{"kind":"date","value":"YYYY-MM-DD"}`
 - `Time`: `{"kind":"time","value":"HH:MM:SS[.fraction]"}`
 - `Duration`: `{"kind":"duration","iso":"..."}`
@@ -276,8 +283,11 @@ Stable value JSON:
 - `Interval`: `{"kind":"interval","start":"...","end":"..."}`
 - `Zone`: `{"kind":"zone","id":"..."}`
 
-Decoding is strict for value-object JSON: unknown fields, missing required
-fields, wrong `kind`, non-canonical values, and invalid identities are errors.
+Decoding is structurally strict for value-object JSON: unknown fields, missing
+required fields, and wrong `kind` are errors. Value syntax is type-specific;
+values outside the owning grammar and invalid identities are errors. Accepted
+RFC 3339 offsets in `Instant` and `Interval` endpoints normalize to UTC `Z` on
+marshal.
 
 `Duration` ISO strings use canonical decimal seconds for sub-second precision; scientific notation is outside the wire domain. A zero `Zone` encodes with `id:"UTC"` to match its total UTC projection behavior.
 
@@ -304,5 +314,7 @@ fields, wrong `kind`, non-canonical values, and invalid identities are errors.
 
 - `go doc` exposes only top-level `gotime` APIs; no public subpackage becomes part of the contract.
 - API inventory contains no formatter, recurrence, strategy, `RFC5545`, or `IsDST` surface.
-- `Zone` exposes point-in-time offset and abbreviation, but no DST boolean.
+- Point-in-time offset and abbreviation are available through stdlib
+  `time.Time.Zone` after projection with `Zone.Location`; `Zone` adds no
+  parallel snapshot or DST boolean API.
 - JSON shapes match the list above and decode strictly.

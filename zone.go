@@ -31,8 +31,9 @@ func LoadZone(id string) (Zone, error) {
 	}
 	loc, err := time.LoadLocation(id)
 	if err != nil {
-		return Zone{}, newTimeError(
+		return Zone{}, newTimeErrorWithCause(
 			ErrInvalidZone,
+			err,
 			fmt.Sprintf("unknown time zone: %s", id),
 			id,
 			"use IANA zone ids like Asia/Tokyo; call gotime.Zones() for all valid ids",
@@ -123,6 +124,9 @@ func (z *Zone) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	if err := requireJSONKind("zone", wire.Kind, "zone"); err != nil {
+		return err
+	}
+	if err := requireJSONString("zone", "id", wire.ID); err != nil {
 		return err
 	}
 	loaded, err := LoadZone(wire.ID)

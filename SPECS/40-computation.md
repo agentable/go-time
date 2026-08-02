@@ -75,10 +75,9 @@ shift across DST boundaries.
 ## Difference
 
 ```go
-func (i Instant) Sub(other Instant) Duration
-func (dt DateTime) Sub(other DateTime) Duration
-func (d Date) DaysUntil(other Date) int
-func (d Date) PeriodUntil(other Date) (Period, error)
+func (i Instant) Sub(other Instant) (Duration, error)
+func (dt DateTime) Sub(other DateTime) (Duration, error)
+func (d Date) DaysUntil(other Date) (int, error)
 func (p Period) Add(other Period) (Period, error)
 func (p Period) Sub(other Period) (Period, error)
 func (p Period) Negate() (Period, error)
@@ -89,10 +88,16 @@ Period component arithmetic returns `ErrOverflow` rather than wrapping an
 `int32` component. ISO rendering remains total and supports the full signed
 component domain.
 
-Date differences are named by policy: `DaysUntil` returns a signed calendar-day
-count, while `PeriodUntil` returns a signed greedy years/months/days period and
-rejects an invalid endpoint with `ErrInvalidDate`. Between January 31 and
-February 28, `DaysUntil` is 28 and `PeriodUntil` is `Period{Months: 1}`.
+Exact timeline differences also return `ErrOverflow` when the true nanosecond
+span does not fit `Duration`; they never expose `time.Time.Sub` saturation as
+an exact result. `Interval.Length` follows the same rule while preserving long
+interval endpoints.
+
+`DaysUntil` returns the signed number of calendar-day boundaries between two
+valid dates. It matches `ErrInvalidDate` with an actionable hint when either
+endpoint is invalid. Calendar decomposition into years, months, and days is
+product policy; go-time does not choose a balancing or end-of-month convention
+for callers.
 
 ## Comparison
 
@@ -136,7 +141,7 @@ Current interval operations:
 |---|---|
 | `Start()` | Inclusive start instant. |
 | `End()` | Exclusive end instant. |
-| `Length()` | Exact duration. |
+| `Length()` | Exact duration or `ErrOverflow` when the scalar does not fit. |
 | `StdRange()` | UTC stdlib range for external formatting. |
 | `Contains(Instant)` | Includes start, excludes end. |
 | `Overlaps(Interval)` | True only when intervals share time. Touching endpoints do not overlap. |
@@ -181,5 +186,7 @@ Current interval operations:
 
 - Exact and calendar arithmetic remain separated by type signatures.
 - Month/year arithmetic clamps at end of month.
+- `DaysUntil` is antisymmetric for valid dates and rejects either invalid
+  endpoint with `ErrInvalidDate`.
 - Interval operations preserve half-open `[start, end)` semantics.
 - No public `RFC5545` method exists on `Duration` or `Period`.

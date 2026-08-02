@@ -7,7 +7,16 @@ import (
 )
 
 func unmarshalJSONWire(b []byte, out any) error {
-	return json.Unmarshal(b, out, json.RejectUnknownMembers(true))
+	if err := json.Unmarshal(b, out, json.RejectUnknownMembers(true)); err != nil {
+		return newTimeErrorWithCause(
+			ErrInvalidFormat,
+			err,
+			"JSON does not match the required wire structure",
+			"",
+			"provide a JSON object with only the documented fields and matching JSON value types",
+		)
+	}
+	return nil
 }
 
 func requireJSONKind(typeName, got, want string) error {

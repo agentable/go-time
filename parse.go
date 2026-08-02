@@ -1,6 +1,10 @@
 package gotime
 
-import "github.com/go-json-experiment/json"
+import (
+	"fmt"
+
+	"github.com/go-json-experiment/json"
+)
 
 // Status is the outcome of a Parse call.
 type Status string
@@ -194,6 +198,9 @@ func Parse(input string, opts ...Option) ParseResult {
 
 // MarshalJSON serializes r to the stable JSON schema defined in SPECS/20-parsing.md.
 func (r ParseResult) MarshalJSON() ([]byte, error) {
+	if err := r.validateWire(); err != nil {
+		return nil, err
+	}
 	wire := parseResultWire{
 		Kind:     "parse_result",
 		Status:   r.Status,
@@ -214,6 +221,63 @@ func (r ParseResult) MarshalJSON() ([]byte, error) {
 		wire.Error = r.Error
 	}
 	return json.Marshal(wire)
+}
+
+func (r ParseResult) validateWire() error {
+	switch r.Status {
+	case StatusResolved:
+		if !knownParseResultKind(r.Kind) {
+			return newTimeError(ErrInvalidFormat,
+				fmt.Sprintf("resolved ParseResult has unknown kind %q", r.Kind),
+				r.Input,
+				"set Kind to the concrete value stored in the resolved ParseResult")
+		}
+	case StatusAmbiguous:
+		if !knownParseResultKind(r.Kind) {
+			return newTimeError(ErrInvalidFormat,
+				fmt.Sprintf("ambiguous ParseResult has unknown kind %q", r.Kind),
+				r.Input,
+				"set Kind to the shared kind of the ambiguity candidates")
+		}
+		if len(r.Candidates) < 2 {
+			return newTimeError(ErrInvalidFormat,
+				"ambiguous ParseResult must contain at least two candidates",
+				r.Input,
+				"use StatusResolved for one interpretation or include every resolved candidate")
+		}
+		for i := range r.Candidates {
+			candidate := &r.Candidates[i]
+			if candidate.Status != StatusResolved || candidate.Kind != r.Kind {
+				return newTimeError(ErrInvalidFormat,
+					fmt.Sprintf("ambiguity candidate %d must be resolved with kind %q", i, r.Kind),
+					r.Input,
+					"include only resolved candidates whose Kind matches the parent ParseResult")
+			}
+		}
+	case StatusInvalid:
+		if r.Error == nil {
+			return newTimeError(ErrInvalidFormat,
+				"invalid ParseResult is missing error details",
+				r.Input,
+				"set Error to the TimeError that explains why parsing failed")
+		}
+	default:
+		return newTimeError(ErrInvalidFormat,
+			fmt.Sprintf("ParseResult has unknown status %q", r.Status),
+			r.Input,
+			"set Status to resolved, ambiguous, or invalid")
+	}
+	return nil
+}
+
+func knownParseResultKind(kind Kind) bool {
+	switch kind {
+	case KindInstant, KindDateTime, KindLocalDateTime, KindDate,
+		KindTime, KindDuration, KindPeriod, KindInterval:
+		return true
+	default:
+		return false
+	}
 }
 
 type parseResultWire struct {

@@ -1,20 +1,20 @@
-# Go Time
+# go-time
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/agentable/go-time)](https://github.com/agentable/go-time)
+[![Go CI](https://github.com/agentable/go-time/actions/workflows/ci.yml/badge.svg)](https://github.com/agentable/go-time/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-A Go time semantics library for parsing, computing, and serializing precise time value objects. Hands off to stdlib types — `time.Time`, `time.Duration` — for any rendering / formatting need.
+A Go time semantics library that turns standard formats and controlled human expressions into precise, typed, and computable values
 
 ## Features
 
-- **Typed value objects**: Work with `Instant`, `DateTime`, `LocalDateTime`, `Date`, `Time`, `Duration`, `Period`, `Interval`, `Zone`
-- **Two parse entry points**: `Parse` returns a tagged-sum `ParseResult`; typed `ParseInstant` / `ParseDateTime` / `ParseLocalDateTime` / … helpers return a typed `(value, error)` pair
-- **One concept per type**: `Duration` is exact nanoseconds, `Period` is calendar Y/M/D — `P1Y` parses as Period, `PT1H` as Duration, mixed inputs are rejected
-- **Stdlib bridges**: `.Std()`, `.Clock()`, `Duration.Decompose()` send values back to `time.Time` / `time.Duration` / structured clock slots so any formatter can consume them
-- **Timezone-aware semantics**: Strict IANA zones, fuzzy zone resolution, explicit local-time resolution, floating-time detection (`ParseResult.HasZone`)
-- **Calendar-safe computation**: `DateTime.Add` is exact; `AddPeriod` applies end-of-month clamping and exposes DST gaps/overlaps as a resolution
-- **Stable JSON schemas**: Deterministic wire formats with strict decoding; no schema depends on `time.Now()` or runtime locale
-- **No display locale stack**: This package ships no formatter types, CLDR data, or message-format dependency. Parsing includes small, controlled input phrase grammars selected by `language.Tag`; display remains the caller's choice.
+- **Typed time semantics**: Represent instants, zoned and local datetimes, dates, clock times, durations, periods, intervals, and zones as distinct immutable values
+- **Two parsing paths**: Use typed `Parse*` functions for expected input or `Parse` when the kind or interpretation may be ambiguous
+- **Explicit human context**: Supply language, reference time, and timezone when interpreting natural-language input
+- **Safe calendar arithmetic**: Keep exact `Duration` math separate from calendar `Period` math, including end-of-month and DST behavior
+- **Timezone-aware resolution**: Preserve nonexistent and duplicate local times instead of silently normalizing them
+- **Stable JSON**: Serialize value objects and parse results with deterministic wire representations
+- **Stdlib interoperability**: Hand values to formatters and other Go APIs through `time.Time` and `time.Duration`
 
 ## Installation
 
@@ -22,13 +22,13 @@ A Go time semantics library for parsing, computing, and serializing precise time
 go get github.com/agentable/go-time
 ```
 
-Requires Go 1.26.5 or newer.
+Requires **Go 1.26.5+**.
 
 ## Quick Start
 
-Most code knows what type it expects — reach for the typed helpers
-(`ParseDateTime`, `ParseLocalDateTime`, `ParseInstant`, `ParseDate`, …). They return `(value, error)`
-and hide the tagged-sum dispatch:
+Use a typed parser when your application expects a specific value. This example
+parses a local deadline in a configured IANA timezone, then inspects its absolute
+instant and local projection.
 
 ```go
 package main
@@ -41,468 +41,446 @@ import (
 )
 
 func main() {
-	dt, err := gotime.ParseDateTime("2026-03-27T13:00:00",
-		gotime.WithZone(gotime.MustLoadZone("Asia/Tokyo")),
+	zone, err := gotime.LoadZone("America/New_York")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	deadline, err := gotime.ParseDateTime(
+		"2026-11-05T09:30:00",
+		gotime.WithZone(zone),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(dt.Std().Format("2006-01-02 15:04 MST"))
-	// 2026-03-27 13:00 JST
+
+	fmt.Println(deadline.Instant())
+	fmt.Println(deadline.Std().Format("2006-01-02 15:04 MST"))
 }
 ```
 
-### Natural language
+Output:
 
-Pass a locale, an explicit reference instant, and the zone whose calendar
-defines natural date/datetime phrases. Product code chooses "now" and its
-calendar frame at the boundary; tests pin both:
+```text
+2026-11-05T14:30:00Z
+2026-11-05 09:30 EST
+```
+
+`ParseDateTime` resolves the local wall time in the supplied zone. Use
+`Instant()` for storage and ordering, and use `Std()` when handing the value to
+stdlib formatters or other Go APIs. Parsing does not persist the deadline or
+trigger any action.
+
+## Parse User Input
+
+### Choose a typed parser
+
+Typed parsers return `(value, error)` and are the default choice when the input field already has a known meaning.
+
+| Expected value | Parser | Example input |
+|---|---|---|
+| Absolute instant | `ParseInstant` | `2026-11-05T14:30:00Z` |
+| Zoned local datetime | `ParseDateTime` | `2026-11-05T09:30:00` with `WithZone` |
+| Floating local datetime | `ParseLocalDateTime` | `2026-11-05T09:30:00` |
+| Calendar date | `ParseDate` | `2026-11-05` |
+| Clock time | `ParseTime` | `09:30` |
+| Exact duration | `ParseDuration` | `PT1H30M` |
+| Calendar period | `ParsePeriod` | `P1M` |
+| Absolute interval | `ParseInterval` | `2026-11-05T14:30:00Z/2026-11-05T16:00:00Z` |
+
+Each parser rejects a different resolved kind. For example, `ParseInstant("2026-11-05")` returns an error that matches `ErrIncompatibleTypes`.
+
+### Parse natural language deterministically
+
+Relative date and datetime phrases need three caller-owned inputs: a language, a reference instant, and the timezone whose calendar defines the phrase. Pin the reference in tests; use `gotime.Now()` at the product boundary when runtime behavior should follow the current clock.
 
 ```go
-zone := gotime.MustLoadZone("America/New_York")
-now := gotime.Now()
+package main
 
-dt, err := gotime.ParseDateTime("tomorrow at 3pm",
-	gotime.WithInputLocale(language.English),
-	gotime.WithZone(zone),
-	gotime.WithReference(now),
+import (
+	"fmt"
+	"log"
+
+	gotime "github.com/agentable/go-time"
+	"golang.org/x/text/language"
 )
+
+func main() {
+	zone, err := gotime.LoadZone("America/New_York")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	reference, err := gotime.ParseInstant("2026-03-30T12:00:00Z")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	deadline, err := gotime.ParseDateTime(
+		"tomorrow at 3pm",
+		gotime.WithInputLocale(language.English),
+		gotime.WithReference(reference),
+		gotime.WithZone(zone),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(deadline.Std().Format("2006-01-02 15:04 MST"))
+}
 ```
 
-Natural datetimes keep their wall-clock intent until the same
-`LocalDateTime.Resolve` path used by formal local input applies the zone. A DST
-gap returns `ErrNonexistentTime`; a fold remains ambiguous through
-`ParseResult.Candidates` and typed parsing returns `ErrDuplicateTime`.
+Output:
 
-### Deterministic tests
-
-Use a fixed reference instant when you need reproducible output:
-
-```go
-ref, _ := gotime.ParseInstant("2026-03-30T12:00:00Z")
-
-dt, err := gotime.ParseDateTime("tomorrow at 3pm",
-	gotime.WithInputLocale(language.English),
-	gotime.WithZone(gotime.MustLoadZone("America/New_York")),
-	gotime.WithReference(ref),
-)
+```text
+2026-03-31 15:00 EDT
 ```
 
-## Parsing
+`WithInputLocale` accepts `language.Tag`. See the [parsing specification](SPECS/20-parsing.md) for supported language families and input forms.
 
-### Typed helpers — the default path
+### Supply parsing context
 
-When the kind is known up front, the typed helpers return `(value, error)` and
-translate `StatusAmbiguous` / `StatusInvalid` / `Kind` mismatch into a `*TimeError`:
+Add only the context required by the input your application accepts.
 
-```go
-i,  err := gotime.ParseInstant("2026-03-27T04:00:00Z")
-dt, err := gotime.ParseDateTime("2026-03-27T13:00:00", gotime.WithZone(gotime.MustLoadZone("Asia/Tokyo")))
-ldt, err := gotime.ParseLocalDateTime("2026-03-27T13:00:00")
-d,  err := gotime.ParseDate("2026-03-27")
-t,  err := gotime.ParseTime("15:00")
-du, err := gotime.ParseDuration("PT1H30M")
-p,  err := gotime.ParsePeriod("P1Y3M")
-iv, err := gotime.ParseInterval("2026-03-27T00:00:00Z/2026-03-28T00:00:00Z")
-```
+| Option | Use it for |
+|---|---|
+| `WithInputLocale(tag)` | Enable controlled natural-language parsing or specify a known slash-date convention |
+| `WithReference(instant)` | Anchor relative expressions such as `tomorrow` and `next Friday` |
+| `WithZone(zone)` | Resolve local datetimes and define the calendar used by relative expressions |
 
-A mismatched kind (e.g. `ParseInstant("2026-03-27")`) returns `*TimeError`
-wrapping `ErrIncompatibleTypes`.
+Keep these values caller-owned: load the zone from application configuration, pass `gotime.Now()` at the runtime boundary, and pin a fixed reference in tests.
 
-### `Parse` — inspection / polymorphic dispatch
+### Preserve ambiguous input
 
-Reach for `Parse` when you do not know the kind ahead of time, or when you
-need access to `Candidates`, `Warnings`, `HasZone`, or `Reference`. Dispatch
-through `Status`, `Kind`, and the comma-ok accessors:
+Use `Parse` when the input kind is unknown or the application needs candidates, warnings, or explicit-zone metadata. This is the path for user-facing ambiguity workflows.
 
 ```go
-r := gotime.Parse(input, opts...)
+result := gotime.Parse("04/05/2026")
 
-switch r.Status {
+switch result.Status {
 case gotime.StatusResolved:
-	switch r.Kind {
-	case gotime.KindDateTime:
-		if dt, ok := r.DateTime(); ok {
-			fmt.Println(dt)
-		}
-	case gotime.KindLocalDateTime:
-		if ldt, ok := r.LocalDateTime(); ok {
-			fmt.Println(ldt)
-		}
-	case gotime.KindDate:
-		if d, ok := r.Date(); ok {
-			fmt.Println(d)
-		}
-	case gotime.KindDuration:
-		if d, ok := r.Duration(); ok {
-			fmt.Println(d)
-		}
+	date, ok := result.Date()
+	if ok {
+		fmt.Println("resolved:", date)
 	}
 case gotime.StatusAmbiguous:
-	for _, c := range r.Candidates {
-		fmt.Println(c.Kind)
+	for _, candidate := range result.Candidates {
+		date, ok := candidate.Date()
+		if ok {
+			fmt.Println("candidate:", date)
+		}
 	}
 case gotime.StatusInvalid:
-	fmt.Println(r.Error.Code, r.Error.Hint)
+	fmt.Println(result.Error.Code, result.Error.Hint)
 }
 ```
 
-The comma-ok accessors return `ok=false` unless the result is resolved and the
-kind matches the accessor.
+Output:
 
-### Supported inputs
-
-| Input kind | Examples | Routes to |
-|------------|----------|-----------|
-| RFC 3339 datetime with offset | `2026-03-27T13:00:00+09:00`, `20260327T130000+0900`, `2026-03-27T04:00:00Z` | `KindInstant` |
-| Local datetime | `2026-03-27T13:00:00`, `20260327T130000` | `KindLocalDateTime`; `KindDateTime` only with `WithZone` |
-| Date | `2026-03-27`, `2026-W13-5`, `2026-086`, `04/05/2026` (locale-disambiguated) | `KindDate` |
-| Time | `15:00`, `08:30:45`, `3:30 PM` | `KindTime` |
-| ISO duration (clock only) | `PT1H30M`, `PT0S` | `KindDuration` |
-| ISO period (calendar only) | `P1Y3M7D`, `P2W`, `P5D` | `KindPeriod` |
-| Mixed `P{date}T{time}` | `P1DT2H`, `P1Y2DT3H` | `StatusInvalid` + `CodeInvalidFormat` |
-| Interval | `2026-03-27T00:00:00Z/2026-03-28T00:00:00Z`, `2026-03-27T09:00:00Z/PT9H` | `KindInterval` |
-| Natural language | `tomorrow at 3pm`, `下周五下午三点`, `明日`, `다음 주 금요일 오후 3시` | varies |
-
-`Duration` and `Period` are distinct types and cannot mix in a single ISO string: a 24-hour clock span is `PT24H` (Duration), a calendar day is `P1D` (Period).
-
-### Parse options
-
-| Option | Purpose |
-|--------|---------|
-| `WithInputLocale(tag language.Tag)` | Language hint for natural-language input. Supported slash policies make `04/05/2026` May 4 in `en-GB`/`en-AU` and April 5 in `en-US`; unsupported tags remain ambiguity-aware. |
-| `WithZone(zone)` | Resolve formal floating datetimes; also supplies the required calendar frame for relative natural dates/datetimes |
-| `WithReference(instant)` | Anchor relative natural date/datetime expressions such as `tomorrow` or `next Friday`; use with `WithZone` |
-
-Ambiguity is surfaced through `ParseResult.Candidates`, not pre-selected by an option — callers decide. There is no `WithStrategy` knob.
-
-Relative natural dates and datetimes require both `WithReference` and
-`WithZone`: omitting the reference returns `ErrInvalidFormat`; omitting its
-calendar zone returns `ErrInvalidZone`. Exact natural durations and periods do
-not require either option.
-
-`WithInputLocale` takes [`golang.org/x/text/language.Tag`](https://pkg.go.dev/golang.org/x/text/language#Tag) — the de facto Go BCP-47 type. Only the language subtag is used; Unicode `-u-` extensions (hour cycle, calendar) belong to the rendering layer, not the parser.
-
-`ParseResult.HasZone` reports whether the input itself included an explicit zone or offset. Formal floating datetime input without `WithZone` stays as `KindLocalDateTime`; adding `WithZone` resolves it into a zoned `DateTime`. Relative natural dates and datetimes are different: their reference instant has no calendar meaning until `WithZone` is supplied.
-
-When the zone identifier comes from user input, resolve it at the call site:
-
-```go
-z, err := gotime.ResolveZone(userInput)
-if err != nil {
-	return err
-}
-r := gotime.Parse(input, gotime.WithZone(z))
+```text
+candidate: 2026-04-05
+candidate: 2026-05-04
 ```
 
-## Formatting
-
-**This package does not format.** Display is the caller's concern. Every value object exposes a small, stable bridge back to stdlib so any formatter can consume it.
-
-### Stdlib `time.Format`
+If the application already knows the user's input convention, pass it explicitly:
 
 ```go
-fmt.Println(dt.Std().Format("2006-01-02 15:04 MST"))
-// 2026-03-27 13:00 JST
-```
-
-### External renderers
-
-```go
-type DateTimeRenderer interface {
-	Format(time.Time) string
-}
-
-func render(dt gotime.DateTime, renderer DateTimeRenderer) string {
-	return renderer.Format(dt.Std())
-}
-```
-
-### Duration → clock slots, Period → exported fields
-
-```go
-// Duration: modular arithmetic is non-trivial, so a helper does it for you.
-c := d.Decompose() // DurationComponents{Hours, Minutes, Seconds, ...}
-
-clockSlots := struct {
-	Hours        int64
-	Minutes      int64
-	Seconds      int64
-	Milliseconds int64
-}{
-	Hours:        c.Hours,
-	Minutes:      c.Minutes,
-	Seconds:      c.Seconds,
-	Milliseconds: c.Milliseconds,
-}
-
-// Period: fields are already exported — no Decompose, no parallel struct.
-calendarSlots := struct {
-	Years  int32
-	Months int32
-	Days   int32
-}{
-	Years:  p.Years,
-	Months: p.Months,
-	Days:   p.Days,
-}
-```
-
-### Bridge methods
-
-| Method | Returns |
-|--------|---------|
-| `Instant.Std()` | `time.Time` (UTC) |
-| `DateTime.Std()` | `time.Time` in the DateTime's zone |
-| `DateTime.Clock()` | `gotime.Time` (clock-time accessor) |
-| `Interval.StdRange()` | `(start, end time.Time)` |
-| `Duration.Std()` | `time.Duration` |
-| `Duration.Decompose()` | `DurationComponents` (clock slots) |
-| `Period.Years` / `.Months` / `.Days` | `int32` fields (no Decompose) |
-
-Civil `Date` and `Time` values must be resolved before crossing to stdlib:
-
-```go
-resolution := gotime.NewLocalDateTime(date, clock).Resolve(zone)
-dt, err := resolution.Only()
-if err != nil {
-	return err
-}
-std := dt.Std()
-```
-
-See [`SPECS/30-formatting.md`](SPECS/30-formatting.md) for the full contract.
-
-## Core Types
-
-| Type | Meaning |
-|------|---------|
-| `Instant` | Absolute UTC moment |
-| `DateTime` | Zoned local date and time |
-| `LocalDateTime` | Date plus clock time before zone resolution |
-| `Date` | Calendar date without time |
-| `Time` | Clock time without date |
-| `Duration` | Exact elapsed nanoseconds (`type Duration time.Duration`) |
-| `Period` | Calendar offset of `Years`/`Months`/`Days` |
-| `Interval` | Half-open range `[start, end)` |
-| `Zone` | IANA timezone identity for persisted zones |
-| `DurationComponents` | Clock-slot decomposition of `Duration` (Hours…Nanoseconds) — bridge to external duration formatters |
-
-Checked civil values use the fixed wire-compatible year domain `0000..9999`.
-`DateFromTime`, `DateTimeFromTime`, `Instant.In`, `DateTime.In`, and checked
-calendar/exact arithmetic return `ErrOverflow` instead of producing a value
-that cannot round-trip through JSON.
-
-## Duration vs Period
-
-`Duration` is exact nanoseconds — composed from typed constants (`Nanosecond`, `Microsecond`, `Millisecond`, `Second`, `Minute`, `Hour`):
-
-```go
-quarter   := 15 * gotime.Minute
-twoDaysExact := 48 * gotime.Hour  // 48 exact elapsed hours
-```
-
-`Period` is a calendar offset — built via struct literal or sugar constructors (`Years`, `Months`, `Days`). Calendar days are DST-safe; they preserve wall-clock time across the boundary:
-
-```go
-nextMonth   := gotime.Period{Months: 1}
-twoCalDays  := gotime.Days(2)        // 2 calendar days (DST-safe)
-twoWeeks    := gotime.Days(14)
-```
-
-There is intentionally no `gotime.Day` constant. `24 * gotime.Hour` is exact 24 hours; `gotime.Days(1)` is a calendar day. Conflating them is the bug the type split exists to prevent.
-
-`DateTime` exposes:
-
-- `dt.Add(d Duration) (DateTime, error)` — checked exact-time arithmetic; pass `-d` to move back
-- `dt.AddPeriod(p Period) (LocalResolution, error)` — checked calendar arithmetic with end-of-month clamping and explicit DST resolution
-- `dt.Sub(other DateTime) Duration` — difference between two DateTimes (mirrors `time.Time.Sub`)
-
-`Date.Add(p Period) (Date, error)` handles checked calendar arithmetic. For
-differences, use the name that matches your intent: `d.DaysUntil(other)` for
-signed calendar-day counts, or `d.PeriodUntil(other)` for a checked greedy
-years/months/days period. `Instant.Add(d Duration) Instant` and
-`Instant.Sub(other Instant) Duration` round out the exact-time trio. The
-compiler enforces the distinction between Duration and Period —
-`dt.Add(gotime.Months(1))` is a compile error.
-
-## Common Operations
-
-```go
-zone := gotime.MustLoadZone("America/New_York")
-tokyo := gotime.MustLoadZone("Asia/Tokyo")
-
-now := gotime.Now()                  // Instant (UTC, no monotonic)
-today := gotime.TodayIn(zone)        // Date — zone is required, never inferred
-fromEpoch := gotime.UnixMillis(0)    // Instant from Unix epoch milliseconds
-
-date, err := gotime.NewDate(2026, time.March, 27)
-if err != nil {
-	fmt.Println("date error:", err)
-	return
-}
-clock, err := gotime.NewTime(9, 0, 0)
-if err != nil {
-	fmt.Println("time error:", err)
-	return
-}
-dt, err := gotime.NewDateTime(date, clock, zone)
-if err != nil {
-	fmt.Println("datetime error:", err)
-	return
-}
-
-local := gotime.NewLocalDateTime(date, clock)
-resolution := local.Resolve(zone)
-if resolution.Status == gotime.LocalAmbiguous {
-	fmt.Println("choose between", resolution.Candidates)
-}
-
-exact, err := dt.Add(24 * gotime.Hour) // exact 24-hour span (Duration)
-if err != nil {
-	fmt.Println("exact arithmetic error:", err)
-	return
-}
-calendarResolution, err := dt.AddPeriod(gotime.Days(1))
-if err != nil {
-	fmt.Println("calendar arithmetic error:", err)
-	return
-}
-calendar, err := calendarResolution.Only()
-if err != nil {
-	fmt.Println("calendar resolution error:", err)
-	return
-}
-shifted, err := dt.In(tokyo)
-if err != nil {
-	fmt.Println("zone projection error:", err)
-	return
-}
-
-iv, err := gotime.NewInterval(dt.Instant(), exact.Instant())
-if err != nil {
-	fmt.Println("interval error:", err)
-	return
-}
-
-// Selection composes with stdlib slices.MinFunc / MaxFunc + Compare.
-import "slices"
-earliest := slices.MinFunc(
-	[]gotime.Instant{now, fromEpoch, dt.Instant()},
-	gotime.Instant.Compare,
+date, err := gotime.ParseDate(
+	"04/05/2026",
+	gotime.WithInputLocale(language.MustParse("en-GB")),
 )
-
-fmt.Println(now, today, exact, calendar, shifted, iv.Length(), earliest)
-```
-
-## Timezones
-
-Use `LoadZone` when you have a canonical IANA zone ID.
-Use `ResolveZone` only when you accept messy real-world input and need to normalize it.
-`MustLoadZone` is for `var` initialization with constant identifiers.
-
-| Call | Use case |
-|------|----------|
-| `LoadZone("Asia/Tokyo")` | Strict IANA, returns error on miss |
-| `MustLoadZone("Asia/Tokyo")` | Constant zones in `var` blocks |
-| `ResolveZone("asia/tokyo")` | Forgiving case normalization |
-| `ResolveZone("Eastern Standard Time")` | Windows zone names |
-| `Zone{}` | Zero value, treated as UTC for stdlib interop |
-
-```go
-tokyo, err := gotime.LoadZone("Asia/Tokyo")
 if err != nil {
 	return err
 }
-name, offsetSeconds := gotime.Now().Std().In(tokyo.Location()).Zone()
-fmt.Println(tokyo.ID(), name, offsetSeconds)
-fmt.Println(len(gotime.Zones()), gotime.ZoneCatalogVersion())
+fmt.Println(date) // 2026-05-04
 ```
 
-`ZoneCatalogVersion()` identifies the tzdb version used to generate the `Zones()` catalog. It is catalog provenance, not a claim about the transition-rule data used by the Go runtime.
+## Compute With Time Values
 
-For interval rendering, project explicitly: `start, end := iv.StdRange()` returns two `time.Time` values you can pass to any range-formatter.
+### Choose exact or calendar arithmetic
 
-When a date plus clock time may cross a DST transition, resolve it explicitly:
+Use `Duration` for elapsed time and `Period` for calendar movement. Across a DST boundary, those operations can produce different wall-clock results by design.
 
 ```go
-local := gotime.NewLocalDateTime(date, clock)
+zone, err := gotime.LoadZone("America/New_York")
+if err != nil {
+	return err
+}
+
+start, err := gotime.ParseDateTime(
+	"2026-03-07T09:00:00",
+	gotime.WithZone(zone),
+)
+if err != nil {
+	return err
+}
+
+exact, err := start.Add(24 * gotime.Hour)
+if err != nil {
+	return err
+}
+
+resolution, err := start.AddPeriod(gotime.Days(1))
+if err != nil {
+	return err
+}
+calendar, err := resolution.Only()
+if err != nil {
+	return err
+}
+
+fmt.Println(exact.Std().Format("2006-01-02 15:04 MST"))
+fmt.Println(calendar.Std().Format("2006-01-02 15:04 MST"))
+// 2026-03-08 10:00 EDT
+// 2026-03-08 09:00 EDT
+```
+
+Typed constants cover exact units from `Nanosecond` through `Hour`. Calendar periods use `Period` fields or constructors such as `Years`, `Months`, and `Days`:
+
+```go
+retryDelay := 15 * gotime.Minute
+billingStep := gotime.Period{Months: 1}
+nextWeek := gotime.Days(7)
+```
+
+### Measure exact and calendar differences
+
+Difference APIs return errors when the scalar or endpoint cannot represent the
+requested result; they never return a saturated duration or normalize an
+invalid date.
+
+```go
+opened, err := gotime.ParseInstant("2026-03-27T09:00:00Z")
+if err != nil {
+	return err
+}
+closed, err := gotime.ParseInstant("2026-03-27T10:30:00Z")
+if err != nil {
+	return err
+}
+elapsed, err := closed.Sub(opened)
+if err != nil {
+	return err
+}
+fmt.Println(elapsed) // 1h30m0s
+
+first, err := gotime.ParseDate("2026-03-27")
+if err != nil {
+	return err
+}
+last, err := gotime.ParseDate("2026-04-02")
+if err != nil {
+	return err
+}
+days, err := first.DaysUntil(last)
+if err != nil {
+	return err
+}
+fmt.Println(days) // 6
+```
+
+Use exact `Sub` methods for timeline elapsed time and `DaysUntil` for signed
+calendar-day counts. Product-specific age, billing, or Y/M/D decomposition
+belongs in the caller.
+
+### Build a half-open time window
+
+Create intervals from two instants or from one instant plus an exact duration. Intervals are useful for comparisons and handoff to range-based APIs.
+
+```go
+window, err := gotime.NewIntervalStartingAt(
+	deadline.Instant(),
+	90 * gotime.Minute,
+)
+if err != nil {
+	return err
+}
+
+length, err := window.Length()
+if err != nil {
+	return err
+}
+
+fmt.Println(length)                        // 1h30m0s
+fmt.Println(window.Contains(window.End())) // false: the end is exclusive
+
+start, end := window.StdRange()
+fmt.Println(start, end)
+```
+
+Use `Overlaps`, `Adjacent`, `Intersect`, `Union`, `Shift`, and `Expand` for common interval operations.
+
+## Work With Time Zones
+
+Choose zone loading based on where the identifier came from.
+
+| Input source | API | Example |
+|---|---|---|
+| Configuration or stored IANA ID | `LoadZone` | `America/New_York` |
+| Source-code constant | `MustLoadZone` | `var tokyo = gotime.MustLoadZone("Asia/Tokyo")` |
+| User or migration input | `ResolveZone` | `Eastern Standard Time`, `asia/tokyo` |
+
+Never call `MustLoadZone` with user input. Resolve user-provided values before passing the resulting `Zone` to a parser:
+
+```go
+zone, err := gotime.ResolveZone(userZone)
+if err != nil {
+	return err
+}
+
+deadline, err := gotime.ParseDateTime(userTime, gotime.WithZone(zone))
+if err != nil {
+	return err
+}
+fmt.Println(deadline.Instant())
+```
+
+Use `LocalDateTime.Resolve` when a local wall time may fall in a DST gap or overlap and the application needs to inspect that state directly:
+
+```go
+zone, err := gotime.LoadZone("America/New_York")
+if err != nil {
+	return err
+}
+
+local, err := gotime.ParseLocalDateTime("2026-11-01T01:30:00")
+if err != nil {
+	return err
+}
+
 resolution := local.Resolve(zone)
-dt, err := resolution.Only() // ErrNonexistentTime or ErrDuplicateTime if not unique
+switch resolution.Status {
+case gotime.LocalResolved:
+	datetime, err := resolution.Only()
+	if err != nil {
+		return err
+	}
+	fmt.Println(datetime.Instant())
+case gotime.LocalAmbiguous:
+	for _, candidate := range resolution.Candidates {
+		fmt.Println(candidate.Instant())
+	}
+case gotime.LocalNonexistent:
+	// Ask for another local time.
+case gotime.LocalInvalid:
+	// Reject invalid date or clock components.
+}
 ```
 
-## Errors
+Output for this duplicate local time:
 
-go-time pairs sentinel errors (for `errors.Is`) with a typed `*TimeError` (for `errors.As`).
-
-```go
-var te *gotime.TimeError
-if errors.As(err, &te) {
-	log.Printf("code=%s hint=%s", te.Code, te.Hint)
-}
-
-if errors.Is(err, gotime.ErrAmbiguousDate) {
-	// control-flow branch
-}
+```text
+2026-11-01T05:30:00Z
+2026-11-01T06:30:00Z
 ```
 
-`*TimeError` unwraps its `Err` sentinel for control flow; `Code` remains JSON/log metadata.
-`Error()` contains only the fixed code and sentinel category. Inspect
-`Message`, `Input`, and `Hint` through `errors.As`; those structured fields may
-contain caller-provided data and require the application's logging and
-redaction policy.
-See `SPECS/60-errors.md` for the full code list.
+The application chooses between these candidates; go-time does not select one implicitly.
 
-## JSON
+## Hand Values to Other APIs
 
-All value objects implement stable JSON encoding via
-`github.com/go-json-experiment/json`. Decoding is strict: wrong `kind`, missing
-required fields, unknown fields, non-canonical values, and invalid identities
-are rejected.
+go-time does not format values for display. Convert semantic values at the integration boundary:
+
+| Value | Bridge |
+|---|---|
+| `Instant` | `instant.Std()` returns UTC `time.Time` |
+| `Instant` | `instant.UnixNano()` / `instant.UnixMilli()` return a checked epoch scalar |
+| `DateTime` | `datetime.Std()` returns zoned `time.Time` |
+| `Duration` | `duration.Std()` returns `time.Duration` |
+| `Duration` | `duration.Decompose()` returns clock component slots |
+| `Interval` | `interval.StdRange()` returns two `time.Time` values |
+| `Period` | Read the exported `Years`, `Months`, and `Days` fields |
 
 ```go
-b, err := json.Marshal(dt)
+fmt.Println(deadline.Std().Format(time.RFC1123))
+
+epochMillis, err := deadline.Instant().UnixMilli()
 if err != nil {
 	return err
 }
-fmt.Println(string(b))
+fmt.Println(epochMillis)
+
+components := (90 * gotime.Minute).Decompose()
+fmt.Println(components.Hours, components.Minutes) // 1 30
 ```
 
-Representative shapes:
+Epoch projections return `ErrOverflow` when the selected `int64` precision
+cannot represent the instant. Keep the `Instant` or use `Std()` when a scalar
+projection is not required.
 
-```json
-{"kind":"datetime","instant":"2026-03-27T13:00:00Z","zone":"America/New_York"}
-{"kind":"local_datetime","value":"2026-03-27T09:00:00"}
-{"kind":"duration","iso":"PT1H30M"}
-{"kind":"period","iso":"P1Y3M7D"}
-{"kind":"zone","id":"America/New_York"}
+## Serialize Values
+
+Marshal value objects and parse results with `github.com/go-json-experiment/json`.
+
+```go
+payload, err := json.Marshal(deadline)
+if err != nil {
+	return err
+}
+fmt.Println(string(payload))
+// {"kind":"datetime","instant":"2026-11-05T14:30:00Z","zone":"America/New_York"}
+
+var restored gotime.DateTime
+if err := json.Unmarshal(payload, &restored); err != nil {
+	return err
+}
+fmt.Println(restored.Zone().ID()) // America/New_York
 ```
 
-- `Duration` / `Period` carry **only** `kind` + `iso` — no `components` / `years` / `months` / `days` mirror fields. `Duration` sub-second ISO text uses decimal seconds, never scientific notation. Run `Duration.Decompose()` for clock slots; read `Period.Years` / `.Months` / `.Days` directly.
-- `Zone` JSON contains only `{"kind":"zone","id":"…"}`. A zero `Zone` encodes as `{"kind":"zone","id":"UTC"}`. Obtain time-dependent abbreviations and numeric offsets through `instant.Std().In(zone.Location()).Zone()`; they are never marshalled with zone identity.
+Decoding validates the value at the boundary. See [SPECS/10-domain-model.md](SPECS/10-domain-model.md) for the complete wire contract instead of mirroring schemas in application code.
 
-## API Reference
+## Handle Errors
 
-- Package docs: [pkg.go.dev/github.com/agentable/go-time](https://pkg.go.dev/github.com/agentable/go-time)
-- Project contracts: [SPECS/](SPECS/)
+Use sentinel errors for control flow and `*TimeError` for structured details.
+
+```go
+_, err := gotime.ParseDateTime(userTime, gotime.WithZone(zone))
+if err != nil {
+	if errors.Is(err, gotime.ErrDuplicateTime) {
+		// Re-run with Parse to inspect candidates or ask the user to clarify.
+	}
+
+	var timeErr *gotime.TimeError
+	if errors.As(err, &timeErr) {
+		log.Printf("code=%s hint=%s", timeErr.Code, timeErr.Hint)
+	}
+	return err
+}
+```
+
+Treat `TimeError.Input` and `TimeError.Message` as caller-provided data and apply the application's redaction policy before logging them.
+
+## API Overview
+
+| Task | Primary API |
+|---|---|
+| Read the current instant or date | `Now`, `NowIn`, `TodayIn` |
+| Parse a known type | `ParseInstant`, `ParseDateTime`, `ParseLocalDateTime`, `ParseDate`, `ParseTime`, `ParseDuration`, `ParsePeriod`, `ParseInterval` |
+| Parse unknown or ambiguous input | `Parse`, `ParseResult` |
+| Construct civil values | `NewDate`, `NewTime`, `NewLocalDateTime`, `NewDateTime` |
+| Convert from Unix or stdlib values | `UnixSeconds`, `UnixMillis`, `UnixNanos`, `InstantFromTime`, `DateTimeFromTime`, `DateFromTime`, `TimeFromTime` |
+| Project an instant to Unix time | checked `Instant.UnixNano`, `Instant.UnixMilli` |
+| Compare and calculate | `Compare`, `Add`, `AddPeriod`, `Sub`, `DaysUntil` |
+| Work with ranges | `NewInterval`, `NewIntervalStartingAt`, `NewIntervalEndingAt`, interval methods |
+| Load time zones | `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ZoneCatalogVersion` |
+
+For complete signatures and package documentation, use [pkg.go.dev](https://pkg.go.dev/github.com/agentable/go-time). For behavior contracts, use [SPECS/](SPECS/).
 
 ## Development
 
 ```bash
-task test
-task lint
-task fmt
-task vet
-task verify
+task test      # Run all tests with race detection
+task lint      # Run golangci-lint and verify module tidiness
+task fmt       # Format Go code
+task vet       # Run go vet
+task verify    # Run the full verification suite
 ```
 
 For development guidelines and agent workflow, see [AGENTS.md](AGENTS.md).
 
 ## Contributing
 
-Open an issue before large changes so the public API and specs can stay aligned.
+Open an issue before large changes so the public API and specifications can stay aligned.
 
 ## License
 
-This software is licensed under the **MIT License**.
-See the [LICENSE](./LICENSE) file for full terms.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

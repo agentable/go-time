@@ -26,8 +26,33 @@ func TestInstantUnmarshalJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"kind":"instant","iso":"1970-01-01T00:00:00Z"}`), &i); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
-	if i.UnixNano() != 0 {
-		t.Errorf("got UnixNano=%d, want 0", i.UnixNano())
+	got, err := i.UnixNano()
+	if err != nil {
+		t.Fatalf("UnixNano() error = %v", err)
+	}
+	if got != 0 {
+		t.Errorf("got UnixNano=%d, want 0", got)
+	}
+}
+
+func TestInstantUnmarshalJSON_NormalizesOffsetInput(t *testing.T) {
+	t.Parallel()
+
+	var instant Instant
+	input := []byte(`{"kind":"instant","iso":"1970-01-01T09:00:00+09:00"}`)
+	if err := json.Unmarshal(input, &instant); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if !instant.Equal(UnixNanos(0)) {
+		t.Fatalf("Unmarshal() = %v, want Unix epoch", instant)
+	}
+	got, err := json.Marshal(instant)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	want := `{"kind":"instant","iso":"1970-01-01T00:00:00Z"}`
+	if string(got) != want {
+		t.Fatalf("Marshal() = %s, want %s", got, want)
 	}
 }
 

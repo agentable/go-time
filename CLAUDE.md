@@ -33,6 +33,9 @@ When updating documentation:
 3. Update `CLAUDE.md` when workflow, architecture constraints, or doc-maintenance rules change
 
 Do not duplicate contracts in `README.md`, and do not turn `SPECS/` into tutorials.
+Improvement plans are temporary working artifacts: after implementation, move
+durable usage, contract, and workflow decisions into the three owners above,
+then delete `improve.md` and `improves/`.
 
 ## Architecture
 
@@ -42,14 +45,14 @@ Three-layer architecture with strict unidirectional dependencies. Upper layers n
 github.com/agentable/go-time/
 ├── current.go          # Current-time helpers: Now / NowIn / TodayIn (no Today() — must specify zone)
 ├── options.go          # Parse options: WithInputLocale(language.Tag), WithZone, WithReference
-├── instant.go          # Instant (absolute UTC; UnixSeconds/Millis/Nanos short forms; Add(Duration) only)
+├── instant.go          # Instant (absolute UTC; checked epoch/difference projections; Add(Duration) only)
 ├── datetime.go         # DateTime (zoned local time; checked Add; AddPeriod→LocalResolution; .Clock()→Time)
 ├── local_datetime.go   # LocalDateTime (date + clock before zone resolution; Resolve(Zone)→candidates)
-├── date.go             # Date (calendar date; checked Add(Period); unresolved until paired with Time + Zone)
+├── date.go             # Date (calendar date; checked Add(Period)/DaysUntil; unresolved until paired with Time + Zone)
 ├── time.go             # Time (clock time; unresolved until paired with Date + Zone)
 ├── duration.go         # Duration = type Duration time.Duration (no Day constant); .Decompose()→DurationComponents
 ├── period.go           # Period = struct{Years, Months, Days int32} (EOM clamp); fields exported directly, no Decompose
-├── interval.go         # Interval (half-open [start, end); .StdRange()→(time.Time, time.Time))
+├── interval.go         # Interval (half-open [start, end); checked Length; .StdRange()→stdlib times)
 ├── zone.go             # Zone identity + stdlib Location bridge (IANA only in JSON)
 ├── duration_components.go # DurationComponents struct — Hours…Nanoseconds slots for external formatters
 ├── parse.go            # Layer 2: ISO 8601 / RFC 3339 parsing + ParseResult tagged-sum
@@ -69,6 +72,17 @@ github.com/agentable/go-time/
 - Layer 3 (arithmetic methods on value objects) — depends only on Layer 1
 - User-visible API is `gotime.*` only — no internal dependencies leak
 - **There is no formatting layer.** Any rendering happens outside this module via stdlib bridges (`.Std()` / `.Decompose()`)
+
+## Agent Operating Rules
+
+- **Think before coding** — State assumptions, resolve ambiguity, and choose the simplest design that preserves correctness.
+- **KISS/DRY/YAGNI** — Prefer stdlib and existing project utilities; share duplicated knowledge, not merely similar syntax.
+- **User-path fixes** — Reproduce failures through the nearest public boundary before relying on narrower tests.
+- **Surgical changes** — Touch only the owned surface and preserve unrelated worktree changes.
+- **Goal-driven execution** — Define acceptance evidence, implement to completion, and do not stop at a plan.
+- **Read before writing** — Inspect SPECS, references, exports, callers, tests, and generated owners first.
+- **Test intent** — Prove observable contracts; do not add policy-only gates or tests that merely mirror prose.
+- **Fail loud** — Report skipped checks and unresolved uncertainty; never claim completion without verification.
 
 ## Agent Workflow
 
@@ -166,26 +180,30 @@ Operational corollaries:
 - `Duration` is `type Duration time.Duration` — `Nanosecond` through `Hour` are typed constants supporting `5 * gotime.Minute` arithmetic. No `Day` constant (24h is `24 * Hour`; calendar day is `Days(n)` on Period). No `Hours(n)` / `Days(n float64)` constructors.
 - `Period` fields (`Years`, `Months`, `Days`) are exported — literal initialization is the canonical form. Constructors `Years(n)` / `Months(n)` / `Days(n)` are sugar.
 - `Period.Add`, `Sub`, `Negate`, and `Abs` are checked and return `ErrOverflow`; calendar component arithmetic must never wrap.
+- `Period.String()` equals `ISO8601()` and must round-trip every valid mixed-sign value. A leading `-P` applies only to unsigned components; never accept a second component sign under a leading sign.
 - `Period` month/year add applies end-of-month clamping (Jan 31 + Months(1) = Feb 28/29). Never overflow.
+- `Instant.Sub`, `DateTime.Sub`, and `Interval.Length` return `(Duration, error)` and match `ErrOverflow` instead of exposing `time.Time.Sub` saturation.
+- `Instant.UnixNano` and `UnixMilli` check representability before calling the stdlib scalar projection. `Date.DaysUntil` validates both endpoints and returns `(int, error)`; calendar Y/M/D decomposition is caller policy, so there is no `PeriodUntil`.
 - Intervals are half-open `[start, end)` — `Contains` excludes end, `Overlaps` excludes touching endpoints, use `Adjacent` for boundary detection
 - `Interval.Expand(before, after)` returns `(Interval, error)` — reject negative expansion durations and preserve the same `end >= start` invariant as constructors.
 - `Interval` carries no zone field — projection zone belongs to the rendering layer (which is outside this module)
 - Use `ResolveZone` for fuzzy timezone resolution (Windows names and case-insensitive IANA names) — use `LoadZone` for strict IANA-only. Fixed offsets are not zones; RFC3339 numeric offsets parse to `Instant`.
-- Treat `internal/zone/catalog.go` and `internal/zone/windows.go` as generated artifacts. Regenerate Windows mappings only from the CLDR release pinned in `SPECS/50-timezone.md`; never hand-edit or canonicalize its territory `001` targets.
+- Treat `internal/zone/catalog.go` and `internal/zone/windows.go` as generated artifacts. Regenerate them only from local inputs verified against `internal/zone/sources.json`; headers derive version and source filename from the lock, never the local path. Never hand-edit or canonicalize CLDR territory `001` targets.
 - `.Std()` returns stdlib types (`time.Time` / `time.Duration`); `.Clock()` returns a `Time`; `Duration.Decompose()` returns `DurationComponents` (clock slots only). Naming is load-bearing: stdlib vs. clock vs. structured slot. `Period` has no `Decompose` — read `p.Years` / `p.Months` / `p.Days` directly (exported fields), no parallel struct.
 - `Zone.Location()` is total — the zero `Zone` falls back to `UTC`; do not reintroduce parallel fallback helpers
 - Parse option presence is explicit: `WithZone(Zone{})` means UTC and `WithReference(Instant{})` means the Go zero instant; never infer presence with `IsZero`.
 - Relative natural dates/datetimes require both `WithReference` and `WithZone`; formal floating datetimes may omit `WithZone` and remain `LocalDateTime`.
-- `internal/natural` receives an already-projected civil reference and returns civil components only; `LocalDateTime.Resolve` at the gotime boundary is the sole owner of natural datetime zone resolution.
+- `internal/natural` receives an already-projected civil reference and returns civil components plus closed internal error categories only; it does not own ambiguity or zone resolution. `LocalDateTime.Resolve` at the gotime boundary is the sole owner of natural datetime zone resolution.
 - `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC` — never call `time.Now()` during marshal. Time-dependent offset and abbreviation projection belongs to stdlib `time.Time.Zone`.
 - `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
 - `ParseResult` has no public `Value() any` escape hatch — dispatch unknown input with `Status`, `Kind`, and comma-ok accessors.
 - `ParseResult.HasZone` indicates whether the input explicitly included timezone/offset information — use this to detect floating times
-- `errors.Is(err, gotime.ErrAmbiguousDate)` for control flow; `errors.As(err, &te)` for detail extraction. `*TimeError` unwraps its `Err` sentinel; `Code` is JSON/log metadata. Typed parsers map DST duplicate local-time ambiguity to `ErrDuplicateTime`, not generic date ambiguity.
+- `errors.Is(err, gotime.ErrAmbiguousDate)` for control flow; `errors.As(err, &te)` for detail extraction. `*TimeError` unwraps a chain containing its sentinel and any parser/loader/codec cause; `Code` is JSON/log metadata. Typed parsers map DST duplicate local-time ambiguity to `ErrDuplicateTime`, not generic date ambiguity.
 - `Code*` is `ErrorCode` (string metadata); `Err*` is a sentinel `error`. Never mix prefixes.
 - `MustLoadZone` is the only public `Must*`. Never add `MustParse`, `MustNewInterval`, etc.
 - `Parse("P{date-only}")` (e.g. `P1Y`, `P5D`, `P2W`) routes to `KindPeriod`. `Parse("PT{time-only}")` routes to `KindDuration`. `Parse("P{date}T{time}")` returns `StatusInvalid` + `CodeInvalidFormat` — no single type can carry both halves.
 - Duration / Period JSON contain **only** `{"kind":..., "iso":...}`. No `components` / `years` / `months` / `days` fields on the wire. Run `Duration.Decompose()` or read `Period` struct fields at the call site.
+- Concrete value JSON decoders map structural failures to `ErrInvalidFormat` and semantic failures to the precise value sentinel, always with a `*TimeError` hint when dispatch reaches the decoder. Preserve underlying causes in the unwrap chain.
 - `Duration.ISO8601()` uses canonical decimal seconds for sub-second precision; scientific notation is not accepted on the wire.
 - Parse ambiguity (slash-date with no locale, DST fall-back) returns `StatusAmbiguous` with `Candidates`. The caller decides — there is no `WithStrategy` knob.
 - `Duration.String()` matches `time.Duration.String()` byte-for-byte. Stringer is a stdlib contract; do not invent variants like `"1h30m"` that drop the trailing `0s`.
@@ -219,6 +237,8 @@ Operational corollaries:
 - No JSON wire field that is also derivable from another field in the same payload — every value object's JSON has exactly one source of truth (`iso` for Duration/Period, etc.)
 - No global mutable defaults (default zone, default language)
 - No documentation masquerading as code — specs are the SSOT; code executes rules, not redescribes them
+- No policy-only gate scripts that merely restate README, SPECS, or agent instructions
+- No spec-mirror tests when a stronger behavior, integration, or generated-artifact test already proves the contract
 - No working around dependency bugs — if a bug or limitation is in a dependency library, do NOT bypass it. Create a report file in `reports/` (see Dependency Issue Reporting below)
 - No new `encoding/json` imports — use `github.com/go-json-experiment/json` exclusively
 - No reminder/alarm/event/cron/RRULE/business-calendar/astronomical types — permanent ban
@@ -271,7 +291,9 @@ var te *gotime.TimeError
 if errors.As(err, &te) { log.Printf("code=%s hint=%s", te.Code, te.Hint) }
 ```
 
-`*TimeError` unwraps its `Err` sentinel, so `errors.Is` follows the standard unwrap chain; `Code` does not drive matching.
+`*TimeError` unwraps a chain containing its sentinel and any underlying parser,
+loader, or codec cause. `errors.Is` follows sentinel identity; `errors.As` can
+reach typed causes; `Code` does not drive matching.
 `TimeError.Error()` exposes only the fixed code and sentinel text. `Message`, `Input`, and `Hint` remain structured fields and require caller-owned redaction before logging.
 
 ## Linting
@@ -317,7 +339,7 @@ Common implementation skills in `.agents/skills/`:
 | [agent-md-writing](.agents/skills/agent-md-writing/) | Regenerating `CLAUDE.md` and refreshing the `AGENTS.md` symlink |
 | [readme-writing](.agents/skills/readme-writing/) | Regenerating `README.md` from the current public API |
 | [golangci-linting](.agents/skills/golangci-linting/) | Setting up or running golangci-lint v2, fixing lint errors, configuring linters |
-| [modernizing](.agents/skills/modernizing/) | Adopting Go 1.20-1.26 new features — generics, iterators, error handling, stdlib collections |
+| [modernizing](.agents/skills/modernizing/) | Adopting Go 1.20-1.27 features — generics, iterators, error handling, stdlib collections |
 | [committing](.agents/skills/committing/) | Creating conventional commit messages for Go packages |
 | [releasing](.agents/skills/releasing/) | Releasing a Go package — semantic versioning, tagging, dependency upgrades |
 | [code-simplifying](.agents/skills/code-simplifying/) | Refining recently written Go code for clarity and consistency without changing functionality |
@@ -327,12 +349,13 @@ Common implementation skills in `.agents/skills/`:
 | [spec-reviewing](.agents/skills/spec-reviewing/) | Reviewing SPECS for completeness and consistency |
 | [code-refactoring](.agents/skills/code-refactoring/) | Architecture review and pragmatic refactoring |
 | [architecture-audit](.agents/skills/architecture-audit/) | Full-codebase health checks, dependency analysis, layer boundary validation |
+| [project-docs-maintaining](.agents/skills/project-docs-maintaining/) | Reconciling README and agent documentation against current source and repository gates |
 
 Design skills in `.agents/skills/`:
 
 | Skill | When to Use |
 |-------|------------|
-| [golang-design-guide](.agents/skills/golang-design-guide/) | Designing Go libraries — type classification, design philosophy, API patterns, error handling strategy |
+| [code-design-guide](.agents/skills/code-design-guide/) | Designing Go libraries — deep modules, API patterns, error surfaces, and testing boundaries |
 
 ## License
 

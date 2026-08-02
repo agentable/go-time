@@ -11,8 +11,9 @@ The most important split is `Duration` vs `Period`: exact elapsed time and calen
 ### Closed Value JSON
 
 - **Decision**: Value-object JSON is a closed contract. Decoders reject unknown
-  fields, missing required fields, wrong `kind`, non-canonical values, and
-  invalid identities.
+  fields, missing required fields, wrong `kind`, values outside the owning
+  type's accepted grammar, and invalid identities. Accepted alternate spellings
+  are type-specific and marshal back to the canonical package form.
 - **Why**: Persisted time payloads must fail at the boundary when they carry two competing facts. Silent acceptance makes old or malformed data look authoritative.
 - **Rejected**: Lenient decode for compatibility, mirror component fields, and display fields embedded in value JSON.
 - **Contract Impact**: A wire payload either maps to one semantic value or returns a typed error. There is no best-effort merge.
@@ -46,9 +47,13 @@ JSON:
 
 Key API: `InstantFromTime`, `UnixSeconds`, `UnixMillis`, `UnixNanos`, `Std`, `UnixNano`, `UnixMilli`, `In`, `Add(Duration)`, `Sub(Instant)`, `Compare`.
 
-`iso` is the only instant wire fact. Callers that need epoch milliseconds use
-`UnixMilli()` after decoding. Marshal rejects an instant whose UTC year cannot
-be represented by the matching RFC3339 decoder.
+`iso` is the only instant wire fact. `UnixNano()` and `UnixMilli()` return
+`(int64, error)` and match `ErrOverflow` when the selected scalar precision
+cannot represent the instant; millisecond projection deliberately discards
+sub-millisecond precision. Marshal rejects an instant whose UTC year cannot be
+represented by the matching RFC3339 decoder.
+Instant decode accepts RFC 3339 numeric offsets because they identify the same
+absolute value; marshal normalizes every accepted instant to UTC with `Z`.
 
 ### DateTime
 
@@ -108,11 +113,13 @@ JSON:
 {"kind":"date","value":"2026-03-27"}
 ```
 
-Key API: `NewDate`, `DateFromTime`, `Year`, `Month`, `Day`, `Weekday`, `ISOWeek`, `YearDay`, `DaysInMonth`, `IsLeapYear`, `Add(Period)`, `DaysUntil(Date)`, `PeriodUntil(Date)`, `Compare`.
+Key API: `NewDate`, `DateFromTime`, `Year`, `Month`, `Day`, `Weekday`, `ISOWeek`, `YearDay`, `DaysInMonth`, `IsLeapYear`, `Add(Period)`, `DaysUntil(Date)`, `Compare`.
 
 `NewDate` returns an error for invalid calendar components. It accepts the stable wire-domain year range `0000..9999` and never normalizes values such as February 31.
 
 `Date` accepts `Period`, never `Duration`.
+`DaysUntil` returns `(int, error)` and matches `ErrInvalidDate` with an
+actionable hint when either endpoint is invalid.
 
 ### Time
 
@@ -181,6 +188,9 @@ Key API: exported `Years`, `Months`, `Days` fields, `NewPeriod`, `Years`, `Month
 Month/year arithmetic clamps to the end of the target month. `Period` has no `Decompose`; callers read the exported fields directly.
 Component arithmetic is checked: `Add`, `Sub`, `Negate`, and `Abs` return
 `ErrOverflow` when the exact result does not fit `int32`.
+`Period.String()` equals `ISO8601()` and is lossless for the full component
+domain. Mixed-sign values use explicit component signs, for example
+`Period{Years: 1, Months: -2, Days: 3}` renders as `P+1Y-2M+3D`.
 
 ### Interval
 
@@ -228,10 +238,9 @@ and JSON.
 | `LocalResolution.Only() -> DateTime` | Demand exactly one resolved candidate. |
 | `DateTime.Instant() -> Instant` | Convert a zoned local time to the absolute timeline. |
 | `DateTime.In(Zone) -> (DateTime, error)` | Same moment, different zone; reject a civil-year overflow. |
-| `DateTime.Sub(DateTime) -> Duration` | Exact elapsed difference. |
-| `Date.DaysUntil(Date) -> int` | Signed calendar-day count. |
-| `Date.PeriodUntil(Date) -> (Period, error)` | Signed greedy calendar difference; reject invalid endpoints. |
-| `Interval.Length() -> Duration` | Exact interval length. |
+| `DateTime.Sub(DateTime) -> (Duration, error)` | Exact elapsed difference; reject scalar overflow. |
+| `Date.DaysUntil(Date) -> (int, error)` | Signed calendar-day count; reject an invalid endpoint. |
+| `Interval.Length() -> (Duration, error)` | Exact interval length; reject scalar overflow without shrinking the endpoint domain. |
 
 ## Wire Format Invariance
 
@@ -243,12 +252,28 @@ JSON shapes are part of the long-term contract.
 - `Duration` and `Period` JSON use `iso`; derived components stay outside the wire payload.
 - Marshal output must not depend on `time.Now()`, process locale, mutable globals, or ambient zone state.
 - Unmarshal rejects wrong `kind`, missing required fields, unknown fields,
-  non-canonical values, and invalid identities.
+  values outside the concrete type's grammar, and invalid identities.
+- Accepted input spellings need not equal marshal output byte-for-byte. In
+  particular, RFC 3339 offsets in `Instant` and `Interval` endpoints are
+  accepted and normalized to UTC `Z`; successful marshal/unmarshal/marshal is
+  byte-stable from the package-generated form onward.
+- Structurally valid JSON that reaches a concrete value decoder reports wrong
+  field types, unknown fields, missing fields, and wrong `kind` through
+  `ErrInvalidFormat` and `*TimeError`, retaining any jsonv2 cause. Malformed
+  top-level JSON is rejected by jsonv2 before type dispatch and remains a
+  `*jsontext.SyntacticError`.
+- Once the wire structure is valid, semantic failures use the value's precise
+  existing sentinel (`ErrInvalidDate`, `ErrInvalidTime`,
+  `ErrInvalidDuration`, `ErrInvalidPeriod`, `ErrInvalidZone`, interval errors,
+  or `ErrInvalidFormat`) and a `*TimeError` with an actionable hint. Parser and
+  loader causes remain in the unwrap chain when present.
 
 ## Acceptance Criteria
 
 - JSON tests reject unknown fields, missing required fields, wrong `kind`,
-  non-canonical values, and invalid identities.
+  values outside each concrete grammar, and invalid identities.
+- Offset-bearing RFC 3339 `Instant` and `Interval` inputs decode to the correct
+  absolute values and re-encode with UTC `Z`.
 - `Marshal -> Unmarshal -> Marshal` remains byte-stable for accepted value payloads.
 - Date construction rejects years outside `0000..9999` and invalid calendar components.
 - Zone JSON remains `{"kind":"zone","id":"..."}` and never carries offset, abbreviation, or DST display fields.

@@ -28,11 +28,40 @@ func TestIntervalUnmarshalJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(input), &iv); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
-	if iv.Start().UnixNano() != 0 {
-		t.Errorf("start = %d, want 0", iv.Start().UnixNano())
+	start, err := iv.Start().UnixNano()
+	if err != nil {
+		t.Fatalf("start UnixNano() error = %v", err)
 	}
-	if iv.End().UnixNano() != 3_600_000_000_000 {
-		t.Errorf("end = %d, want 3600000000000", iv.End().UnixNano())
+	if start != 0 {
+		t.Errorf("start = %d, want 0", start)
+	}
+	end, err := iv.End().UnixNano()
+	if err != nil {
+		t.Fatalf("end UnixNano() error = %v", err)
+	}
+	if end != 3_600_000_000_000 {
+		t.Errorf("end = %d, want 3600000000000", end)
+	}
+}
+
+func TestIntervalUnmarshalJSON_NormalizesOffsetInput(t *testing.T) {
+	t.Parallel()
+
+	var interval Interval
+	input := []byte(`{"kind":"interval","start":"1970-01-01T09:00:00+09:00","end":"1970-01-01T10:00:00+09:00"}`)
+	if err := json.Unmarshal(input, &interval); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if !interval.Start().Equal(UnixNanos(0)) || !interval.End().Equal(UnixNanos(int64(time.Hour))) {
+		t.Fatalf("Unmarshal() = %v, want epoch through epoch+1h", interval)
+	}
+	got, err := json.Marshal(interval)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	want := `{"kind":"interval","start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}`
+	if string(got) != want {
+		t.Fatalf("Marshal() = %s, want %s", got, want)
 	}
 }
 

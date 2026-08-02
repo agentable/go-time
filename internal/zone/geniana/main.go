@@ -1,4 +1,8 @@
 // The geniana command generates the internal IANA timezone catalog.
+//
+// Run from the repository root with a source matching the checked-in lock:
+//
+//	go run ./internal/zone/geniana -zone-tab /path/to/zone.tab -source-lock internal/zone/sources.json
 package main
 
 import (
@@ -12,60 +16,45 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/agentable/go-time/internal/zone/genlock"
 )
 
 func main() {
 	var zoneTabPath string
-	var versionFilePath string
-	var version string
+	var sourceLockPath string
 	var outPath string
 	flag.StringVar(&zoneTabPath, "zone-tab", "", "path to IANA zone.tab")
-	flag.StringVar(&versionFilePath, "version-file", "", "path to tzdb +VERSION file")
-	flag.StringVar(&version, "version", "", "IANA tzdb version; overrides -version-file")
+	flag.StringVar(&sourceLockPath, "source-lock", "internal/zone/sources.json", "path to timezone generator source lock")
 	flag.StringVar(&outPath, "out", "internal/zone/catalog.go", "output Go file")
 	flag.Parse()
 
-	if err := run(zoneTabPath, versionFilePath, version, outPath); err != nil {
+	if err := run(zoneTabPath, sourceLockPath, outPath); err != nil {
 		fmt.Fprintf(os.Stderr, "geniana: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(zoneTabPath, versionFilePath, version, outPath string) error {
+func run(zoneTabPath, sourceLockPath, outPath string) error {
 	if zoneTabPath == "" {
 		return errors.New("-zone-tab is required")
 	}
-	if version == "" {
-		var err error
-		version, err = readVersion(versionFilePath)
-		if err != nil {
-			return err
-		}
+	lock, err := genlock.Load(sourceLockPath)
+	if err != nil {
+		return err
+	}
+	if err := lock.IANA.Verify(zoneTabPath); err != nil {
+		return fmt.Errorf("verify IANA source: %w", err)
 	}
 	zones, err := readZoneTab(zoneTabPath)
 	if err != nil {
 		return err
 	}
-	src, err := render(version, zoneTabPath, zones)
+	src, err := render(lock.IANA.Version, lock.IANA.Filename(), zones)
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(outPath, src, 0o644) //nolint:gosec // Generated Go source should use normal repository file permissions.
-}
-
-func readVersion(path string) (string, error) {
-	if path == "" {
-		return "", errors.New("-version or -version-file is required")
-	}
-	b, err := os.ReadFile(path) //nolint:gosec // The caller intentionally selects the local tzdb version file.
-	if err != nil {
-		return "", fmt.Errorf("read version file: %w", err)
-	}
-	version := strings.TrimSpace(string(b))
-	if version == "" {
-		return "", fmt.Errorf("version file %q is empty", path)
-	}
-	return version, nil
 }
 
 func readZoneTab(path string) (zones []string, err error) {

@@ -2,6 +2,7 @@ package gotime
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-json-experiment/json"
@@ -72,7 +73,21 @@ func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 	}
 	parsed, err := time.Parse("2006-01-02T15:04:05", wire.Value)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid local datetime value %q: %w", wire.Value, err)
+		sentinel := ErrInvalidFormat
+		message := "local datetime value is not valid"
+		hint := "use a local datetime such as 2026-03-27T13:30:45"
+		if dateText, timeText, ok := strings.Cut(wire.Value, "T"); ok {
+			if _, dateErr := time.Parse("2006-01-02", dateText); dateErr != nil {
+				sentinel = ErrInvalidDate
+				message = "local datetime contains an invalid calendar date"
+				hint = "use a real calendar date such as 2026-03-27"
+			} else if _, timeErr := time.Parse("15:04:05", timeText); timeErr != nil {
+				sentinel = ErrInvalidTime
+				message = "local datetime contains an invalid clock time"
+				hint = "use a clock time such as 13:30:45 or 13:30:45.123"
+			}
+		}
+		return newTimeErrorWithCause(sentinel, err, message, wire.Value, hint)
 	}
 	date, err := DateFromTime(parsed)
 	if err != nil {

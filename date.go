@@ -118,68 +118,25 @@ func dateAddOverflow(d Date, p Period) (Date, error) {
 }
 
 // DaysUntil returns the signed number of calendar days from d to other.
-func (d Date) DaysUntil(other Date) int {
-	return other.dayNumber() - d.dayNumber()
-}
-
-// PeriodUntil returns the signed greedy calendar period from d to other.
-// It prefers years, then months, then days; use DaysUntil for exact day counts.
 // It returns ErrInvalidDate if either endpoint is invalid.
-func (d Date) PeriodUntil(other Date) (Period, error) {
+func (d Date) DaysUntil(other Date) (int, error) {
 	if msg := validateDateComponents(d.year, int(d.month), d.day); msg != "" {
-		return Period{}, newTimeError(
+		return 0, newTimeError(
 			ErrInvalidDate,
 			msg,
 			d.String(),
-			"construct the start Date with NewDate before calculating a period",
+			"construct the start Date with NewDate before calculating a day difference",
 		)
 	}
 	if msg := validateDateComponents(other.year, int(other.month), other.day); msg != "" {
-		return Period{}, newTimeError(
+		return 0, newTimeError(
 			ErrInvalidDate,
 			msg,
 			other.String(),
-			"construct the end Date with NewDate before calculating a period",
+			"construct the end Date with NewDate before calculating a day difference",
 		)
 	}
-	if d.Equal(other) {
-		return Period{}, nil
-	}
-
-	start, end := d, other
-	neg := other.Before(d)
-	if neg {
-		start, end = other, d
-	}
-	years := end.year - start.year
-	yearBase, err := start.Add(Period{Years: int32(years)}) //nolint:gosec // normalized calendar year delta fits Period's int32 fields
-	if err != nil {
-		return Period{}, err
-	}
-	if yearBase.After(end) {
-		years--
-	}
-	months := 0
-	for {
-		next, err := start.Add(Period{Years: int32(years), Months: int32(months + 1)}) //nolint:gosec // normalized calendar deltas fit in int32
-		if err != nil {
-			return Period{}, err
-		}
-		if next.Compare(end) > 0 {
-			break
-		}
-		months++
-	}
-	base, err := start.Add(Period{Years: int32(years), Months: int32(months)}) //nolint:gosec // calendar deltas fit in int32
-	if err != nil {
-		return Period{}, err
-	}
-	days := base.DaysUntil(end)
-	period := Period{Years: int32(years), Months: int32(months), Days: int32(days)} //nolint:gosec // calendar deltas fit in int32
-	if neg {
-		return Period{Years: -period.Years, Months: -period.Months, Days: -period.Days}, nil
-	}
-	return period, nil
+	return other.dayNumber() - d.dayNumber(), nil
 }
 
 func (d Date) dayNumber() int {
@@ -278,7 +235,13 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 	}
 	t, err := time.Parse("2006-01-02", wire.Value)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid date value %q: %w", wire.Value, err)
+		return newTimeErrorWithCause(
+			ErrInvalidDate,
+			err,
+			"date value is not a valid calendar date",
+			wire.Value,
+			"use a real calendar date such as 2026-03-27",
+		)
 	}
 	date, err := NewDate(t.Year(), t.Month(), t.Day())
 	if err != nil {

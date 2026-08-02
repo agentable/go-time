@@ -89,18 +89,29 @@ func naturalResultToParseResult(input string, r *natural.Result, cfg *config) Pa
 		}
 		return pr
 
-	case natural.KindAmbiguous:
-		// Natural parsers don't produce ambiguous results in Tier 1.
-		return invalidResult(input, ErrUnparseable,
-			fmt.Sprintf("ambiguous natural language expression: %q", input),
-			"Provide a more specific time expression or add a locale hint")
-
 	case natural.KindInvalid:
-		return invalidResult(input, sentinelForCode(ErrorCode(r.ErrCode)), r.ErrMessage, r.ErrHint)
+		sentinel := naturalErrorSentinel(r.ErrorKind)
+		if sentinel == nil {
+			return invalidResult(input, ErrUnparseable,
+				fmt.Sprintf("natural language parser returned unexpected error kind: %v", r.ErrorKind),
+				"Report this as a bug")
+		}
+		return invalidResult(input, sentinel, r.ErrMessage, r.ErrHint)
 
 	default:
 		return invalidResult(input, ErrUnparseable,
 			fmt.Sprintf("natural language parser returned unexpected kind: %v", r.Kind),
 			"Report this as a bug")
+	}
+}
+
+func naturalErrorSentinel(kind natural.ErrorKind) error {
+	switch kind {
+	case natural.ErrorOverflow:
+		return ErrOverflow
+	case natural.ErrorInvalidDuration:
+		return ErrInvalidDuration
+	default:
+		return nil
 	}
 }

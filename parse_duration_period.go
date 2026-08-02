@@ -47,6 +47,11 @@ func parseDuration(input string, cfg *config) ParseResult {
 
 func parseISOPeriodMatch(input string, m []string, cfg *config) ParseResult {
 	neg := m[1] == "-"
+	if neg && hasSignedPeriodComponent(m[2:6]) {
+		return invalidResult(input, ErrInvalidPeriod,
+			fmt.Sprintf("period combines a leading sign with component signs: %q", input),
+			"Use one leading sign for all components, or omit it and sign components individually")
+	}
 	var years, months, weeks, days int64
 	for _, component := range []struct {
 		raw    string

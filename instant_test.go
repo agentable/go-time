@@ -2,6 +2,7 @@ package gotime
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -18,8 +19,12 @@ func TestInstantFromTime_ForcesUTC(t *testing.T) {
 
 func TestUnixNanos_Epoch(t *testing.T) {
 	i := UnixNanos(0)
-	if i.UnixNano() != 0 {
-		t.Errorf("UnixNano() = %d, want 0", i.UnixNano())
+	got, err := i.UnixNano()
+	if err != nil {
+		t.Fatalf("UnixNano() error = %v", err)
+	}
+	if got != 0 {
+		t.Errorf("UnixNano() = %d, want 0", got)
 	}
 	want := time.Unix(0, 0).UTC()
 	if !i.Std().Equal(want) {
@@ -29,11 +34,19 @@ func TestUnixNanos_Epoch(t *testing.T) {
 
 func TestUnixMillis(t *testing.T) {
 	i := UnixMillis(1000)
-	if i.UnixNano() != 1_000_000_000 {
-		t.Errorf("UnixNano() = %d, want 1_000_000_000", i.UnixNano())
+	gotNanos, err := i.UnixNano()
+	if err != nil {
+		t.Fatalf("UnixNano() error = %v", err)
 	}
-	if i.UnixMilli() != 1000 {
-		t.Errorf("UnixMilli() = %d, want 1000", i.UnixMilli())
+	if gotNanos != 1_000_000_000 {
+		t.Errorf("UnixNano() = %d, want 1_000_000_000", gotNanos)
+	}
+	gotMillis, err := i.UnixMilli()
+	if err != nil {
+		t.Fatalf("UnixMilli() error = %v", err)
+	}
+	if gotMillis != 1000 {
+		t.Errorf("UnixMilli() = %d, want 1000", gotMillis)
 	}
 }
 
@@ -45,8 +58,121 @@ func TestUnixSeconds(t *testing.T) {
 	if got := i.Std(); !got.Equal(want) {
 		t.Errorf("Std() = %v, want %v", got, want)
 	}
-	if got := i.UnixNano(); got != 1_234_000_000_000 {
+	got, err := i.UnixNano()
+	if err != nil {
+		t.Fatalf("UnixNano() error = %v", err)
+	}
+	if got != 1_234_000_000_000 {
 		t.Errorf("UnixNano() = %d, want 1_234_000_000_000", got)
+	}
+}
+
+func TestInstant_UnixNanoBoundaries(t *testing.T) {
+	t.Parallel()
+
+	for _, want := range []int64{math.MinInt64, math.MaxInt64} {
+		instant := UnixNanos(want)
+		got, err := instant.UnixNano()
+		if err != nil {
+			t.Fatalf("UnixNanos(%d).UnixNano() error = %v", want, err)
+		}
+		if got != want {
+			t.Errorf("UnixNanos(%d).UnixNano() = %d, want %d", want, got, want)
+		}
+		if !UnixNanos(got).Equal(instant) {
+			t.Errorf("UnixNanos(%d) did not round-trip", got)
+		}
+	}
+}
+
+func TestInstant_UnixNanoRejectsOverflow(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		instant Instant
+	}{
+		{name: "below minimum", instant: UnixNanos(math.MinInt64).Add(-Nanosecond)},
+		{name: "above maximum", instant: UnixNanos(math.MaxInt64).Add(Nanosecond)},
+		{name: "zero value", instant: Instant{}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.instant.UnixNano()
+			if !errors.Is(err, ErrOverflow) {
+				t.Fatalf("UnixNano() error = %v, want ErrOverflow", err)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) || te.Hint == "" {
+				t.Fatalf("UnixNano() error = %#v, want TimeError with hint", err)
+			}
+		})
+	}
+}
+
+func TestInstant_UnixMilliBoundaries(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		instant Instant
+		want    int64
+	}{
+		{name: "minimum", instant: UnixMillis(math.MinInt64), want: math.MinInt64},
+		{
+			name:    "maximum",
+			instant: UnixMillis(math.MaxInt64).Add(Millisecond - Nanosecond),
+			want:    math.MaxInt64,
+		},
+	}
+	for _, tc := range tests {
+		got, err := tc.instant.UnixMilli()
+		if err != nil {
+			t.Fatalf("%s UnixMilli() error = %v", tc.name, err)
+		}
+		if got != tc.want {
+			t.Errorf("%s UnixMilli() = %d, want %d", tc.name, got, tc.want)
+		}
+		if !UnixMillis(got).Equal(InstantFromTime(tc.instant.Std().Truncate(time.Millisecond))) {
+			t.Errorf("%s UnixMillis(%d) did not round-trip to millisecond precision", tc.name, got)
+		}
+	}
+}
+
+func TestInstant_UnixMilliRejectsOverflow(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		instant Instant
+	}{
+		{name: "below minimum", instant: UnixMillis(math.MinInt64).Add(-Nanosecond)},
+		{name: "above maximum", instant: UnixMillis(math.MaxInt64).Add(Millisecond)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.instant.UnixMilli()
+			if !errors.Is(err, ErrOverflow) {
+				t.Fatalf("UnixMilli() error = %v, want ErrOverflow", err)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) || te.Hint == "" {
+				t.Fatalf("UnixMilli() error = %#v, want TimeError with hint", err)
+			}
+		})
+	}
+}
+
+func TestInstant_ZeroUnixMilliIsRepresentable(t *testing.T) {
+	t.Parallel()
+
+	var instant Instant
+	got, err := instant.UnixMilli()
+	if err != nil {
+		t.Fatalf("UnixMilli() error = %v", err)
+	}
+	if want := instant.Std().UnixMilli(); got != want {
+		t.Errorf("UnixMilli() = %d, want %d", got, want)
 	}
 }
 
@@ -65,9 +191,64 @@ func TestNow_InstantNonZero(t *testing.T) {
 func TestInstant_AddSub(t *testing.T) {
 	i := UnixNanos(0)
 	i2 := i.Add((1 * Hour))
-	d := i2.Sub(i)
+	d, err := i2.Sub(i)
+	if err != nil {
+		t.Fatalf("Sub after Add((1 * Hour)) error = %v", err)
+	}
 	if d.InHours() != 1.0 {
 		t.Errorf("Sub after Add((1 * Hour)) = %v hours, want 1.0", d.InHours())
+	}
+
+	back, err := i.Sub(i2)
+	if err != nil {
+		t.Fatalf("reverse Sub error = %v", err)
+	}
+	if back != -d {
+		t.Errorf("reverse Sub = %v, want %v", back, -d)
+	}
+}
+
+func TestInstant_SubExactDurationBoundaries(t *testing.T) {
+	t.Parallel()
+
+	start := UnixNanos(0)
+	for _, want := range []Duration{Duration(math.MinInt64), Duration(math.MaxInt64)} {
+		end := start.Add(want)
+		got, err := end.Sub(start)
+		if err != nil {
+			t.Fatalf("Sub(%v) error = %v", want, err)
+		}
+		if got != want {
+			t.Errorf("Sub(%v) = %v, want %v", want, got, want)
+		}
+		if !start.Add(got).Equal(end) {
+			t.Errorf("start.Add(Sub) = %v, want %v", start.Add(got), end)
+		}
+	}
+}
+
+func TestInstant_SubRejectsOverflow(t *testing.T) {
+	t.Parallel()
+
+	start := UnixNanos(0)
+	tests := []struct {
+		name string
+		end  Instant
+	}{
+		{name: "positive", end: start.Add(Duration(math.MaxInt64)).Add(Nanosecond)},
+		{name: "negative", end: start.Add(Duration(math.MinInt64)).Add(-Nanosecond)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.end.Sub(start)
+			if !errors.Is(err, ErrOverflow) {
+				t.Fatalf("Sub() error = %v, want ErrOverflow", err)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) || te.Hint == "" {
+				t.Fatalf("Sub() error = %#v, want TimeError with hint", err)
+			}
+		})
 	}
 }
 

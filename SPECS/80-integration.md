@@ -19,8 +19,8 @@ Consumers map workflow needs to stable primitives:
 | resolve wall-clock input in a zone | `LocalDateTime.Resolve`, `ParseDateTime` with `WithZone` |
 | render output | `.Std()`, `Duration.Decompose()`, `Period` fields, then an external renderer |
 | convert zone | `DateTime.In` |
-| exact difference | `Instant.Sub`, `DateTime.Sub` |
-| calendar difference | `Date.DaysUntil`, `Date.PeriodUntil` |
+| exact difference | checked `Instant.Sub`, `DateTime.Sub`, `Interval.Length` |
+| calendar difference | `Date.DaysUntil` |
 | compare values | `Compare` methods |
 | add exact duration | `Instant.Add`, `DateTime.Add` |
 | add calendar period | `DateTime.AddPeriod`, `Date.Add` |

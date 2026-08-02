@@ -3,6 +3,7 @@ package gotime
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 
@@ -206,19 +207,32 @@ func TestPeriod_String(t *testing.T) {
 	tests := []struct {
 		name string
 		p    Period
-		want string
 	}{
-		{name: "zero", p: Period{}, want: "0d"},
-		{name: "positive fields", p: Period{Years: 1, Months: 2, Days: 3}, want: "1y2mo3d"},
-		{name: "all negative", p: Period{Months: -2, Days: -3}, want: "-2mo3d"},
+		{name: "zero", p: Period{}},
+		{name: "positive fields", p: Period{Years: 1, Months: 2, Days: 3}},
+		{name: "all negative", p: Period{Months: -2, Days: -3}},
+		{name: "mixed signs", p: Period{Years: 1, Months: -2, Days: 3}},
+		{name: "minimum component", p: Period{Years: math.MinInt32}},
+		{name: "mixed minimum component", p: Period{Years: math.MinInt32, Months: 1}},
 	}
+	seen := make(map[string]Period, len(tests))
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := tc.p.String(); got != tc.want {
-				t.Errorf("String() = %q, want %q", got, tc.want)
+			got := tc.p.String()
+			if want := tc.p.ISO8601(); got != want {
+				t.Errorf("String() = %q, want ISO8601() %q", got, want)
 			}
+			parsed, err := ParsePeriod(got)
+			if err != nil {
+				t.Fatalf("ParsePeriod(String()) error = %v", err)
+			}
+			if diff := cmp.Diff(tc.p, parsed); diff != "" {
+				t.Errorf("ParsePeriod(String()) mismatch (-want +got):\n%s", diff)
+			}
+			if previous, ok := seen[got]; ok {
+				t.Fatalf("String() collision for %#v and %#v: %q", previous, tc.p, got)
+			}
+			seen[got] = tc.p
 		})
 	}
 }
@@ -280,12 +294,19 @@ func TestPeriod_UnmarshalJSONWeeks(t *testing.T) {
 func TestPeriod_UnmarshalJSONInvalidISO(t *testing.T) {
 	t.Parallel()
 
-	var got Period
-	err := json.Unmarshal([]byte(`{"kind":"period","iso":"P"}`), &got)
-	if err == nil {
-		t.Fatal("json.Unmarshal invalid period succeeded, want error")
-	}
-	if !errors.Is(err, errInvalidISO8601Period) {
-		t.Fatalf("json.Unmarshal invalid period error = %v, want errInvalidISO8601Period", err)
+	for _, iso := range []string{"P", "-P-1Y", "-P+1Y", "-P-1W+2D"} {
+		t.Run(iso, func(t *testing.T) {
+			t.Parallel()
+
+			var got Period
+			input := []byte(fmt.Sprintf(`{"kind":"period","iso":%q}`, iso))
+			err := json.Unmarshal(input, &got)
+			if !errors.Is(err, ErrInvalidPeriod) {
+				t.Fatalf("json.Unmarshal(%q) error = %v, want ErrInvalidPeriod", iso, err)
+			}
+			if !errors.Is(err, errInvalidISO8601Period) {
+				t.Fatalf("json.Unmarshal(%q) error = %v, want errInvalidISO8601Period", iso, err)
+			}
+		})
 	}
 }

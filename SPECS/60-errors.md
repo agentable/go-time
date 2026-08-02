@@ -7,7 +7,9 @@ go-time uses the same two-track model as many stdlib APIs:
 - Sentinel `Err*` values for `errors.Is`.
 - Typed `*TimeError` values for `errors.As` and structured metadata.
 
-`*TimeError.Unwrap()` returns the sentinel. `Code` is for JSON, logs, and tools; it does not drive Go control flow.
+`*TimeError.Unwrap()` returns an unwrap chain containing the sentinel and, when
+available, the underlying parser, loader, or codec cause. `Code` is for JSON,
+logs, and tools; it does not drive Go control flow.
 
 ## ErrorCode
 
@@ -49,6 +51,8 @@ Every package-generated `*TimeError` should include an actionable `Hint`.
 `Message` and `Input` may contain caller-provided data. `Error()` MUST exclude
 both fields and return only the fixed `ErrorCode` and matching sentinel text;
 unknown codes return `time error` rather than echoing untrusted fields.
+`Err` stores the unwrap chain, not necessarily the sentinel alone. Callers use
+`errors.Is` for the sentinel and `errors.As` for an underlying typed cause.
 
 ## Sentinels
 
@@ -122,6 +126,19 @@ Empty input in `Parse` returns `ErrEmptyInput` with `CodeEmptyInput`.
 `ParseResult` embeds errors under `error` when invalid.
 JSON preserves `Message`, `Input`, and `Hint` for structured consumers; it is
 not a sanitized log payload.
+
+Concrete value decoders classify wrong field types, unknown members, missing
+required fields, and wrong `kind` as `ErrInvalidFormat` with a `*TimeError` and
+an actionable hint. When jsonv2 supplies an underlying structural cause, it
+remains reachable through `errors.As` but is excluded from `TimeError.Error()`.
+Malformed top-level JSON never reaches a concrete type decoder; jsonv2 returns
+its `*jsontext.SyntacticError` directly.
+
+After structure validation, concrete value decoders map invalid dates, clock
+times, exact durations, calendar periods, zones, intervals, and RFC3339 values
+to their precise existing sentinel. These failures support `errors.As` to
+`*TimeError`, always include a Hint, and retain an underlying parser or loader
+cause when one exists.
 
 ## Public Panics
 

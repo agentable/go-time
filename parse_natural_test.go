@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentable/go-time/internal/natural"
+
 	"golang.org/x/text/language"
 )
 
@@ -451,21 +453,69 @@ func TestParse_Natural_Unrecognised(t *testing.T) {
 func TestParse_Natural_OverflowPreservesSentinel(t *testing.T) {
 	t.Parallel()
 
-	r := Parse("in 9223372036854775808 months", WithInputLocale(language.English))
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	for _, input := range []string{
+		"in 3000000000 months",
+		"in 3000000000 hours",
+	} {
+		r := Parse(input, WithInputLocale(language.English))
+		if r.Status != StatusInvalid {
+			t.Fatalf("Parse(%q).Status = %v, want Invalid", input, r.Status)
+		}
+		if r.Error == nil {
+			t.Fatalf("Parse(%q).Error = nil, want error", input)
+		}
+		if !errors.Is(r.Error, ErrOverflow) {
+			t.Fatalf("Parse(%q).Error = %v, want ErrOverflow", input, r.Error)
+		}
+		if r.Error.Code != CodeOverflow {
+			t.Errorf("Parse(%q).Error.Code = %q, want %q", input, r.Error.Code, CodeOverflow)
+		}
+		if r.Error.Hint == "" {
+			t.Errorf("Parse(%q).Error.Hint is empty", input)
+		}
 	}
-	if r.Error == nil {
-		t.Fatal("Error must not be nil when status is Invalid")
+}
+
+func TestNaturalResultToParseResultRejectsUnknownErrorKind(t *testing.T) {
+	t.Parallel()
+
+	r := natural.Result{
+		Kind:       natural.KindInvalid,
+		ErrorKind:  natural.ErrorKind(255),
+		ErrMessage: "unknown internal failure",
+		ErrHint:    "do not expose this hint",
 	}
-	if !errors.Is(r.Error, ErrOverflow) {
-		t.Fatalf("error = %v, want ErrOverflow", r.Error)
+	got := naturalResultToParseResult("input", &r, &config{})
+	if got.Status != StatusInvalid || got.Error == nil {
+		t.Fatalf("result = %#v, want invalid result with error", got)
 	}
-	if r.Error.Code != CodeOverflow {
-		t.Errorf("error code = %q, want %q", r.Error.Code, CodeOverflow)
+	if !errors.Is(got.Error, ErrUnparseable) || got.Error.Code != CodeUnparseable {
+		t.Fatalf("error = %#v, want ErrUnparseable and CodeUnparseable", got.Error)
 	}
-	if r.Error.Hint == "" {
-		t.Error("error Hint must not be empty")
+	if got.Error.Hint == "" {
+		t.Fatal("error Hint is empty")
+	}
+}
+
+func TestNaturalErrorSentinel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		kind natural.ErrorKind
+		want error
+	}{
+		{name: "overflow", kind: natural.ErrorOverflow, want: ErrOverflow},
+		{name: "invalid duration", kind: natural.ErrorInvalidDuration, want: ErrInvalidDuration},
+		{name: "unknown", kind: natural.ErrorKind(255)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := naturalErrorSentinel(tc.kind)
+			if !errors.Is(got, tc.want) {
+				t.Fatalf("naturalErrorSentinel(%v) = %v, want %v", tc.kind, got, tc.want)
+			}
+		})
 	}
 }
 
