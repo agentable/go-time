@@ -289,7 +289,7 @@ func TestParseResult_HasZone(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := Parse(tc.input)
 			if r.Status == StatusInvalid {
-				t.Skipf("input %q not parseable: %v", tc.input, r.Error)
+				t.Fatalf("Parse(%q).Status = invalid, error = %#v; want non-invalid", tc.input, r.Error)
 			}
 			if r.HasZone != tc.hasZone {
 				t.Errorf("Parse(%q).HasZone = %v, want %v", tc.input, r.HasZone, tc.hasZone)

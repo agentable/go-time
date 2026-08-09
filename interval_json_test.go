@@ -69,7 +69,10 @@ func TestIntervalJSONRoundTrip(t *testing.T) {
 	start := UnixNanos(1_000_000_000)
 	end := UnixNanos(2_000_000_000)
 	orig := mustInterval(t, start, end)
-	b, _ := json.Marshal(orig)
+	b, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
 	var got Interval
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("round-trip: %v", err)

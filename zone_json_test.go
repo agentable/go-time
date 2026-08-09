@@ -75,7 +75,10 @@ func TestZoneUnmarshalJSON(t *testing.T) {
 
 func TestZoneJSONRoundTrip(t *testing.T) {
 	orig := UTC
-	b, _ := json.Marshal(orig)
+	b, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
 	var got Zone
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("round-trip: %v", err)
