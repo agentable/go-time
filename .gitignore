@@ -69,3 +69,9 @@ reports/*
 # .ralphy
 .ralphy/*.json
 .plans
+
+# Local planning and tooling state
+analytics.md
+
+# Local planning and tooling state
+.plan/*.md
