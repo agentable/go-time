@@ -3,6 +3,7 @@ package gotime
 import (
 	"errors"
 	"maps"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,6 +194,60 @@ func TestJSONUnmarshalSemanticErrors(t *testing.T) {
 			}
 			if !tc.unchanged() {
 				t.Fatalf("Unmarshal(%s) changed the receiver", tc.input)
+			}
+		})
+	}
+}
+
+func TestJSONZoneErrorsKeepStructuredInputOutOfText(t *testing.T) {
+	t.Parallel()
+
+	const sensitiveZone = "secret-zone-token\n\x1b[31m"
+	tests := []struct {
+		name   string
+		value  any
+		target any
+	}{
+		{
+			name: "zone",
+			value: struct {
+				Kind string `json:"kind"`
+				ID   string `json:"id"`
+			}{Kind: "zone", ID: sensitiveZone},
+			target: new(Zone),
+		},
+		{
+			name: "datetime",
+			value: struct {
+				Kind    string `json:"kind"`
+				Instant string `json:"instant"`
+				Zone    string `json:"zone"`
+			}{Kind: "datetime", Instant: "2026-03-27T04:00:00Z", Zone: sensitiveZone},
+			target: new(DateTime),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			payload, err := json.Marshal(test.value)
+			if err != nil {
+				t.Fatalf("Marshal() error = %v", err)
+			}
+			err = json.Unmarshal(payload, test.target)
+			if !errors.Is(err, ErrInvalidZone) {
+				t.Fatalf("Unmarshal() error = %v, want ErrInvalidZone", err)
+			}
+			if strings.Contains(err.Error(), "secret-zone-token") {
+				t.Fatalf("Unmarshal() error exposed structured input: %q", err)
+			}
+			var detail *TimeError
+			if !errors.As(err, &detail) {
+				t.Fatalf("Unmarshal() error = %T, want *TimeError", err)
+			}
+			if detail.Input != sensitiveZone {
+				t.Errorf("TimeError.Input = %q, want original structured input", detail.Input)
 			}
 		})
 	}

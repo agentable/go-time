@@ -61,6 +61,9 @@ func WithReference(t Instant) Option {
 func applyOptions(opts []Option) config {
 	var cfg config
 	for _, o := range opts {
+		if o == nil {
+			continue
+		}
 		o(&cfg)
 	}
 	return cfg

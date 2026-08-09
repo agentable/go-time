@@ -10,8 +10,10 @@ import (
 	ianazone "github.com/agentable/go-time/internal/zone"
 )
 
+var utcZone = Zone{id: "UTC", loc: time.UTC}
+
 // UTC is the UTC timezone.
-var UTC = Zone{id: "UTC", loc: time.UTC}
+var UTC = utcZone
 
 // Zone represents an IANA timezone identity.
 type Zone struct {
@@ -71,7 +73,7 @@ func (z Zone) Location() *time.Location {
 
 func normalizeZone(z Zone) Zone {
 	if z.IsZero() {
-		return UTC
+		return utcZone
 	}
 	return z
 }
@@ -131,7 +133,7 @@ func (z *Zone) UnmarshalJSON(b []byte) error {
 	}
 	loaded, err := LoadZone(wire.ID)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid zone id %q: %w", wire.ID, err)
+		return err
 	}
 	*z = loaded
 	return nil

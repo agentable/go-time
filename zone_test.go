@@ -56,6 +56,33 @@ func TestZone_ZeroValue_NoPanic(t *testing.T) {
 	}
 }
 
+func TestZeroZoneSemanticsDoNotDependOnExportedUTC(t *testing.T) {
+	originalUTC := UTC
+	t.Cleanup(func() {
+		UTC = originalUTC
+	})
+	UTC = MustLoadZone("Asia/Tokyo")
+
+	encoded, err := (Zone{}).MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON(Zone{}) error = %v", err)
+	}
+	if got, want := string(encoded), `{"kind":"zone","id":"UTC"}`; got != want {
+		t.Errorf("MarshalJSON(Zone{}) = %s, want %s", got, want)
+	}
+
+	dt, err := DateTimeFromTime(time.Date(2026, time.March, 27, 4, 0, 0, 0, time.UTC), Zone{})
+	if err != nil {
+		t.Fatalf("DateTimeFromTime(Zone{}) error = %v", err)
+	}
+	if got := dt.Zone().ID(); got != "UTC" {
+		t.Errorf("DateTimeFromTime(Zone{}).Zone().ID() = %q, want UTC", got)
+	}
+	if got := dt.Std().Location(); got != time.UTC {
+		t.Errorf("DateTimeFromTime(Zone{}).Std().Location() = %v, want UTC", got)
+	}
+}
+
 // Phase 2: LoadZone, MustLoadZone, ResolveZone, Zones
 
 func TestLoadZone_Valid(t *testing.T) {

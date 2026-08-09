@@ -198,7 +198,7 @@ func (dt *DateTime) UnmarshalJSON(b []byte) error {
 	}
 	z, err := LoadZone(wire.Zone)
 	if err != nil {
-		return fmt.Errorf("gotime: invalid zone %q: %w", wire.Zone, err)
+		return err
 	}
 	parsed, err := instant.In(z)
 	if err != nil {
