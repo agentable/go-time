@@ -76,6 +76,21 @@ RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax fo
   `LocalDateTime.Resolve`; display projection begins after conversion to
   stdlib `time.Time`.
 
+### Transition Enumeration Is Not a go-time Contract
+
+- **Decision**: go-time does not expose timezone transition enumeration or
+  observance types. `Zone.Location()` bridges point-in-time projection and
+  local-time resolution; it does not promise a complete transition sequence.
+- **Why**: Protocols that serialize timezone rules own their data provenance,
+  truncation window, and observance model. Those concerns do not belong in the
+  semantic foundation.
+- **Rejected**: `Zone.Transitions`, sampling or binary-search discovery, and a
+  claim that repeatedly advancing stdlib `time.Time.ZoneBounds` completely
+  enumerates runtime rules.
+- **Contract Impact**: transition tests use a focused corpus to verify local
+  projection behavior. Protocol libraries obtain authoritative transition data
+  through their own integration boundary.
+
 ### Windows Name Mapping Is Generated
 
 - **Decision**: Windows timezone names map from Unicode CLDR `release-48-1`
@@ -163,6 +178,7 @@ this package.
 - Do not put time-dependent fields in `Zone.MarshalJSON`.
 - Do not expose display snapshots, formatted offsets, abbreviations, or a DST
   boolean on `Zone`.
+- Do not expose timezone transition enumeration or observance types.
 - Do not add `GuessZone`, `ValidateZone`, `ListZones`, or `LocalZone`; use the current API.
 
 ## Acceptance Criteria
@@ -170,4 +186,7 @@ this package.
 - Zone JSON contains only `kind` and `id`, and rejects fixed-offset identities.
 - Point-in-time abbreviation and numeric offset projection uses stdlib
   `time.Time.Zone`; no parallel DTO or string offset API exists.
+- Public API review confirms that no transition enumeration or observance type
+  exists; the focused transition corpus verifies local projection behavior
+  without claiming complete rule discovery.
 - DST gaps and duplicate local times remain observable through `LocalDateTime.Resolve` and parsing with `WithZone`.
