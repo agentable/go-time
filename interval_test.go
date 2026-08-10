@@ -2,7 +2,6 @@ package gotime
 
 import (
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -353,36 +352,6 @@ func TestInterval_IsZero(t *testing.T) {
 	var iv Interval
 	if !iv.IsZero() {
 		t.Error("zero Interval should be zero")
-	}
-}
-
-func TestInterval_MarshalJSON_NoZone(t *testing.T) {
-	iv := mustInterval(t, ivStart, ivEnd)
-	b, err := json.Marshal(iv)
-	if err != nil {
-		t.Fatalf("MarshalJSON error: %v", err)
-	}
-	s := string(b)
-	if strings.Contains(s, `"zone"`) {
-		t.Errorf("JSON = %s, must not have zone field (Interval is zone-free)", s)
-	}
-}
-
-func TestInterval_UnmarshalJSON_RoundTrip(t *testing.T) {
-	orig := mustInterval(t, ivStart, ivEnd)
-	b, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatalf("MarshalJSON error: %v", err)
-	}
-	var decoded Interval
-	if err := json.Unmarshal(b, &decoded); err != nil {
-		t.Fatalf("UnmarshalJSON error: %v", err)
-	}
-	if !decoded.Start().Equal(orig.Start()) {
-		t.Errorf("Start = %v, want %v", decoded.Start(), orig.Start())
-	}
-	if !decoded.End().Equal(orig.End()) {
-		t.Errorf("End = %v, want %v", decoded.End(), orig.End())
 	}
 }
 

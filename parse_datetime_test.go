@@ -59,6 +59,47 @@ func TestParse_DateTime_OffsetSubSecondReturnsInstant(t *testing.T) {
 	}
 }
 
+func TestParse_DateTime_FractionalNanoseconds(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input string
+		want  int
+	}{
+		{input: "2026-03-27T13:00:00.1", want: 100_000_000},
+		{input: "2026-03-27T13:00:00.123456789", want: 123_456_789},
+		{input: "20260327T130000.1234567899", want: 123_456_789},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+
+			r := Parse(tc.input)
+			if r.Status != StatusResolved {
+				t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+			}
+			var got int
+			switch r.Kind {
+			case KindDateTime:
+				dt, _ := r.DateTime()
+				got = dt.Clock().Nanosecond()
+			case KindLocalDateTime:
+				ldt, _ := r.LocalDateTime()
+				got = ldt.Time.Nanosecond()
+			case KindInstant:
+				i, _ := r.Instant()
+				got = i.Std().Nanosecond()
+			default:
+				t.Fatalf("kind = %v, want KindDateTime, KindLocalDateTime, or KindInstant", r.Kind)
+			}
+			if got != tc.want {
+				t.Fatalf("nanosecond = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestParse_DateTime_CompactOffsetReturnsInstant(t *testing.T) {
 	r := Parse("20260327T130000+0900")
 	if r.Status != StatusResolved {

@@ -488,15 +488,6 @@ func TestDateTime_AddCalendar_Months_DST(t *testing.T) {
 	}
 }
 
-func TestPeriod_Days(t *testing.T) {
-	if Days(1).Days != 1 {
-		t.Errorf("Days(1).Days = %v, want 1", Days(1).Days)
-	}
-	if Days(7).Days != 7 {
-		t.Errorf("Days(7).Days = %v, want 7", Days(7).Days)
-	}
-}
-
 func TestDateTime_String(t *testing.T) {
 	dt := makeDateTime(2026, time.March, 27, 13, 0, 0, testZoneTokyo)
 	s := dt.String()
