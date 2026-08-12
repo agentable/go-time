@@ -431,22 +431,24 @@ func TestLatinLocalePrefixMatching(t *testing.T) {
 	tests := []struct {
 		locale string
 		input  string
+		wantOK bool
 	}{
-		{"fr-FR", "aujourd'hui"},
-		{"fr-CA", "demain"},
-		{"de-DE", "heute"},
-		{"de-AT", "morgen"},
-		{"es-ES", "hoy"},
-		{"es-MX", "mañana"},
-		{"pt-BR", "hoje"},
-		{"pt-PT", "amanhã"},
-		{"ru-RU", "сегодня"},
+		{"fr-FR", "aujourd'hui", true},
+		{"fr-CA", "demain", true},
+		{"de-DE", "heute", true},
+		{"de-AT", "morgen", true},
+		{"es-ES", "hoy", true},
+		{"es-MX", "mañana", true},
+		{"pt-BR", "hoje", true},
+		{"pt-PT", "amanhã", true},
+		{"ru-RU", "сегодня", true},
+		{"fr-FR", "pas une date", false},
 	}
 	for _, tt := range tests {
 		ctx := Context{Locale: tt.locale, RelativeTo: latinBase}
 		_, ok := Parse(tt.input, ctx)
-		if !ok {
-			t.Errorf("Parse(%q, locale=%q) not ok — locale prefix matching failed", tt.input, tt.locale)
+		if ok != tt.wantOK {
+			t.Errorf("Parse(%q, locale=%q) ok = %v, want %v", tt.input, tt.locale, ok, tt.wantOK)
 		}
 	}
 }

@@ -194,16 +194,18 @@ func TestArabicLocalePrefixMatching(t *testing.T) {
 	tests := []struct {
 		locale string
 		input  string
+		wantOK bool
 	}{
-		{"ar-SA", "اليوم"},
-		{"ar-EG", "غدا"},
-		{"ar-MA", "أمس"},
+		{"ar-SA", "اليوم", true},
+		{"ar-EG", "غدا", true},
+		{"ar-MA", "أمس", true},
+		{"ar-SA", "ليس وقتا", false},
 	}
 	for _, tt := range tests {
 		ctx := Context{Locale: tt.locale, RelativeTo: arBase}
 		_, ok := Parse(tt.input, ctx)
-		if !ok {
-			t.Errorf("Parse(%q, locale=%q) not ok — locale prefix matching failed", tt.input, tt.locale)
+		if ok != tt.wantOK {
+			t.Errorf("Parse(%q, locale=%q) ok = %v, want %v", tt.input, tt.locale, ok, tt.wantOK)
 		}
 	}
 }

@@ -94,6 +94,7 @@ func TestEn_DateTime(t *testing.T) {
 		{"today at 9:30am", time.Date(today.Year(), today.Month(), today.Day(), 9, 30, 0, 0, loc)},
 		{"tomorrow at 12pm", time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 12, 0, 0, 0, loc)},
 		{"today at 12am", time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, loc)},
+		{"next Friday at 4:15pm", time.Date(2026, 4, 3, 16, 15, 0, 0, loc)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

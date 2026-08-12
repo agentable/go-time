@@ -30,7 +30,7 @@ var (
 	// reZhRelativeDur matches duration expressions like 两小时后 / 30分钟前.
 	// Group 1: number (Arabic or Chinese), Group 2: unit, Group 3: direction (后/後=future, 前=past)
 	reZhRelativeDur = regexp.MustCompile(
-		`^(\d+|两|兩|[一二三四五六七八九十百千]+)(小时|小時|分钟|分鐘|天|周|週|个月|個月)(后|後|前)$`,
+		`^(\d+|两|兩|[零〇一二两兩三四五六七八九十百千]+)(小时|小時|分钟|分鐘|天|周|週|个月|個月)(后|後|前)$`,
 	)
 )
 
@@ -84,7 +84,10 @@ func (p *zhParser) parse(input string, ctx Context) (Result, bool) {
 	}
 
 	if m := reZhRelativeDur.FindStringSubmatch(input); m != nil {
-		return zhRelativeUnitResult(m[1], m[2], m[3]), true
+		if r, ok := zhRelativeUnitResult(m[1], m[2], m[3]); ok {
+			return r, true
+		}
+		return Result{}, false
 	}
 
 	return Result{}, false
@@ -170,7 +173,8 @@ func zhHourToInt(s string) int {
 	case "十二":
 		return 12
 	default:
-		return int(zhNumericValue(s))
+		n, _ := zhNumericValue(s)
+		return int(n)
 	}
 }
 
@@ -214,8 +218,14 @@ func zhMinutes(halfOrMin, digitMin string) int {
 }
 
 // zhRelativeUnitResult converts a matched relative unit into a Duration or Period.
-func zhRelativeUnitResult(numStr, unit, dir string) Result {
-	n := zhNumericValue(numStr)
+func zhRelativeUnitResult(numStr, unit, dir string) (Result, bool) {
+	n, ok := zhNumericValue(numStr)
+	if !ok {
+		if isASCIIDigits(numStr) {
+			return invalidResult(ErrorOverflow, "relative count overflows int64", "use a smaller count"), true
+		}
+		return Result{}, false
+	}
 	var canonical string
 	switch unit {
 	case "小时", "小時":
@@ -234,36 +244,89 @@ func zhRelativeUnitResult(numStr, unit, dir string) Result {
 	if dir == "前" {
 		n = -n
 	}
-	return relativeUnitResult(canonical, n)
+	return relativeUnitResult(canonical, n), true
+}
+
+func isASCIIDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // zhNumericValue converts a Chinese or Arabic number string to int64.
-func zhNumericValue(s string) int64 {
-	switch s {
-	case "两", "兩":
-		return 2
-	case "一":
-		return 1
-	case "二":
-		return 2
-	case "三":
-		return 3
-	case "四":
-		return 4
-	case "五":
-		return 5
-	case "六":
-		return 6
-	case "七":
-		return 7
-	case "八":
-		return 8
-	case "九":
-		return 9
-	case "十":
-		return 10
-	default:
-		n, _ := strconv.ParseInt(s, 10, 64)
-		return n
+func zhNumericValue(s string) (int64, bool) {
+	if s == "两" || s == "兩" {
+		return 2, true
 	}
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return n, true
+	}
+	return zhChineseNumeral(s)
+}
+
+func zhChineseNumeral(s string) (int64, bool) {
+	runes := []rune(s)
+	digits := map[rune]int64{'一': 1, '二': 2, '两': 2, '兩': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
+	units := map[rune]int64{'十': 10, '百': 100, '千': 1000}
+	var total int64
+	lastUnit := int64(10000)
+	first := true
+	zero := false
+	for i := 0; i < len(runes); {
+		if runes[i] == '零' || runes[i] == '〇' {
+			if first || zero || i+1 == len(runes) {
+				return 0, false
+			}
+			zero = true
+			i++
+			continue
+		}
+
+		coefficient := int64(1)
+		unit := int64(0)
+		if runes[i] == '十' {
+			if !first {
+				return 0, false
+			}
+			unit = 10
+			i++
+		} else {
+			digit, ok := digits[runes[i]]
+			if !ok {
+				return 0, false
+			}
+			coefficient = digit
+			twoVariant := runes[i] == '两' || runes[i] == '兩'
+			i++
+			if i == len(runes) {
+				if !first && (twoVariant || (lastUnit > 10) != zero) {
+					return 0, false
+				}
+				return total + coefficient, true
+			}
+			unit = units[runes[i]]
+			if unit == 0 || (twoVariant && unit < 100) {
+				return 0, false
+			}
+			i++
+		}
+
+		if unit >= lastUnit {
+			return 0, false
+		}
+		if !first && ((lastUnit/unit > 10) != zero) {
+			return 0, false
+		}
+		total += coefficient * unit
+		lastUnit = unit
+		first = false
+		zero = false
+	}
+	return total, total != 0
 }

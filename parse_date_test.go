@@ -119,6 +119,7 @@ func TestParse_Date_Invalid(t *testing.T) {
 		{"2026-13-01", CodeInvalidDate}, // month 13
 		{"2026-00-01", CodeInvalidDate}, // month 0
 		{"2026-03-32", CodeInvalidDate}, // day 32
+		{"2026-13", CodeInvalidDate},    // year-month with month 13
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

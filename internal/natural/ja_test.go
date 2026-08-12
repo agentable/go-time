@@ -95,6 +95,7 @@ func TestJa_DateTime(t *testing.T) {
 		{"明日の午前10時", time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 10, 0, 0, 0, loc)},
 		// 今日の午後2時30分 → today 14:30
 		{"今日の午後2時30分", time.Date(today.Year(), today.Month(), today.Day(), 14, 30, 0, 0, loc)},
+		{"今日の7時", time.Date(today.Year(), today.Month(), today.Day(), 7, 0, 0, 0, loc)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

@@ -86,7 +86,7 @@ func TestParseResult_Accessors_ByKind(t *testing.T) {
 		},
 		{
 			name:     "local datetime",
-			input:    "2026-03-27T13:00:00",
+			input:    "20260327T13",
 			wantKind: KindLocalDateTime,
 			assert: func(t *testing.T, r ParseResult) {
 				t.Helper()

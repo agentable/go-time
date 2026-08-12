@@ -37,6 +37,47 @@ func TestNewDateTime_Components(t *testing.T) {
 	}
 }
 
+func TestNewDateTime_InvalidComponents(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		date    Date
+		clock   Time
+		wantErr error
+	}{
+		{
+			name:    "invalid date",
+			date:    Date{year: 2026, month: time.February, day: 30},
+			clock:   mustTime(12, 0, 0),
+			wantErr: ErrInvalidDate,
+		},
+		{
+			name:    "invalid time",
+			date:    mustDate(2026, time.March, 27),
+			clock:   Time{hour: 24},
+			wantErr: ErrInvalidTime,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := NewDateTime(tc.date, tc.clock, testZoneTokyo)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("NewDateTime() error = %v, want %v", err, tc.wantErr)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) {
+				t.Fatalf("NewDateTime() error type = %T, want *TimeError", err)
+			}
+			if te.Hint == "" {
+				t.Fatal("NewDateTime() TimeError.Hint is empty")
+			}
+		})
+	}
+}
+
 func TestNewDateTime_NonexistentLocalTime(t *testing.T) {
 	d := mustDate(2026, time.March, 8)
 	ct := mustTime(2, 30, 0)

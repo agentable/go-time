@@ -52,6 +52,12 @@ The grammar is intentionally small: relative dates, week expressions, basic date
 
 Natural-language day, week, month, and year units route to `KindPeriod`. They are never approximated as 24-hour, 7-day, 30-day, or 365-day `Duration` values. Natural-language second, minute, and hour units route to `KindDuration`.
 
+Chinese relative-unit counts use canonical decimal compositions through
+thousands. `零` or `〇` is required when a composition skips a place. `两` and
+`兩` may represent two alone or precede `百` or `千`; a trailing two in a
+composite uses `二`, so `一百零二` is accepted and `一百零两` is rejected.
+Noncanonical shorthand and repeated or ascending units do not match.
+
 The internal natural parser receives a reference whose civil fields were
 already projected into the caller's `WithZone`. It performs calendar math only
 and returns unresolved civil components; it does not load or resolve zones.
@@ -207,6 +213,13 @@ second parser engine.
 
 Interval boundaries must resolve to `KindInstant` or `KindDateTime`. Date-only interval boundaries are invalid because an interval is an absolute UTC range and a bare date has no time or zone.
 Natural-language interval boundaries are invalid even when `WithInputLocale` and `WithReference` are supplied.
+When a formal interval endpoint is recognized but semantically invalid, the
+interval preserves that endpoint's precise error category, such as
+`ErrInvalidDate`, `ErrInvalidTime`, `ErrInvalidZone`, `ErrNonexistentTime`, or
+`ErrOverflow`. The structured error's `Input` is the complete interval so a
+caller can identify the rejected value as one operation. Malformed endpoint
+syntax remains `ErrInvalidFormat`, and a recognized but incompatible endpoint
+kind remains `ErrIncompatibleTypes`.
 
 ## Processing Order
 

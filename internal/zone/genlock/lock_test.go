@@ -2,7 +2,9 @@ package genlock
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +53,18 @@ func TestLoadAndVerify(t *testing.T) {
 	}
 }
 
+func TestLoadAndVerifyMissingFiles(t *testing.T) {
+	t.Parallel()
+
+	missing := filepath.Join(t.TempDir(), "missing")
+	if _, err := Load(missing); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("Load(missing) error = %v, want fs.ErrNotExist", err)
+	}
+	if err := (Source{SHA256: strings.Repeat("0", 64)}).Verify(missing); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("Verify(missing) error = %v, want fs.ErrNotExist", err)
+	}
+}
+
 func TestLoadRejectsInvalidLock(t *testing.T) {
 	t.Parallel()
 
@@ -65,7 +79,8 @@ func TestLoadRejectsInvalidLock(t *testing.T) {
 		{name: "missing version", body: validLockJSON("", strings.Repeat("a", 64)), want: "version"},
 		{name: "non HTTPS URL", body: strings.Replace(validLockJSON("2025b", strings.Repeat("a", 64)), "https://example.test/zone.tab", "http://example.test/zone.tab", 1), want: "https"},
 		{name: "URL without source file", body: strings.Replace(validLockJSON("2025b", strings.Repeat("a", 64)), "https://example.test/zone.tab", "https://example.test/", 1), want: "source file"},
-		{name: "invalid SHA-256", body: validLockJSON("2025b", "not-a-digest"), want: "sha256"},
+		{name: "invalid SHA-256 length", body: validLockJSON("2025b", "not-a-digest"), want: "sha256"},
+		{name: "invalid SHA-256 hexadecimal", body: validLockJSON("2025b", strings.Repeat("g", 64)), want: "sha256"},
 	}
 
 	for _, tc := range tests {
@@ -81,6 +96,29 @@ func TestLoadRejectsInvalidLock(t *testing.T) {
 				t.Fatalf("Load() error = %v, want substring %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestLoadAcceptsUppercaseSHA256(t *testing.T) {
+	t.Parallel()
+
+	input := []byte("source data\n")
+	digest := strings.ToUpper(fmt.Sprintf("%x", sha256.Sum256(input)))
+	dir := t.TempDir()
+	inputPath := filepath.Join(dir, "source.txt")
+	if err := os.WriteFile(inputPath, input, 0o600); err != nil {
+		t.Fatalf("WriteFile(input): %v", err)
+	}
+	lockPath := filepath.Join(dir, "sources.json")
+	if err := os.WriteFile(lockPath, []byte(validLockJSON("2025b", digest)), 0o600); err != nil {
+		t.Fatalf("WriteFile(lock): %v", err)
+	}
+	lock, err := Load(lockPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if err := lock.IANA.Verify(inputPath); err != nil {
+		t.Fatalf("Verify() error = %v", err)
 	}
 }
 

@@ -15,6 +15,7 @@ func TestParse_Duration(t *testing.T) {
 		{"PT0S", 0},
 		{"PT90M", 90},
 		{"PT3600S", 60},
+		{"-PT30M", -30},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
@@ -118,6 +119,7 @@ func TestParse_Duration_RejectsExponentSeconds(t *testing.T) {
 func TestParse_Duration_Overflow(t *testing.T) {
 	tests := []string{
 		"PT999999999999999999999H",
+		"PT2562048H",
 		"PT2562047H48M",
 	}
 	for _, input := range tests {
@@ -134,12 +136,16 @@ func TestParse_Duration_Overflow(t *testing.T) {
 }
 
 func TestParse_Period_Overflow(t *testing.T) {
-	r := Parse("P2147483648D")
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
-	}
-	if r.Error.Code != CodeOverflow {
-		t.Errorf("error code = %q, want %q", r.Error.Code, CodeOverflow)
+	for _, input := range []string{"P2147483648D", "P2147483649D"} {
+		t.Run(input, func(t *testing.T) {
+			r := Parse(input)
+			if r.Status != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid", r.Status)
+			}
+			if r.Error == nil || !errors.Is(r.Error, ErrOverflow) || r.Error.Code != CodeOverflow {
+				t.Errorf("error = %v, want ErrOverflow with code %q", r.Error, CodeOverflow)
+			}
+		})
 	}
 }
 

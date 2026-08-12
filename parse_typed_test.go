@@ -18,20 +18,62 @@ func TestParseInstant_Resolves(t *testing.T) {
 }
 
 func TestParseInstant_KindMismatch(t *testing.T) {
-	// A bare date parses as KindDate; ParseInstant must reject with ErrIncompatibleTypes.
-	_, err := ParseInstant("2026-03-27")
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		parse    func() error
+		wantHint string
+	}{
+		{
+			name: "date",
+			parse: func() error {
+				_, err := ParseInstant("2026-03-27")
+				return err
+			},
+			wantHint: "input parsed as date, call ParseDate instead",
+		},
+		{
+			name: "datetime",
+			parse: func() error {
+				_, err := ParseInstant("2026-03-27T13:00:00", WithZone(UTC))
+				return err
+			},
+			wantHint: "input parsed as datetime, call ParseDateTime instead",
+		},
+		{
+			name: "time",
+			parse: func() error {
+				_, err := ParseDate("13:45:30")
+				return err
+			},
+			wantHint: "input parsed as time, call ParseTime instead",
+		},
+		{
+			name: "interval",
+			parse: func() error {
+				_, err := ParseDate("2026-03-27T00:00:00Z/2026-03-28T00:00:00Z")
+				return err
+			},
+			wantHint: "input parsed as interval, call ParseInterval instead",
+		},
 	}
-	if !errors.Is(err, ErrIncompatibleTypes) {
-		t.Errorf("expected ErrIncompatibleTypes, got %v", err)
-	}
-	var te *TimeError
-	if !errors.As(err, &te) {
-		t.Fatalf("expected *TimeError, got %T", err)
-	}
-	if te.Hint != "input parsed as date, call ParseDate instead" {
-		t.Errorf("TimeError.Hint = %q, want ParseDate guidance", te.Hint)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tc.parse()
+			if !errors.Is(err, ErrIncompatibleTypes) {
+				t.Fatalf("error = %v, want ErrIncompatibleTypes", err)
+			}
+			var te *TimeError
+			if !errors.As(err, &te) {
+				t.Fatalf("error type = %T, want *TimeError", err)
+			}
+			if te.Hint != tc.wantHint {
+				t.Errorf("TimeError.Hint = %q, want %q", te.Hint, tc.wantHint)
+			}
+		})
 	}
 }
 
@@ -223,6 +265,45 @@ func TestTypedParsers_ReturnErrorSentinels(t *testing.T) {
 			},
 			wantErr:  ErrIncompatibleTypes,
 			wantCode: CodeIncompatibleTypes,
+		},
+		{
+			name: "interval invalid start date",
+			parse: func() error {
+				_, err := ParseInterval("2026-02-30T00:00:00/2026-03-27T00:00:00", WithZone(UTC))
+				return err
+			},
+			wantErr:  ErrInvalidDate,
+			wantCode: CodeInvalidDate,
+		},
+		{
+			name: "interval invalid end time",
+			parse: func() error {
+				_, err := ParseInterval("2026-03-27T00:00:00/2026-03-28T25:00:00", WithZone(UTC))
+				return err
+			},
+			wantErr:  ErrInvalidTime,
+			wantCode: CodeInvalidTime,
+		},
+		{
+			name: "interval nonexistent start",
+			parse: func() error {
+				_, err := ParseInterval(
+					"2026-03-08T02:30:00/2026-03-08T04:00:00",
+					WithZone(MustLoadZone("America/New_York")),
+				)
+				return err
+			},
+			wantErr:  ErrNonexistentTime,
+			wantCode: CodeNonexistentTime,
+		},
+		{
+			name: "interval duration overflow",
+			parse: func() error {
+				_, err := ParseInterval("2026-03-27T00:00:00Z/PT999999999999999999999H")
+				return err
+			},
+			wantErr:  ErrOverflow,
+			wantCode: CodeOverflow,
 		},
 	}
 	for _, tc := range tests {

@@ -125,9 +125,17 @@ func TestHindiPastPeriod(t *testing.T) {
 }
 
 func TestHindiLocalePrefixMatching(t *testing.T) {
-	ctx := Context{Locale: "hi-IN", RelativeTo: hiBase}
-	_, ok := Parse("आज", ctx)
-	if !ok {
-		t.Error("Parse(आज, locale=hi-IN) not ok — locale prefix matching failed")
+	for _, tc := range []struct {
+		input  string
+		wantOK bool
+	}{
+		{input: "आज", wantOK: true},
+		{input: "समय नहीं", wantOK: false},
+	} {
+		ctx := Context{Locale: "hi-IN", RelativeTo: hiBase}
+		_, ok := Parse(tc.input, ctx)
+		if ok != tc.wantOK {
+			t.Errorf("Parse(%q, locale=hi-IN) ok = %v, want %v", tc.input, ok, tc.wantOK)
+		}
 	}
 }

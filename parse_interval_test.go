@@ -1,10 +1,105 @@
 package gotime
 
 import (
+	"errors"
 	"testing"
 
 	"golang.org/x/text/language"
 )
+
+func TestParse_Interval_InvalidEndpointPreservesSemanticError(t *testing.T) {
+	t.Parallel()
+
+	const valid = "2026-03-27T00:00:00"
+	tests := []struct {
+		name     string
+		input    string
+		wantErr  error
+		wantCode ErrorCode
+	}{
+		{name: "invalid start date", input: "2026-02-30T00:00:00/" + valid, wantErr: ErrInvalidDate, wantCode: CodeInvalidDate},
+		{name: "invalid end date", input: valid + "/2026-02-30T00:00:00", wantErr: ErrInvalidDate, wantCode: CodeInvalidDate},
+		{name: "invalid start time", input: "2026-03-27T25:00:00/" + valid, wantErr: ErrInvalidTime, wantCode: CodeInvalidTime},
+		{name: "invalid end time", input: valid + "/2026-03-28T25:00:00", wantErr: ErrInvalidTime, wantCode: CodeInvalidTime},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := Parse(tc.input, WithZone(UTC))
+			if r.Status != StatusInvalid {
+				t.Fatalf("Parse(%q).Status = %s, want %s", tc.input, r.Status, StatusInvalid)
+			}
+			if !errors.Is(r.Error, tc.wantErr) {
+				t.Fatalf("Parse(%q).Error = %v, want %v", tc.input, r.Error, tc.wantErr)
+			}
+			if r.Error.Code != tc.wantCode {
+				t.Errorf("Parse(%q).Error.Code = %q, want %q", tc.input, r.Error.Code, tc.wantCode)
+			}
+			if r.Error.Input != tc.input {
+				t.Errorf("Parse(%q).Error.Input = %q, want complete interval", tc.input, r.Error.Input)
+			}
+			if r.Error.Hint == "" {
+				t.Errorf("Parse(%q).Error.Hint is empty", tc.input)
+			}
+		})
+	}
+}
+
+func TestParse_Interval_InvalidScenarios(t *testing.T) {
+	t.Parallel()
+
+	zone := MustLoadZone("America/New_York")
+	tests := []struct {
+		name     string
+		input    string
+		opts     []Option
+		wantErr  error
+		wantCode ErrorCode
+	}{
+		{
+			name:     "nonexistent start",
+			input:    "2026-03-08T02:30:00/2026-03-08T04:00:00",
+			opts:     []Option{WithZone(zone)},
+			wantErr:  ErrNonexistentTime,
+			wantCode: CodeNonexistentTime,
+		},
+		{
+			name:     "nonexistent end",
+			input:    "2026-03-08T00:30:00/2026-03-08T02:30:00",
+			opts:     []Option{WithZone(zone)},
+			wantErr:  ErrNonexistentTime,
+			wantCode: CodeNonexistentTime,
+		},
+		{name: "malformed start", input: "not-a-date/2026-03-27T00:00:00Z", wantErr: ErrInvalidFormat, wantCode: CodeInvalidFormat},
+		{name: "malformed end", input: "2026-03-27T00:00:00Z/not-a-date", wantErr: ErrInvalidFormat, wantCode: CodeInvalidFormat},
+		{name: "period is not exact duration", input: "2026-03-27T00:00:00Z/P1D", wantErr: ErrIncompatibleTypes, wantCode: CodeIncompatibleTypes},
+		{name: "two durations", input: "PT1H/PT2H", wantErr: ErrInvalidFormat, wantCode: CodeInvalidFormat},
+		{name: "duration overflow", input: "2026-03-27T00:00:00Z/PT999999999999999999999H", wantErr: ErrOverflow, wantCode: CodeOverflow},
+		{name: "malformed start before duration", input: "not-a-date/PT1H", wantErr: ErrInvalidFormat, wantCode: CodeInvalidFormat},
+		{name: "overflow duration before end", input: "PT999999999999999999999H/2026-03-27T00:00:00Z", wantErr: ErrOverflow, wantCode: CodeOverflow},
+		{name: "malformed end after duration", input: "PT1H/not-a-date", wantErr: ErrInvalidFormat, wantCode: CodeInvalidFormat},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := Parse(tc.input, tc.opts...)
+			if r.Status != StatusInvalid || r.Error == nil {
+				t.Fatalf("Parse(%q) = %#v, want invalid result", tc.input, r)
+			}
+			if !errors.Is(r.Error, tc.wantErr) {
+				t.Fatalf("Parse(%q).Error = %v, want %v", tc.input, r.Error, tc.wantErr)
+			}
+			if r.Error.Code != tc.wantCode {
+				t.Errorf("Parse(%q).Error.Code = %q, want %q", tc.input, r.Error.Code, tc.wantCode)
+			}
+			if r.Error.Input != tc.input || r.Error.Hint == "" {
+				t.Errorf("Parse(%q) error input/hint = %q/%q", tc.input, r.Error.Input, r.Error.Hint)
+			}
+		})
+	}
+}
 
 func TestParse_Interval_DateToDate(t *testing.T) {
 	r := Parse("2026-03-27/2026-03-28")

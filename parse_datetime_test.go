@@ -304,18 +304,24 @@ func TestParse_DateTime_NonexistentLocalTime(t *testing.T) {
 	}
 }
 
-func TestParse_DateTime_InvalidTime(t *testing.T) {
+func TestParse_DateTime_InvalidComponents(t *testing.T) {
 	tests := []struct {
-		input string
+		input    string
+		wantCode ErrorCode
 	}{
-		{"2026-03-27T25:00:00Z"},
-		{"2026-03-27T13:60:00Z"},
+		{input: "2026-03-27T25:00:00Z", wantCode: CodeInvalidFormat},
+		{input: "2026-03-27T13:60:00Z", wantCode: CodeInvalidFormat},
+		{input: "20260230T130000", wantCode: CodeInvalidDate},
+		{input: "20260327T250000", wantCode: CodeInvalidTime},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			r := Parse(tt.input)
 			if r.Status != StatusInvalid {
 				t.Fatalf("status = %v, want Invalid for %q", r.Status, tt.input)
+			}
+			if r.Error == nil || r.Error.Code != tt.wantCode {
+				t.Fatalf("error = %#v, want code %q", r.Error, tt.wantCode)
 			}
 		})
 	}

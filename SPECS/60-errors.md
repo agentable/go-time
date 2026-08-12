@@ -111,6 +111,9 @@ Apply an application-owned redaction policy before logging `te.Message` or
 - `StatusAmbiguous` carries `ParseResult.Candidates`.
 - Typed parsers translate non-resolved or wrong-kind results into `*TimeError`.
 - Typed parsers keep ambiguity causes precise: slash-date ambiguity wraps `ErrAmbiguousDate`, while DST fall-back duplicate local times wrap `ErrDuplicateTime`.
+- Interval parsing keeps a recognized endpoint's semantic sentinel and code;
+  its `TimeError.Input` is rewritten to the complete interval while the
+  endpoint hint and unwrap chain remain inspectable.
 - Warning metadata never determines sentinel identity.
 
 Empty input in `Parse` returns `ErrEmptyInput` with `CodeEmptyInput`.

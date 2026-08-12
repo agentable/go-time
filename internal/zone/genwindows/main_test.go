@@ -3,73 +3,164 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestRunVerifiesLockedSourceBeforeWriting(t *testing.T) {
+func TestRunRejectsInvalidInputsBeforeWriting(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing")
+	tests := []struct {
+		name      string
+		input     []byte
+		inputPath string
+		lockPath  string
+		want      string
+	}{
+		{name: "missing argument", want: "required"},
+		{name: "missing lock", inputPath: missing, lockPath: missing, want: "source lock"},
+		{name: "missing input", inputPath: missing, want: "locked source"},
+		{name: "malformed XML", input: []byte("<supplementalData>"), want: "decode XML"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			caseDir := t.TempDir()
+			inputPath := tc.inputPath
+			lockPath := tc.lockPath
+			if tc.input != nil {
+				inputPath = filepath.Join(caseDir, "windowsZones.xml")
+				if err := os.WriteFile(inputPath, tc.input, 0o600); err != nil {
+					t.Fatalf("WriteFile(input): %v", err)
+				}
+			}
+			if lockPath == "" {
+				digest := fmt.Sprintf("%x", sha256.Sum256(tc.input))
+				lockPath = writeLock(t, caseDir, digest)
+			}
+			out := filepath.Join(caseDir, "windows.go")
+			const original = "do not replace"
+			if err := os.WriteFile(out, []byte(original), 0o600); err != nil {
+				t.Fatalf("WriteFile(output): %v", err)
+			}
+
+			err := run(inputPath, lockPath, out)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("run() error = %v, want substring %q", err, tc.want)
+			}
+			got, readErr := os.ReadFile(out)
+			if readErr != nil {
+				t.Fatalf("ReadFile(output): %v", readErr)
+			}
+			if string(got) != original {
+				t.Fatalf("output changed on validation failure: %q", got)
+			}
+		})
+	}
+}
+
+func TestRunReturnsOutputFailure(t *testing.T) {
 	t.Parallel()
 
 	input, err := os.ReadFile("testdata/windowsZones.xml")
 	if err != nil {
 		t.Fatalf("ReadFile(input): %v", err)
 	}
-	digest := fmt.Sprintf("%x", sha256.Sum256(input))
 	dir := t.TempDir()
-	xmlPaths := []string{
-		filepath.Join(dir, "first-local-name.xml"),
-		filepath.Join(dir, "second-local-name.xml"),
+	inputPath := filepath.Join(dir, "windowsZones.xml")
+	if err := os.WriteFile(inputPath, input, 0o600); err != nil {
+		t.Fatalf("WriteFile(input): %v", err)
 	}
-	for _, path := range xmlPaths {
-		if err := os.WriteFile(path, input, 0o600); err != nil {
-			t.Fatalf("WriteFile(%s): %v", path, err)
-		}
+	lockPath := writeLock(t, dir, fmt.Sprintf("%x", sha256.Sum256(input)))
+	if err := run(inputPath, lockPath, dir); err == nil {
+		t.Fatal("run(output directory) error = nil, want write failure")
 	}
+}
 
-	t.Run("verified input", func(t *testing.T) {
-		lockPath := writeLock(t, dir, digest)
-		generated := make([][]byte, 0, len(xmlPaths))
-		for i, xmlPath := range xmlPaths {
-			out := filepath.Join(dir, fmt.Sprintf("windows-%d.go", i))
-			if err := run(xmlPath, lockPath, out); err != nil {
-				t.Fatalf("run(%s) error = %v", xmlPath, err)
-			}
-			got, err := os.ReadFile(out)
-			if err != nil {
-				t.Fatalf("ReadFile(output): %v", err)
-			}
-			generated = append(generated, got)
-		}
-		if !bytes.Equal(generated[0], generated[1]) {
-			t.Fatal("verified source bytes generated different artifacts under different local filenames")
-		}
-		if !strings.Contains(string(generated[0]), "Unicode CLDR release-48-1 windowsZones.xml") {
-			t.Fatalf("generated header does not use locked source identity:\n%s", generated[0])
-		}
-	})
+func TestReadMappingsReturnsMissingFileError(t *testing.T) {
+	t.Parallel()
 
-	t.Run("checksum mismatch", func(t *testing.T) {
-		lockPath := writeLock(t, dir, strings.Repeat("0", 64))
-		out := filepath.Join(dir, "unchanged.go")
-		const original = "do not replace"
-		if err := os.WriteFile(out, []byte(original), 0o600); err != nil {
-			t.Fatalf("WriteFile(output): %v", err)
+	_, err := readMappings(filepath.Join(t.TempDir(), "missing-windowsZones.xml"))
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("readMappings() error = %v, want fs.ErrNotExist", err)
+	}
+}
+
+func TestRunMatchesGoldenArtifact(t *testing.T) {
+	t.Parallel()
+
+	input, err := os.ReadFile("testdata/windowsZones.xml")
+	if err != nil {
+		t.Fatalf("ReadFile(input): %v", err)
+	}
+	want, err := os.ReadFile("testdata/windows.golden.go")
+	if err != nil {
+		t.Fatalf("ReadFile(golden): %v", err)
+	}
+	dir := t.TempDir()
+	digest := fmt.Sprintf("%x", sha256.Sum256(input))
+	lockPath := writeLock(t, dir, digest)
+	for _, name := range []string{"local-one.xml", "local-two.xml"} {
+		inputPath := filepath.Join(dir, name)
+		if err := os.WriteFile(inputPath, input, 0o600); err != nil {
+			t.Fatalf("WriteFile(input): %v", err)
 		}
-		err := run(xmlPaths[0], lockPath, out)
-		if err == nil || !strings.Contains(err.Error(), "SHA-256") {
-			t.Fatalf("run() error = %v, want SHA-256 mismatch", err)
+		out := filepath.Join(dir, name+".go")
+		if err := run(inputPath, lockPath, out); err != nil {
+			t.Fatalf("run(%s) error = %v", name, err)
 		}
 		got, err := os.ReadFile(out)
 		if err != nil {
 			t.Fatalf("ReadFile(output): %v", err)
 		}
-		if string(got) != original {
-			t.Fatalf("output changed on verification failure: %q", got)
+		if !bytes.Equal(got, want) {
+			t.Fatalf("generated artifact differs from golden\ngot:\n%s\nwant:\n%s", got, want)
 		}
-	})
+		if _, err := parser.ParseFile(token.NewFileSet(), out, got, parser.AllErrors); err != nil {
+			t.Fatalf("generated artifact is not valid Go: %v", err)
+		}
+	}
+}
+
+func TestRunRejectsChecksumMismatchBeforeWriting(t *testing.T) {
+	t.Parallel()
+
+	input, err := os.ReadFile("testdata/windowsZones.xml")
+	if err != nil {
+		t.Fatalf("ReadFile(input): %v", err)
+	}
+	dir := t.TempDir()
+	inputPath := filepath.Join(dir, "windowsZones.xml")
+	if err := os.WriteFile(inputPath, input, 0o600); err != nil {
+		t.Fatalf("WriteFile(input): %v", err)
+	}
+	lockPath := writeLock(t, dir, strings.Repeat("0", 64))
+	out := filepath.Join(dir, "unchanged.go")
+	const original = "do not replace"
+	if err := os.WriteFile(out, []byte(original), 0o600); err != nil {
+		t.Fatalf("WriteFile(output): %v", err)
+	}
+	err = run(inputPath, lockPath, out)
+	if err == nil || !strings.Contains(err.Error(), "SHA-256") {
+		t.Fatalf("run() error = %v, want SHA-256 mismatch", err)
+	}
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("ReadFile(output): %v", err)
+	}
+	if string(got) != original {
+		t.Fatalf("output changed on verification failure: %q", got)
+	}
 }
 
 func writeLock(t *testing.T, dir, cldrDigest string) string {
@@ -150,6 +241,9 @@ func TestReadMappings_RejectsMalformedInput(t *testing.T) {
 		{name: "malformed XML", xml: `<supplementalData>`, want: "decode XML"},
 		{name: "wrong hierarchy", xml: `<supplementalData><mapZone other="Bad" territory="001" type="Etc/UTC"/></supplementalData>`, want: "no territory 001"},
 		{name: "missing Windows name", xml: `<supplementalData><windowsZones><mapTimezones><mapZone territory="001" type="Etc/UTC"/></mapTimezones></windowsZones></supplementalData>`, want: "missing other"},
+		{name: "missing territory", xml: `<supplementalData><windowsZones><mapTimezones><mapZone other="Bad" type="Etc/UTC"/></mapTimezones></windowsZones></supplementalData>`, want: "missing territory"},
+		{name: "missing target", xml: `<supplementalData><windowsZones><mapTimezones><mapZone other="Bad" territory="001"/></mapTimezones></windowsZones></supplementalData>`, want: "missing type"},
+		{name: "non-001 only", xml: `<supplementalData><windowsZones><mapTimezones><mapZone other="Regional" territory="CA" type="America/Toronto"/></mapTimezones></windowsZones></supplementalData>`, want: "no territory 001"},
 		{name: "multiple default targets", xml: `<supplementalData><windowsZones><mapTimezones><mapZone other="Bad" territory="001" type="A B"/></mapTimezones></windowsZones></supplementalData>`, want: "exactly one IANA"},
 	}
 

@@ -128,15 +128,17 @@ func validateIntervalPart(input, label string, r ParseResult) (ParseResult, bool
 		r.Input = input
 		return r, false
 	case StatusInvalid:
-		message := "parse failed"
-		hint := "Use ISO 8601 interval format"
 		if r.Error != nil {
-			message = r.Error.Message
-			hint = r.Error.Hint
+			err := *r.Error
+			err.Message = fmt.Sprintf("invalid interval %s: %s", label, r.Error.Message)
+			err.Input = input
+			r.Input = input
+			r.Error = &err
+			return r, false
 		}
 		return invalidResult(input, ErrInvalidFormat,
-			fmt.Sprintf("invalid interval %s: %s", label, message),
-			hint), false
+			fmt.Sprintf("invalid interval %s: parse failed", label),
+			"Use ISO 8601 interval format"), false
 	default:
 		return invalidResult(input, ErrUnparseable,
 			fmt.Sprintf("invalid interval %s", label),
