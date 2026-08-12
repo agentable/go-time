@@ -116,7 +116,13 @@ func (ldt LocalDateTime) Resolve(z Zone) LocalResolution
 func (r LocalResolution) Only() (DateTime, error)
 ```
 
-`LocalDateTime` carries no zone. `Resolve` exposes DST gaps and overlaps without choosing for the caller. `Only` is the deliberate narrowing operation for code that requires exactly one `DateTime`.
+`LocalDateTime` carries no zone. `Resolve` exposes DST gaps and overlaps without
+choosing for the caller. `Only` is the deliberate narrowing operation for code
+that requires exactly one `DateTime`. Because `LocalResolution` is publicly
+constructible, `Only` also validates its state: `LocalResolved` must carry
+exactly one candidate. Zero, unknown, and contradictory states return a zero
+`DateTime` with a typed error rather than panicking; `LocalResolution{}` and
+`LocalResolved` candidate-count contradictions match `ErrInvalidTime`.
 
 ## Duration Constants
 

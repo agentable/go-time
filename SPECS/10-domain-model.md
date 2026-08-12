@@ -103,6 +103,12 @@ Key API: `NewLocalDateTime`, `Resolve`, `String`.
 
 `LocalResolution.Only()` returns the single `DateTime` or a typed error (`ErrNonexistentTime`, `ErrDuplicateTime`, `ErrInvalidDate`, or `ErrInvalidTime`).
 
+The exported `LocalResolution` fields also permit caller-constructed states.
+`Only` accepts only `LocalResolved` with exactly one candidate. A resolved state
+with any other candidate count, a valid local time labeled `LocalInvalid`, an
+unknown status, and `LocalResolution{}` return `ErrInvalidTime`; invalid date
+components return `ErrInvalidDate`. Every error path returns a zero `DateTime`.
+
 ### Date
 
 A calendar date without time or timezone.
@@ -227,6 +233,24 @@ name, offsetSeconds := instant.Std().In(zone.Location()).Zone()
 
 Zero `Zone` values have UTC semantics on `ID`, `String`, `Equal`, `Location`,
 and JSON.
+
+## Go Zero Values
+
+Runtime meaning and JSON behavior are separate contracts. A Go zero value may
+be operationally meaningful, marshalable, both, or neither.
+
+| Type | Runtime meaning | JSON behavior | Error behavior at its checked boundary |
+|---|---|---|---|
+| `Instant{}` | The zero stdlib instant; `IsZero` is true. | Marshals as the canonical year-0001 UTC instant. | Checked scalar projections may still return `ErrOverflow` outside their scalar range. |
+| `DateTime{}` | The zero stdlib instant with zero-zone UTC projection; `IsZero` is true. | Marshals as the canonical year-0001 UTC datetime. | Checked projection and arithmetic report domain overflow when applicable. |
+| `LocalDateTime{}` | Invalid because its zero `Date` has no calendar month or day. | Marshal returns `ErrInvalidDate`. | `Resolve` produces `LocalInvalid`; `Only` returns `ErrInvalidDate`. |
+| `Date{}` | Invalid calendar components; `IsZero` is true. | Marshal returns `ErrInvalidDate`. | Checked date operations return `ErrInvalidDate`. |
+| `Time{}` | Valid midnight; `IsZero` is true. | Marshals as `00:00:00`. | No error solely because the value is zero. |
+| `Duration(0)` | Valid zero elapsed time. | Marshals as `PT0S`. | No error solely because the value is zero. |
+| `Period{}` | Valid no-op calendar offset. | Marshals as `P0D`. | No error solely because the value is zero. |
+| `Interval{}` | Valid zero-length interval at the zero instant; `IsZero` is true. | Marshals with equal canonical year-0001 UTC endpoints. | No error solely because the interval is zero-length. |
+| `Zone{}` | UTC value semantics; `IsZero` reports representation, not an invalid zone. | Marshals as `{"kind":"zone","id":"UTC"}`. | No error solely because the representation is zero. |
+| `LocalResolution{}` | Unresolved public state with no candidate. | It has no value-object JSON contract. | `Only` returns zero `DateTime` and `ErrInvalidTime`. |
 
 ## Relationships
 

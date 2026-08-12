@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
@@ -97,8 +98,8 @@ func TestIntervalUnmarshalJSON_NormalizesOffsetInput(t *testing.T) {
 }
 
 func TestIntervalJSONRoundTrip(t *testing.T) {
-	start := UnixNanos(1_000_000_000)
-	end := UnixNanos(2_000_000_000)
+	start := UnixNanos(1_000_000_007)
+	end := UnixNanos(2_000_000_009)
 	orig := mustInterval(t, start, end)
 	b, err := json.Marshal(orig)
 	if err != nil {
@@ -110,6 +111,10 @@ func TestIntervalJSONRoundTrip(t *testing.T) {
 	}
 	if !orig.Start().Equal(got.Start()) || !orig.End().Equal(got.End()) {
 		t.Errorf("round-trip mismatch: got %v, want %v", got, orig)
+	}
+	again, err := json.Marshal(got)
+	if err != nil || !bytes.Equal(again, b) {
+		t.Fatalf("second Marshal(%v) = %s, %v; want %s", got, again, err, b)
 	}
 }
 

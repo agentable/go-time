@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"time"
@@ -74,17 +75,33 @@ func TestZoneUnmarshalJSON(t *testing.T) {
 }
 
 func TestZoneJSONRoundTrip(t *testing.T) {
-	orig := UTC
-	b, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
+	tests := []struct {
+		name string
+		orig Zone
+	}{
+		{name: "named IANA zone", orig: MustLoadZone("Asia/Tokyo")},
+		{name: "UTC", orig: UTC},
+		{name: "zero zone", orig: Zone{}},
 	}
-	var got Zone
-	if err := json.Unmarshal(b, &got); err != nil {
-		t.Fatalf("round-trip: %v", err)
-	}
-	if !orig.Equal(got) {
-		t.Errorf("round-trip mismatch: got %v, want %v", got, orig)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b, err := json.Marshal(tc.orig)
+			if err != nil {
+				t.Fatalf("Marshal() error = %v", err)
+			}
+			var got Zone
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("Unmarshal(%s) error = %v", b, err)
+			}
+			if !tc.orig.Equal(got) {
+				t.Errorf("round-trip mismatch: got %v, want %v", got, tc.orig)
+			}
+			again, err := json.Marshal(got)
+			if err != nil || !bytes.Equal(again, b) {
+				t.Fatalf("second Marshal(%v) = %s, %v; want %s", got, again, err, b)
+			}
+		})
 	}
 }
 

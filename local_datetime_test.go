@@ -52,8 +52,16 @@ func TestLocalDateTimeResolveNonexistent(t *testing.T) {
 	if got := len(resolution.Candidates); got != 0 {
 		t.Fatalf("Resolve candidates = %d, want 0", got)
 	}
-	if _, err := resolution.Only(); !errors.Is(err, ErrNonexistentTime) {
+	got, err := resolution.Only()
+	if !got.IsZero() {
+		t.Errorf("Only() = %v, want zero DateTime", got)
+	}
+	if !errors.Is(err, ErrNonexistentTime) {
 		t.Fatalf("Only() error = %v, want ErrNonexistentTime", err)
+	}
+	var timeErr *TimeError
+	if !errors.As(err, &timeErr) || timeErr.Hint == "" {
+		t.Fatalf("Only() error = %#v, want TimeError with hint", err)
 	}
 }
 
@@ -88,8 +96,16 @@ func TestLocalDateTimeResolveAmbiguous(t *testing.T) {
 	if got := len(resolution.Candidates); got != 2 {
 		t.Fatalf("Resolve candidates = %d, want 2", got)
 	}
-	if _, err := resolution.Only(); !errors.Is(err, ErrDuplicateTime) {
+	got, err := resolution.Only()
+	if !got.IsZero() {
+		t.Errorf("Only() = %v, want zero DateTime", got)
+	}
+	if !errors.Is(err, ErrDuplicateTime) {
 		t.Fatalf("Only() error = %v, want ErrDuplicateTime", err)
+	}
+	var timeErr *TimeError
+	if !errors.As(err, &timeErr) || timeErr.Hint == "" {
+		t.Fatalf("Only() error = %#v, want TimeError with hint", err)
 	}
 
 	first, second := resolution.Candidates[0], resolution.Candidates[1]
@@ -127,6 +143,93 @@ func TestLocalDateTimeResolveZeroZoneUsesUTC(t *testing.T) {
 	}
 }
 
+func TestLocalResolutionOnlyRejectsInvalidPublicStates(t *testing.T) {
+	validLocal := NewLocalDateTime(
+		mustDate(2026, time.March, 27),
+		mustTime(9, 30, 0),
+	)
+	candidate := mustDateTime(validLocal.Date, validLocal.Time, UTC)
+
+	tests := []struct {
+		name       string
+		resolution LocalResolution
+		want       error
+		wantCode   ErrorCode
+	}{
+		{
+			name:       "resolved without candidate",
+			resolution: LocalResolution{Status: LocalResolved, Local: validLocal},
+			want:       ErrInvalidTime,
+			wantCode:   CodeInvalidTime,
+		},
+		{
+			name: "resolved with multiple candidates",
+			resolution: LocalResolution{
+				Status:     LocalResolved,
+				Local:      validLocal,
+				Candidates: []DateTime{candidate, candidate},
+			},
+			want:     ErrInvalidTime,
+			wantCode: CodeInvalidTime,
+		},
+		{
+			name: "invalid date components",
+			resolution: LocalResolution{
+				Status: LocalInvalid,
+				Local:  NewLocalDateTime(Date{}, validLocal.Time),
+			},
+			want:     ErrInvalidDate,
+			wantCode: CodeInvalidDate,
+		},
+		{
+			name: "invalid time components",
+			resolution: LocalResolution{
+				Status: LocalInvalid,
+				Local:  NewLocalDateTime(validLocal.Date, Time{hour: 24}),
+			},
+			want:     ErrInvalidTime,
+			wantCode: CodeInvalidTime,
+		},
+		{
+			name:       "invalid status with valid local time",
+			resolution: LocalResolution{Status: LocalInvalid, Local: validLocal},
+			want:       ErrInvalidTime,
+			wantCode:   CodeInvalidTime,
+		},
+		{
+			name:       "unknown status",
+			resolution: LocalResolution{Status: LocalResolutionStatus("unknown"), Local: validLocal},
+			want:       ErrInvalidTime,
+			wantCode:   CodeInvalidTime,
+		},
+		{
+			name:       "zero value",
+			resolution: LocalResolution{},
+			want:       ErrInvalidTime,
+			wantCode:   CodeInvalidTime,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.resolution.Only()
+			if !got.IsZero() {
+				t.Errorf("LocalResolution.Only() = %v, want zero DateTime", got)
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("LocalResolution.Only() error = %v, want %v", err, tc.want)
+			}
+			var timeErr *TimeError
+			if !errors.As(err, &timeErr) || timeErr.Hint == "" {
+				t.Fatalf("LocalResolution.Only() error = %#v, want TimeError with hint", err)
+			}
+			if timeErr.Code != tc.wantCode {
+				t.Errorf("LocalResolution.Only() error code = %q, want %q", timeErr.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
 func TestLocalDateTimeJSONRoundTrip(t *testing.T) {
 	ldt := NewLocalDateTime(
 		mustDate(2026, time.March, 27),
@@ -148,6 +251,10 @@ func TestLocalDateTimeJSONRoundTrip(t *testing.T) {
 	}
 	if !got.Date.Equal(ldt.Date) || !got.Time.Equal(ldt.Time) {
 		t.Fatalf("UnmarshalJSON() = %v, want %v", got, ldt)
+	}
+	again, err := json.Marshal(got)
+	if err != nil || !bytes.Equal(again, b) {
+		t.Fatalf("second Marshal(%v) = %s, %v; want %s", got, again, err, b)
 	}
 }
 
@@ -172,6 +279,10 @@ func TestLocalDateTimeJSONRoundTripFraction(t *testing.T) {
 	}
 	if !got.Date.Equal(ldt.Date) || !got.Time.Equal(ldt.Time) {
 		t.Fatalf("UnmarshalJSON() = %v, want %v", got, ldt)
+	}
+	again, err := json.Marshal(got)
+	if err != nil || !bytes.Equal(again, b) {
+		t.Fatalf("second Marshal(%v) = %s, %v; want %s", got, again, err, b)
 	}
 }
 
