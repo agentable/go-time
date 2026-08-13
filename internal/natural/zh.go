@@ -275,15 +275,15 @@ func zhChineseNumeral(s string) (int64, bool) {
 	digits := map[rune]int64{'一': 1, '二': 2, '两': 2, '兩': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
 	units := map[rune]int64{'十': 10, '百': 100, '千': 1000}
 	var total int64
-	lastUnit := int64(10000)
-	first := true
-	zero := false
+	previousUnit := int64(10000)
+	hasPreviousUnit := false
+	hasZeroPlaceholder := false
 	for i := 0; i < len(runes); {
 		if runes[i] == '零' || runes[i] == '〇' {
-			if first || zero || i+1 == len(runes) {
+			if !hasPreviousUnit || hasZeroPlaceholder || i+1 == len(runes) {
 				return 0, false
 			}
-			zero = true
+			hasZeroPlaceholder = true
 			i++
 			continue
 		}
@@ -291,7 +291,7 @@ func zhChineseNumeral(s string) (int64, bool) {
 		coefficient := int64(1)
 		unit := int64(0)
 		if runes[i] == '十' {
-			if !first {
+			if hasPreviousUnit {
 				return 0, false
 			}
 			unit = 10
@@ -305,7 +305,8 @@ func zhChineseNumeral(s string) (int64, bool) {
 			twoVariant := runes[i] == '两' || runes[i] == '兩'
 			i++
 			if i == len(runes) {
-				if !first && (twoVariant || (lastUnit > 10) != zero) {
+				requiresZeroPlaceholder := previousUnit > 10
+				if hasPreviousUnit && (twoVariant || requiresZeroPlaceholder != hasZeroPlaceholder) {
 					return 0, false
 				}
 				return total + coefficient, true
@@ -317,16 +318,17 @@ func zhChineseNumeral(s string) (int64, bool) {
 			i++
 		}
 
-		if unit >= lastUnit {
+		if unit >= previousUnit {
 			return 0, false
 		}
-		if !first && ((lastUnit/unit > 10) != zero) {
+		requiresZeroPlaceholder := previousUnit/unit > 10
+		if hasPreviousUnit && requiresZeroPlaceholder != hasZeroPlaceholder {
 			return 0, false
 		}
 		total += coefficient * unit
-		lastUnit = unit
-		first = false
-		zero = false
+		previousUnit = unit
+		hasPreviousUnit = true
+		hasZeroPlaceholder = false
 	}
 	return total, total != 0
 }

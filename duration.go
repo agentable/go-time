@@ -14,7 +14,7 @@ import (
 var errInvalidISO8601Duration = errors.New("invalid ISO 8601 duration")
 
 // Duration represents an exact elapsed time with nanosecond precision.
-// It is a typed alias for time.Duration so that const arithmetic works:
+// It is a defined type with time.Duration as its underlying type, so const arithmetic works:
 // callers write 5 * gotime.Minute exactly like stdlib.
 //
 // Use Duration for exact-time math (timers, spans, sampling intervals).

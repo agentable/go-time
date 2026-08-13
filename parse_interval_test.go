@@ -155,12 +155,28 @@ func TestParse_Interval_DurationEnd(t *testing.T) {
 }
 
 func TestParse_Interval_EndBeforeStart(t *testing.T) {
-	r := Parse("2026-03-28T00:00:00Z/2026-03-27T00:00:00Z")
+	const input = "2026-03-28T00:00:00Z/2026-03-27T00:00:00Z"
+	r := Parse(input)
 	if r.Status != StatusInvalid {
 		t.Fatalf("status = %v, want Invalid", r.Status)
 	}
+	if r.Error == nil {
+		t.Fatal("Error = nil, want ErrIntervalReversed details")
+	}
+	if !errors.Is(r.Error, ErrIntervalReversed) {
+		t.Errorf("Error = %v, want ErrIntervalReversed", r.Error)
+	}
 	if r.Error.Code != CodeIntervalReversed {
 		t.Errorf("error code = %q, want %q", r.Error.Code, CodeIntervalReversed)
+	}
+	if r.Error.Message != "interval end is before start" {
+		t.Errorf("Error.Message = %q, want %q", r.Error.Message, "interval end is before start")
+	}
+	if r.Error.Input != input {
+		t.Errorf("Error.Input = %q, want %q", r.Error.Input, input)
+	}
+	if r.Error.Hint != "Ensure the interval end is at or after the start" {
+		t.Errorf("Error.Hint = %q, want %q", r.Error.Hint, "Ensure the interval end is at or after the start")
 	}
 }
 

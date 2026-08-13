@@ -73,11 +73,6 @@ func parseInterval(input string, cfg *config) ParseResult {
 			"Use ISO 8601 interval format: start/end, start/duration, or duration/end")
 	}
 
-	if endInstant.Before(startInstant) {
-		return invalidResult(input, ErrIntervalReversed,
-			"interval end is before start",
-			"Ensure the interval end is at or after the start")
-	}
 	iv, err := NewInterval(startInstant, endInstant)
 	if err != nil {
 		return invalidResult(input, ErrIntervalReversed,
