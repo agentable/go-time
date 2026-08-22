@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 // Instant is an absolute UTC moment with nanosecond precision.

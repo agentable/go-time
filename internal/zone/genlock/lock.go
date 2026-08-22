@@ -10,7 +10,7 @@ import (
 	pathpkg "path"
 	"strings"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 // Source identifies one generator input.

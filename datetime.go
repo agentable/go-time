@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 // daysInMonth returns the number of days in the given month of the given year.

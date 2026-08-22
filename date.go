@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 // Date is a calendar date without time or timezone information.

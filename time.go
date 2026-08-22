@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 // Time represents a clock time without a date or timezone.

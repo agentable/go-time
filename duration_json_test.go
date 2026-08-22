@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 func TestDurationMarshalJSON(t *testing.T) {

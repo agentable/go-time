@@ -275,7 +275,8 @@ Unresolved `Date` and `Time` values cross to stdlib only after
 
 ## JSON
 
-All value objects and `ParseResult` use `github.com/go-json-experiment/json`. Do not add `encoding/json` imports.
+All value objects and `ParseResult` use Go 1.27 `encoding/json/v2`. Do not add
+`encoding/json` v1 imports outside an explicit compatibility boundary.
 
 Stable value JSON:
 

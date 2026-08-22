@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 // errInvalidISO8601Period is returned when an ISO 8601 period string cannot be parsed.

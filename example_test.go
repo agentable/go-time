@@ -1,11 +1,11 @@
 package gotime_test
 
 import (
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"time"
 
-	"github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
 	"golang.org/x/text/language"
 
 	gotime "github.com/agentable/go-time"

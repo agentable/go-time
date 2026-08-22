@@ -3,7 +3,7 @@ package gotime
 import (
 	"fmt"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 func unmarshalJSONWire(b []byte, out any) error {

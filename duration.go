@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 // errInvalidISO8601Duration is returned when an ISO 8601 duration string cannot be parsed.

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 )
 
 func TestParseResultMarshalResolved(t *testing.T) {

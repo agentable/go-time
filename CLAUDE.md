@@ -167,7 +167,7 @@ Operational corollaries:
 
 ### Must Follow
 
-- Go 1.26 — use modern language features where they simplify code
+- Go 1.27 — use modern language features where they simplify code
 - Follow [Google Go Best Practices](https://google.github.io/go-style/best-practices)
 - Follow [Google Go Style Decisions](https://google.github.io/go-style/decisions)
 - KISS/DRY/YAGNI — no premature abstractions, no unused features, no duplicated logic
@@ -240,7 +240,8 @@ Operational corollaries:
 - No policy-only gate scripts that merely restate README, SPECS, or agent instructions
 - No spec-mirror tests when a stronger behavior, integration, or generated-artifact test already proves the contract
 - No working around dependency bugs — if a bug or limitation is in a dependency library, do NOT bypass it. Create a report file in `reports/` (see Dependency Issue Reporting below)
-- No new `encoding/json` imports — use `github.com/go-json-experiment/json` exclusively
+- Use Go 1.27 `encoding/json/v2` and `encoding/json/jsontext` for JSON; use
+  `encoding/json` only for an explicit v1 compatibility boundary
 - No reminder/alarm/event/cron/RRULE/business-calendar/astronomical types — permanent ban
 
 ### Domain Patterns
@@ -266,7 +267,7 @@ See SPECS/ for detailed patterns:
 
 | Dependency | Purpose |
 |------------|---------|
-| `github.com/go-json-experiment/json` | Stable JSON serialization via jsonv2 |
+| Go 1.27 `encoding/json/v2` | Standard-library JSON v2 serialization |
 | `github.com/google/go-cmp` | Test diffs only |
 | `golang.org/x/text` | `language.Tag` for `WithInputLocale` — BCP-47 type only, no CLDR/display data |
 

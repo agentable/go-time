@@ -409,7 +409,7 @@ projection is not required.
 
 ## Serialize Values
 
-Marshal value objects and parse results with `github.com/go-json-experiment/json`.
+Marshal value objects and parse results with Go 1.27 `encoding/json/v2`.
 
 ```go
 payload, err := json.Marshal(deadline)

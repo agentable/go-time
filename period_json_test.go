@@ -2,12 +2,12 @@ package gotime
 
 import (
 	"bytes"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math"
 	"testing"
 
-	"github.com/go-json-experiment/json"
 	"github.com/google/go-cmp/cmp"
 )
 
