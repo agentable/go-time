@@ -1,8 +1,8 @@
 # go-time
-
 [![Go Version](https://img.shields.io/github/go-mod/go-version/agentable/go-time)](https://github.com/agentable/go-time)
-[![Go CI](https://github.com/agentable/go-time/actions/workflows/ci.yml/badge.svg)](https://github.com/agentable/go-time/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+[![Go CI](https://github.com/agentable/go-time/actions/workflows/ci.yml/badge.svg)](https://github.com/agentable/go-time/actions/workflows/ci.yml)
 
 A Go time semantics library that turns standard formats and controlled human expressions into precise, typed, and computable values
 
@@ -22,7 +22,6 @@ A Go time semantics library that turns standard formats and controlled human exp
 go get github.com/agentable/go-time
 ```
 
-Requires **Go 1.26.5+**.
 
 ## Quick Start
 

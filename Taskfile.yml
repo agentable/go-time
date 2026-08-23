@@ -4,26 +4,35 @@ vars:
   PROJECT_ROOT:
     sh: pwd
   GOBIN: '{{.PROJECT_ROOT}}/bin'
-  GOLANGCI_LINT_LOCAL_BINARY: '{{.GOBIN}}/golangci-lint'
+  GOLANGCI_LINT_LOCAL_BINARY: '{{.GOBIN}}/golangci-lint{{exeExt}}'
   REQUIRED_GOLANGCI_LINT_VERSION:
     sh: cat .golangci.version 2>/dev/null || echo "2.13.1"
   GOLANGCI_LINT_BINARY:
     sh: |
       required="$(cat .golangci.version 2>/dev/null || echo "2.13.1")"
-      for candidate in "$(command -v golangci-lint 2>/dev/null || true)" "{{.GOLANGCI_LINT_LOCAL_BINARY}}"; do
-        [ -n "$candidate" ] || continue
-        [ -x "$candidate" ] || continue
-        version="$("$candidate" version --short 2>/dev/null || "$candidate" version --short 2>/dev/null || true)"
-        if [ "$version" = "$required" ]; then
+      matches_required() {
+        [ -x "$1" ] || return 1
+        [ "$("$1" version --short 2>/dev/null || true)" = "$required" ]
+      }
+      old_ifs="$IFS"
+      IFS=:
+      for dir in $PATH; do
+        [ -n "$dir" ] || dir=.
+        candidate="$dir/golangci-lint{{exeExt}}"
+        if matches_required "$candidate"; then
           echo "$candidate"
           exit 0
         fi
       done
+      IFS="$old_ifs"
+      if matches_required "{{.GOLANGCI_LINT_LOCAL_BINARY}}"; then
+        echo "{{.GOLANGCI_LINT_LOCAL_BINARY}}"
+        exit 0
+      fi
       echo "{{.GOLANGCI_LINT_LOCAL_BINARY}}"
   GOLANGCI_LINT_VERSION:
     sh: |
-      {{.GOLANGCI_LINT_BINARY}} version --short 2>/dev/null ||
-      {{.GOLANGCI_LINT_BINARY}} version --short 2>/dev/null ||
+      "{{.GOLANGCI_LINT_BINARY}}" version --short 2>/dev/null ||
       echo "not-installed"
 
 env:
@@ -56,8 +65,6 @@ tasks:
     cmds:
       - echo "Downloading dependencies..."
       - go mod download
-      - go mod tidy
-
 
   deps:update:
     desc: Update dependencies for the root module and any nested modules
@@ -101,13 +108,15 @@ tasks:
     desc: Run all tests with race detection
     cmds:
       - echo "Running all tests..."
-      - go test -race ./...
+      - go test -race -count=1 ./...
 
   lint:
     desc: Run all linters
-    deps:
-      - golangci-lint
-      - tidy-lint
+    cmds:
+      - task: tidy-lint
+      - task: fmt-check
+      - task: vet
+      - task: golangci-lint
 
   install-golangci-lint:
     desc: Install golangci-lint with the required version
@@ -118,7 +127,6 @@ tasks:
           echo "Installing golangci-lint v{{.REQUIRED_GOLANGCI_LINT_VERSION}}..."
           GOWORK=off GOBIN="{{.GOBIN}}" go install \
             github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v{{.REQUIRED_GOLANGCI_LINT_VERSION}}
-          echo "golangci-lint v{{.REQUIRED_GOLANGCI_LINT_VERSION}} installed successfully"
         fi
     status:
       - test "{{.GOLANGCI_LINT_VERSION}}" = "{{.REQUIRED_GOLANGCI_LINT_VERSION}}"
@@ -130,14 +138,13 @@ tasks:
     cmds:
       - '{{.GOLANGCI_LINT_BINARY}} version'
       - echo "Running golangci-lint..."
-      - '{{.GOLANGCI_LINT_BINARY}} run --timeout=30m --concurrency=1 --path-prefix=.'
+      - '{{.GOLANGCI_LINT_BINARY}} run --allow-serial-runners --timeout=30m --concurrency=1 --path-prefix=. ./...'
 
   tidy-lint:
-    desc: Check if go.mod and go.sum are tidy
+    desc: Check module files without changing them
     cmds:
       - echo "Checking go.mod and go.sum are tidy..."
-      - go mod tidy
-      - git diff --exit-code -- go.mod go.sum
+      - go mod tidy -diff
 
   yamllint:
     desc: Run yamllint
@@ -157,6 +164,19 @@ tasks:
       - echo "Formatting Go code..."
       - '{{.GOLANGCI_LINT_BINARY}} fmt ./...'
 
+  fmt-check:
+    desc: Check Go source formatting without changing files
+    deps:
+      - install-golangci-lint
+    cmds:
+      - |
+        set -eu
+        output="$({{.GOLANGCI_LINT_BINARY}} fmt --diff ./...)"
+        if [ -n "$output" ]; then
+          printf '%s\n' "$output"
+          exit 1
+        fi
+
   vet:
     desc: Run go vet
     cmds:
@@ -164,12 +184,11 @@ tasks:
       - go vet ./...
 
   verify:
-    desc: Run all verification steps (deps, format, vet, lint, test, vuln)
+    desc: Run all checks without changing tracked files
     cmds:
       - task: deps
-      - task: fmt
-      - task: vet
       - task: lint
+      - task: yamllint
       - task: test
       - task: vuln
       - echo "All verification steps completed successfully"
