@@ -67,7 +67,7 @@ github.com/agentable/go-time/
 
 **Layer dependency rules:**
 
-- Layer 1 (value objects) — semantics and arithmetic use stdlib only; wire methods use the single `go-json-experiment/json` dependency. `zone.go` also imports `internal/zone` for static generated data.
+- Layer 1 (value objects) — semantics and arithmetic use stdlib only; wire methods use Go 1.27.0's native `encoding/json/v2` and `encoding/json/jsontext`. `zone.go` also imports `internal/zone` for static generated data.
 - Layer 2 (`parse.go`, `internal/natural/`) — depends only on Layer 1 + stdlib + `golang.org/x/text/language`
 - Layer 3 (arithmetic methods on value objects) — depends only on Layer 1
 - User-visible API is `gotime.*` only — no internal dependencies leak
@@ -240,8 +240,8 @@ Operational corollaries:
 - No policy-only gate scripts that merely restate README, SPECS, or agent instructions
 - No spec-mirror tests when a stronger behavior, integration, or generated-artifact test already proves the contract
 - No working around dependency bugs — if a bug or limitation is in a dependency library, do NOT bypass it. Create a report file in `reports/` (see Dependency Issue Reporting below)
-- Use Go 1.27.0 `encoding/json/v2` and `encoding/json/jsontext` for JSON; use
-  `encoding/json` only for an explicit v1 compatibility boundary
+- Use only Go 1.27.0's native `encoding/json/v2` and `encoding/json/jsontext`
+  for JSON. Do not add compatibility adapters or alternate JSON implementations.
 - No reminder/alarm/event/cron/RRULE/business-calendar/astronomical types — permanent ban
 
 ### Domain Patterns
