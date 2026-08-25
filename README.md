@@ -22,6 +22,7 @@ A Go time semantics library that turns standard formats and controlled human exp
 go get github.com/agentable/go-time
 ```
 
+Requires **Go 1.27.0 or newer**.
 
 ## Quick Start
 
@@ -408,7 +409,7 @@ projection is not required.
 
 ## Serialize Values
 
-Marshal value objects and parse results with Go 1.27 `encoding/json/v2`.
+Marshal value objects and parse results with Go 1.27.0 `encoding/json/v2`.
 
 ```go
 payload, err := json.Marshal(deadline)

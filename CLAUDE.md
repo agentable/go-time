@@ -167,7 +167,7 @@ Operational corollaries:
 
 ### Must Follow
 
-- Go 1.27 — use modern language features where they simplify code
+- Go 1.27.0 — use modern language features where they simplify code
 - Follow [Google Go Best Practices](https://google.github.io/go-style/best-practices)
 - Follow [Google Go Style Decisions](https://google.github.io/go-style/decisions)
 - KISS/DRY/YAGNI — no premature abstractions, no unused features, no duplicated logic
@@ -240,7 +240,7 @@ Operational corollaries:
 - No policy-only gate scripts that merely restate README, SPECS, or agent instructions
 - No spec-mirror tests when a stronger behavior, integration, or generated-artifact test already proves the contract
 - No working around dependency bugs — if a bug or limitation is in a dependency library, do NOT bypass it. Create a report file in `reports/` (see Dependency Issue Reporting below)
-- Use Go 1.27 `encoding/json/v2` and `encoding/json/jsontext` for JSON; use
+- Use Go 1.27.0 `encoding/json/v2` and `encoding/json/jsontext` for JSON; use
   `encoding/json` only for an explicit v1 compatibility boundary
 - No reminder/alarm/event/cron/RRULE/business-calendar/astronomical types — permanent ban
 
@@ -267,7 +267,7 @@ See SPECS/ for detailed patterns:
 
 | Dependency | Purpose |
 |------------|---------|
-| Go 1.27 `encoding/json/v2` | Standard-library JSON v2 serialization |
+| Go 1.27.0 `encoding/json/v2` | Standard-library JSON v2 serialization |
 | `github.com/google/go-cmp` | Test diffs only |
 | `golang.org/x/text` | `language.Tag` for `WithInputLocale` — BCP-47 type only, no CLDR/display data |
 
@@ -340,7 +340,7 @@ Common implementation skills in `.agents/skills/`:
 | [agent-md-writing](.agents/skills/agent-md-writing/) | Regenerating `CLAUDE.md` and refreshing the `AGENTS.md` symlink |
 | [readme-writing](.agents/skills/readme-writing/) | Regenerating `README.md` from the current public API |
 | [golangci-linting](.agents/skills/golangci-linting/) | Setting up or running golangci-lint v2, fixing lint errors, configuring linters |
-| [modernizing](.agents/skills/modernizing/) | Adopting Go 1.20-1.27 features — generics, iterators, error handling, stdlib collections |
+| [modernizing](.agents/skills/modernizing/) | Adopting Go 1.20-1.27.0 features — generics, iterators, error handling, stdlib collections |
 | [committing](.agents/skills/committing/) | Creating conventional commit messages for Go packages |
 | [releasing](.agents/skills/releasing/) | Releasing a Go package — semantic versioning, tagging, dependency upgrades |
 | [code-simplifying](.agents/skills/code-simplifying/) | Refining recently written Go code for clarity and consistency without changing functionality |
