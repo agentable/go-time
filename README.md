@@ -8,7 +8,7 @@ A Go time semantics library that turns standard formats and controlled human exp
 
 ## Features
 
-- **Typed time semantics**: Represent instants, zoned and local datetimes, dates, clock times, durations, periods, intervals, and zones as distinct immutable values
+- **Typed time semantics**: Represent instants, zoned and local datetimes, dates, clock times, durations, periods, intervals, and zones as distinct values with non-mutating value methods
 - **Two parsing paths**: Use typed `Parse*` functions for expected input or `Parse` when the kind or interpretation may be ambiguous
 - **Explicit human context**: Supply language, reference time, and timezone when interpreting natural-language input
 - **Safe calendar arithmetic**: Keep exact `Duration` math separate from calendar `Period` math, including end-of-month and DST behavior
@@ -283,6 +283,32 @@ Use exact `Sub` methods for timeline elapsed time and `DaysUntil` for signed
 calendar-day counts. Product-specific age, billing, or Y/M/D decomposition
 belongs in the caller.
 
+### Query calendar facts
+
+Calendar-derived facts report invalid `Date` values instead of normalizing
+them into another date.
+
+```go
+date, err := gotime.ParseDate("2026-02-14")
+if err != nil {
+	return err
+}
+
+weekday, err := date.Weekday()
+if err != nil {
+	return err
+}
+days, err := date.DaysInMonth()
+if err != nil {
+	return err
+}
+
+fmt.Println(weekday, days) // Saturday 28
+```
+
+`ISOWeek` and `YearDay` use the same checked pattern. `DaysInMonth` needs a
+valid year and month only, while `IsLeapYear` remains a year-only `bool` query.
+
 ### Build a half-open time window
 
 Create intervals from two instants or from one instant plus an exact duration. Intervals are useful for comparisons and handoff to range-based APIs.
@@ -334,6 +360,10 @@ if err != nil {
 }
 fmt.Println(deadline.Instant())
 ```
+
+`gotime.UTC` is a named value for reading, comparison, and arguments; assigning
+to it does not configure a process-wide default. `Zones()` returns a sorted,
+caller-owned copy, so changing the returned slice does not affect later calls.
 
 Use `LocalDateTime.Resolve` when a local wall time may fall in a DST gap or overlap and the application needs to inspect that state directly:
 
@@ -428,6 +458,43 @@ fmt.Println(restored.Zone().ID()) // America/New_York
 
 Decoding validates the value at the boundary. See [SPECS/10-domain-model.md](SPECS/10-domain-model.md) for the complete wire contract instead of mirroring schemas in application code.
 
+`ParseResult` and `TimeError` JSON are diagnostic output, not runtime recovery
+formats. Marshal them when sending inspection data to a log pipeline or API:
+
+```go
+result := gotime.Parse(userInput, opts...)
+diagnostic, err := json.Marshal(result)
+if err != nil {
+	return err
+}
+sendDiagnostic(diagnostic)
+```
+
+Keep the original result when code needs `HasZone`, typed accessors, ambiguity
+identity, or `errors.Is`. To obtain a new runtime result later, parse the
+original input again with explicit options. A serialized `TimeError` keeps its
+stable `code` and details, but not the Go sentinel or underlying cause chain.
+
+## Share Values Safely
+
+Value methods do not modify their receiver, so independent values can be read
+concurrently. JSON decoding is different: it replaces the pointer receiver.
+Keep that receiver private until decoding finishes.
+
+```go
+var date gotime.Date
+if err := json.Unmarshal(payload, &date); err != nil {
+	return err
+}
+publish(date)
+```
+
+`ParseResult.Warnings`, `ParseResult.Candidates`, and
+`LocalResolution.Candidates` are caller-owned slices. Copying the containing
+struct still shares each slice backing array. Clone the slices you need to
+mutate independently, and coordinate concurrent access whenever an alias may
+write.
+
 ## Handle Errors
 
 Use sentinel errors for control flow and `*TimeError` for structured details.
@@ -459,7 +526,7 @@ Treat `TimeError.Input` and `TimeError.Message` as caller-provided data and appl
 | Construct civil values | `NewDate`, `NewTime`, `NewLocalDateTime`, `NewDateTime` |
 | Convert from Unix or stdlib values | `UnixSeconds`, `UnixMillis`, `UnixNanos`, `InstantFromTime`, `DateTimeFromTime`, `DateFromTime`, `TimeFromTime` |
 | Project an instant to Unix time | checked `Instant.UnixNano`, `Instant.UnixMilli` |
-| Compare and calculate | `Compare`, `Add`, `AddPeriod`, `Sub`, `DaysUntil` |
+| Compare and calculate | `Compare`, `Add`, `AddPeriod`, `Sub`, `DaysUntil`, checked date queries |
 | Work with ranges | `NewInterval`, `NewIntervalStartingAt`, `NewIntervalEndingAt`, interval methods |
 | Load time zones | `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ZoneCatalogVersion` |
 

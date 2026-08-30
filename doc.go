@@ -25,6 +25,13 @@
 // [MustLoadZone] panics only for invalid fixed IANA zone identifiers and is
 // intended for package-level or test-time initialization.
 //
+// # Ownership and concurrency
+//
+// Value-receiver methods do not mutate their receiver. Pointer JSON decoders
+// replace their target and require caller-provided exclusive access while
+// decoding. Exported result slices are caller-owned; copying a containing
+// struct aliases the slice backing arrays rather than deep-cloning them.
+//
 // # Formatting is out of scope
 //
 // Localization and display formatting are intentionally out of scope. Bridge

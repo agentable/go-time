@@ -192,7 +192,8 @@ func (iv Interval) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON decodes iv from {"kind":"interval","start":"<RFC3339Nano>","end":"<RFC3339Nano>"}.
+// UnmarshalJSON decodes iv from {"kind":"interval","start":"<RFC3339Nano>","end":"<RFC3339Nano>"}
+// and replaces iv. Callers must not read or write the same receiver concurrently.
 func (iv *Interval) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind  string `json:"kind"`

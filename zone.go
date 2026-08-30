@@ -12,7 +12,8 @@ import (
 
 var utcZone = Zone{id: "UTC", loc: time.UTC}
 
-// UTC is the UTC timezone.
+// UTC is the named UTC value. Treat it as read-only; assigning to it does not
+// configure package defaults or change zero-Zone semantics.
 var UTC = utcZone
 
 // Zone represents an IANA timezone identity.
@@ -116,7 +117,8 @@ func isFixedOffsetID(id string) bool {
 	return err == nil
 }
 
-// UnmarshalJSON decodes z from {"kind":"zone","id":"<IANA id>",...}.
+// UnmarshalJSON decodes z from {"kind":"zone","id":"<IANA id>",...} and
+// replaces z. Callers must not read or write the same receiver concurrently.
 func (z *Zone) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind string `json:"kind"`
@@ -162,7 +164,7 @@ func ResolveZone(id string) (Zone, error) {
 	)
 }
 
-// Zones returns a sorted copy of all known IANA timezone identifiers.
+// Zones returns a sorted caller-owned copy of all known IANA timezone identifiers.
 func Zones() []string {
 	return slices.Clone(ianazone.Zones)
 }

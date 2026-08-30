@@ -151,7 +151,8 @@ func (i Instant) wireISO() (string, error) {
 	return iso, nil
 }
 
-// UnmarshalJSON decodes i from {"kind":"instant","iso":"<RFC3339Nano>",...}.
+// UnmarshalJSON decodes i from {"kind":"instant","iso":"<RFC3339Nano>",...}
+// and replaces i. Callers must not read or write the same receiver concurrently.
 func (i *Instant) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind string `json:"kind"`

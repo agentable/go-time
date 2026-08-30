@@ -130,6 +130,13 @@ Empty input in `Parse` returns `ErrEmptyInput` with `CodeEmptyInput`.
 JSON preserves `Message`, `Input`, and `Hint` for structured consumers; it is
 not a sanitized log payload.
 
+This JSON is diagnostic output only. It preserves the stable `ErrorCode` and
+structured details, but `Err` and all underlying parser, loader, or codec
+causes are omitted. Decoding those fields into a `TimeError` does not restore
+sentinel identity or make `errors.Is` work. Go callers that need sentinel or
+cause inspection must retain the original in-process error; cross-wire callers
+may classify the stable `code` according to their own protocol policy.
+
 Concrete value decoders classify wrong field types, unknown members, missing
 required fields, and wrong `kind` as `ErrInvalidFormat` with a `*TimeError` and
 an actionable hint. When jsonv2 supplies an underlying structural cause, it

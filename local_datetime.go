@@ -56,7 +56,8 @@ func (ldt LocalDateTime) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON decodes ldt from {"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS[.fraction]"}.
+// UnmarshalJSON decodes ldt from {"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS[.fraction]"}
+// and replaces ldt. Callers must not read or write the same receiver concurrently.
 func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind  string `json:"kind"`
@@ -119,7 +120,8 @@ type LocalResolution struct {
 	Zone Zone
 	// Local is the unresolved local date-time.
 	Local LocalDateTime
-	// Candidates holds the matching DateTime values in chronological order.
+	// Candidates is a caller-owned slice of matching DateTime values in
+	// chronological order. Copying LocalResolution aliases its backing array.
 	Candidates []DateTime
 }
 

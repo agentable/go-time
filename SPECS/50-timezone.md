@@ -21,8 +21,15 @@ func ZoneCatalogVersion() string
 - `ResolveZone` accepts real-world zone names: exact IANA, case-insensitive IANA, Windows names, and legacy aliases handled by Go's `time.LoadLocation`.
 - `ResolveZone` does not resolve timezone abbreviations. Abbreviations are
   point-in-time display metadata available through stdlib `time.Time.Zone`.
-- `Zones` returns the generated IANA identifier catalog. `ZoneCatalogVersion` returns the IANA tzdb version used to generate that catalog; it does not describe the transition-rule data used by `time.LoadLocation`.
-- `UTC` is the only predefined zone. Host-local discovery and configuration
+- `Zones` returns a sorted, cloned, caller-owned copy of the generated IANA
+  identifier catalog. Mutating it does not affect the internal catalog or a
+  later call. `ZoneCatalogVersion` returns the IANA tzdb version used to
+  generate that catalog; it does not describe the transition-rule data used by
+  `time.LoadLocation`.
+- `UTC` is the only predefined zone. Treat it as a named read-only value for
+  reading, comparison, and arguments. Assigning to the exported variable is
+  not a configuration mechanism and does not change zero-Zone semantics or a
+  process-wide default. Host-local discovery and configuration
   belong to applications because process environment is not a durable zone
   identity.
 

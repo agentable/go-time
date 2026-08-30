@@ -76,8 +76,9 @@ type Warning struct {
 	Hint string `json:"hint,omitempty"`
 }
 
-// ParseResult holds the outcome of Parse.
+// ParseResult holds the in-process outcome of Parse.
 // Check Status before calling the typed accessors (DateTime, Date, …).
+// Its JSON form is diagnostic output and does not preserve all runtime state.
 type ParseResult struct {
 	// Status reports whether parsing resolved, remained ambiguous, or failed.
 	Status Status
@@ -91,10 +92,11 @@ type ParseResult struct {
 	Reference Instant
 	// HasZone reports whether the input explicitly included timezone or offset information.
 	HasZone bool
-	// Warnings describes lossy assumptions made while parsing.
+	// Warnings is a caller-owned slice describing lossy assumptions made while parsing.
 	Warnings []Warning
 	// Candidates holds the alternative interpretations when Status is Ambiguous.
-	// Each candidate is itself a StatusResolved ParseResult.
+	// Each candidate is itself a StatusResolved ParseResult. The slice is
+	// caller-owned; copying ParseResult aliases its backing array.
 	Candidates []ParseResult
 	// Error describes the failure when Status is Invalid.
 	Error *TimeError
@@ -196,7 +198,8 @@ func Parse(input string, opts ...Option) ParseResult {
 	return parseWithConfig(input, &cfg)
 }
 
-// MarshalJSON serializes r to the stable JSON schema defined in SPECS/20-parsing.md.
+// MarshalJSON serializes r as diagnostic output using the stable schema defined
+// in SPECS/20-parsing.md. ParseResult has no supported JSON decoder.
 func (r ParseResult) MarshalJSON() ([]byte, error) {
 	if err := r.validateWire(); err != nil {
 		return nil, err

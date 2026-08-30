@@ -172,7 +172,8 @@ func (p Period) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON decodes p from {"kind":"period","iso":"<ISO8601>",...}.
+// UnmarshalJSON decodes p from {"kind":"period","iso":"<ISO8601>",...}
+// and replaces p. Callers must not read or write the same receiver concurrently.
 func (p *Period) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind string `json:"kind"`

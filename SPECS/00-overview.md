@@ -23,7 +23,9 @@ The API follows constraint-led design: remove every decision the caller should n
 2. **Names read as English**: `gotime.Now()`, `dt.In(zone)`, `iv.Contains(t)`.
 3. **No surprise**: fallible APIs return `error`; the only public panic API is `MustLoadZone`.
 4. **Primitives, not products**: no display policy, ambiguity UX, scheduling, persistence, or CLI protocol.
-5. **Immutable values**: all operations return new values.
+5. **Non-mutating value methods**: value-receiver operations return values
+   without mutating their receiver; pointer JSON decoders explicitly replace
+   their targets.
 6. **One concept per type**: `Duration` is exact nanoseconds; `Period` is calendar Y/M/D; `Interval` is zone-free.
 7. **Stable wire format**: JSON is deterministic and never depends on marshal-time state.
 8. **Errors compose with stdlib**: `Err*` sentinels for `errors.Is`, `*TimeError` for `errors.As`.

@@ -133,9 +133,8 @@ func ExampleDuration_Decompose() {
 	// Hours=1 Minutes=30 Milliseconds=250
 }
 
-// Value objects serialize to stable JSON schemas. All types round-trip
-// through json.Marshal / json.Unmarshal without losing precision.
-func Example_jsonRoundTrip() {
+// DateTime values serialize to a stable JSON representation.
+func Example_jsonMarshal() {
 	zone := gotime.MustLoadZone("Asia/Tokyo")
 	dt := mustDateTime(
 		mustDate(2026, time.March, 27),

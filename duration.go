@@ -215,7 +215,8 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 	}{Kind: "duration", ISO: d.ISO8601()})
 }
 
-// UnmarshalJSON decodes d from {"kind":"duration","iso":"<ISO8601>",...}.
+// UnmarshalJSON decodes d from {"kind":"duration","iso":"<ISO8601>",...}
+// and replaces d. Callers must not read or write the same receiver concurrently.
 func (d *Duration) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind string `json:"kind"`

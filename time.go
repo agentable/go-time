@@ -109,7 +109,8 @@ func (t Time) MarshalJSON() ([]byte, error) {
 	}{Kind: "time", Value: t.String()})
 }
 
-// UnmarshalJSON decodes t from {"kind":"time","value":"HH:MM:SS[.nnnnnnnnn]"}.
+// UnmarshalJSON decodes t from {"kind":"time","value":"HH:MM:SS[.nnnnnnnnn]"}
+// and replaces t. Callers must not read or write the same receiver concurrently.
 func (t *Time) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind  string `json:"kind"`

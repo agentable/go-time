@@ -181,18 +181,62 @@ func (d Date) toTime() time.Time {
 }
 
 // Weekday returns the day of the week (Sunday = 0 through Saturday = 6).
-func (d Date) Weekday() time.Weekday { return d.toTime().Weekday() }
+// It returns ErrInvalidDate when d is not a valid complete calendar date.
+func (d Date) Weekday() (time.Weekday, error) {
+	if err := d.calendarQueryError(); err != nil {
+		return time.Weekday(0), err
+	}
+	return d.toTime().Weekday(), nil
+}
 
 // ISOWeek returns the ISO 8601 year and week number.
-func (d Date) ISOWeek() (year, week int) { return d.toTime().ISOWeek() }
+// It returns ErrInvalidDate when d is not a valid complete calendar date.
+func (d Date) ISOWeek() (year, week int, err error) {
+	if err := d.calendarQueryError(); err != nil {
+		return 0, 0, err
+	}
+	year, week = d.toTime().ISOWeek()
+	return year, week, nil
+}
 
 // YearDay returns the day of the year (1–366).
-func (d Date) YearDay() int { return d.toTime().YearDay() }
+// It returns ErrInvalidDate when d is not a valid complete calendar date.
+func (d Date) YearDay() (int, error) {
+	if err := d.calendarQueryError(); err != nil {
+		return 0, err
+	}
+	return d.toTime().YearDay(), nil
+}
 
 // DaysInMonth returns the number of days in the date's month.
-func (d Date) DaysInMonth() int { return daysInMonth(d.year, d.month) }
+// It returns ErrInvalidDate when the year or month is invalid. The day is not
+// validated because it does not affect the result.
+func (d Date) DaysInMonth() (int, error) {
+	if msg := validateDateYearMonth(d.year, int(d.month)); msg != "" {
+		return 0, newTimeError(
+			ErrInvalidDate,
+			msg,
+			d.String(),
+			"use a year from 0000 through 9999 and a month from January through December",
+		)
+	}
+	return daysInMonth(d.year, d.month), nil
+}
+
+func (d Date) calendarQueryError() error {
+	if msg := validateDateComponents(d.year, int(d.month), d.day); msg != "" {
+		return newTimeError(
+			ErrInvalidDate,
+			msg,
+			d.String(),
+			"construct Date with NewDate before querying calendar-derived values",
+		)
+	}
+	return nil
+}
 
 // IsLeapYear reports whether the date's year is a leap year.
+// It is a year-only query and does not validate the month or day.
 func (d Date) IsLeapYear() bool {
 	return d.year%4 == 0 && (d.year%100 != 0 || d.year%400 == 0)
 }
@@ -218,7 +262,8 @@ func (d Date) MarshalJSON() ([]byte, error) {
 	}{Kind: "date", Value: d.String()})
 }
 
-// UnmarshalJSON decodes d from {"kind":"date","value":"YYYY-MM-DD"}.
+// UnmarshalJSON decodes d from {"kind":"date","value":"YYYY-MM-DD"} and
+// replaces d. Callers must not read or write the same receiver concurrently.
 func (d *Date) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind  string `json:"kind"`
@@ -254,11 +299,8 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 // validateDateComponents returns a non-empty error message if the date is invalid,
 // or an empty string if valid.
 func validateDateComponents(year, month, day int) string {
-	if year < 0 || year > 9999 {
-		return fmt.Sprintf("invalid year %d: must be 0-9999", year)
-	}
-	if month < 1 || month > 12 {
-		return fmt.Sprintf("invalid month %d: must be 1-12", month)
+	if msg := validateDateYearMonth(year, month); msg != "" {
+		return msg
 	}
 	if day < 1 || day > 31 {
 		return fmt.Sprintf("invalid day %d: must be 1-31", day)
@@ -267,6 +309,16 @@ func validateDateComponents(year, month, day int) string {
 	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 	if t.Month() != time.Month(month) || t.Day() != day {
 		return fmt.Sprintf("date %04d-%02d-%02d does not exist", year, month, day)
+	}
+	return ""
+}
+
+func validateDateYearMonth(year, month int) string {
+	if year < 0 || year > 9999 {
+		return fmt.Sprintf("invalid year %d: must be 0-9999", year)
+	}
+	if month < 1 || month > 12 {
+		return fmt.Sprintf("invalid month %d: must be 1-12", month)
 	}
 	return ""
 }

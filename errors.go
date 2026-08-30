@@ -45,7 +45,8 @@ const (
 // It composes with the standard library: errors.Is matches the Err sentinel,
 // while errors.As extracts Input, Hint, Message, and Code for inspection.
 // Message and Input may contain caller-provided data; Error omits them and
-// returns only the fixed code and sentinel category.
+// returns only the fixed code and sentinel category. JSON is diagnostic output:
+// it omits Err and does not preserve sentinel or underlying-cause identity.
 type TimeError struct {
 	// Code is the stable machine-readable error code.
 	Code ErrorCode `json:"code"`

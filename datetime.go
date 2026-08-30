@@ -158,7 +158,8 @@ func (dt DateTime) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON decodes dt from {"kind":"datetime","instant":"<RFC3339Nano UTC>","zone":"<IANA id>"}.
+// UnmarshalJSON decodes dt from {"kind":"datetime","instant":"<RFC3339Nano UTC>","zone":"<IANA id>"}
+// and replaces dt. Callers must not read or write the same receiver concurrently.
 func (dt *DateTime) UnmarshalJSON(b []byte) error {
 	var wire struct {
 		Kind    string `json:"kind"`

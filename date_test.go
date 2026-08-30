@@ -233,36 +233,83 @@ func TestDate_Weekday(t *testing.T) {
 		{mustDate(2026, time.April, 5), time.Sunday},
 	}
 	for _, tc := range tests {
-		if got := tc.date.Weekday(); got != tc.want {
+		got, err := tc.date.Weekday()
+		if err != nil {
+			t.Fatalf("%v.Weekday() error = %v", tc.date, err)
+		}
+		if got != tc.want {
 			t.Errorf("%v.Weekday() = %v, want %v", tc.date, got, tc.want)
 		}
+	}
+
+	for _, tc := range invalidDateQueryReceivers() {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.date.Weekday()
+			if got != time.Weekday(0) {
+				t.Errorf("Weekday() = %v, want zero weekday", got)
+			}
+			assertInvalidDateQueryError(t, err)
+		})
 	}
 }
 
 func TestDate_ISOWeek(t *testing.T) {
-	// 2026-01-01 is Thursday → ISO week 1 of 2026
-	d := mustDate(2026, time.January, 1)
-	year, week := d.ISOWeek()
-	if year != 2026 || week != 1 {
-		t.Errorf("ISOWeek() = (%d, %d), want (2026, 1)", year, week)
+	tests := []struct {
+		date     Date
+		wantYear int
+		wantWeek int
+	}{
+		{mustDate(2026, time.January, 1), 2026, 1},
+		{mustDate(2025, time.December, 29), 2026, 1},
 	}
-	// 2025-12-29 (Monday) → ISO week 1 of 2026
-	d2 := mustDate(2025, time.December, 29)
-	year2, week2 := d2.ISOWeek()
-	if year2 != 2026 || week2 != 1 {
-		t.Errorf("ISOWeek() = (%d, %d), want (2026, 1)", year2, week2)
+	for _, tc := range tests {
+		year, week, err := tc.date.ISOWeek()
+		if err != nil {
+			t.Fatalf("%v.ISOWeek() error = %v", tc.date, err)
+		}
+		if year != tc.wantYear || week != tc.wantWeek {
+			t.Errorf("%v.ISOWeek() = (%d, %d), want (%d, %d)", tc.date, year, week, tc.wantYear, tc.wantWeek)
+		}
+	}
+
+	for _, tc := range invalidDateQueryReceivers() {
+		t.Run(tc.name, func(t *testing.T) {
+			year, week, err := tc.date.ISOWeek()
+			if year != 0 || week != 0 {
+				t.Errorf("ISOWeek() = (%d, %d), want (0, 0)", year, week)
+			}
+			assertInvalidDateQueryError(t, err)
+		})
 	}
 }
 
 func TestDate_YearDay(t *testing.T) {
-	if got := mustDate(2026, time.January, 1).YearDay(); got != 1 {
-		t.Errorf("Jan 1 YearDay() = %d, want 1", got)
+	tests := []struct {
+		date Date
+		want int
+	}{
+		{mustDate(2026, time.January, 1), 1},
+		{mustDate(2026, time.December, 31), 365},
+		{mustDate(2024, time.December, 31), 366},
 	}
-	if got := mustDate(2026, time.December, 31).YearDay(); got != 365 {
-		t.Errorf("Dec 31 (non-leap) YearDay() = %d, want 365", got)
+	for _, tc := range tests {
+		got, err := tc.date.YearDay()
+		if err != nil {
+			t.Fatalf("%v.YearDay() error = %v", tc.date, err)
+		}
+		if got != tc.want {
+			t.Errorf("%v.YearDay() = %d, want %d", tc.date, got, tc.want)
+		}
 	}
-	if got := mustDate(2024, time.December, 31).YearDay(); got != 366 {
-		t.Errorf("Dec 31 (leap) YearDay() = %d, want 366", got)
+
+	for _, tc := range invalidDateQueryReceivers() {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.date.YearDay()
+			if got != 0 {
+				t.Errorf("YearDay() = %d, want 0", got)
+			}
+			assertInvalidDateQueryError(t, err)
+		})
 	}
 }
 
@@ -277,7 +324,52 @@ func TestDate_DaysInMonth(t *testing.T) {
 		{mustDate(2026, time.April, 10), 30},
 	}
 	for _, tc := range tests {
-		if got := tc.date.DaysInMonth(); got != tc.want {
+		got, err := tc.date.DaysInMonth()
+		if err != nil {
+			t.Fatalf("%v.DaysInMonth() error = %v", tc.date, err)
+		}
+		if got != tc.want {
+			t.Errorf("%v.DaysInMonth() = %d, want %d", tc.date, got, tc.want)
+		}
+	}
+}
+
+func TestDate_DaysInMonth_RejectsInvalidYearOrMonth(t *testing.T) {
+	tests := []struct {
+		name string
+		date Date
+	}{
+		{name: "negative year", date: Date{year: -1, month: time.January}},
+		{name: "year above domain", date: Date{year: 10_000, month: time.January}},
+		{name: "zero month", date: Date{year: 2026, month: 0}},
+		{name: "month above domain", date: Date{year: 2026, month: 13}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.date.DaysInMonth()
+			if got != 0 {
+				t.Errorf("DaysInMonth() = %d, want 0", got)
+			}
+			assertInvalidDateQueryError(t, err)
+		})
+	}
+}
+
+func TestDate_DaysInMonth_DoesNotRequireValidDay(t *testing.T) {
+	tests := []struct {
+		date Date
+		want int
+	}{
+		{date: Date{year: 2024, month: time.February, day: 0}, want: 29},
+		{date: Date{year: 2026, month: time.February, day: 30}, want: 28},
+		{date: Date{year: 2026, month: time.April, day: 31}, want: 30},
+	}
+	for _, tc := range tests {
+		got, err := tc.date.DaysInMonth()
+		if err != nil {
+			t.Fatalf("%v.DaysInMonth() error = %v", tc.date, err)
+		}
+		if got != tc.want {
 			t.Errorf("%v.DaysInMonth() = %d, want %d", tc.date, got, tc.want)
 		}
 	}
@@ -292,12 +384,45 @@ func TestDate_IsLeapYear(t *testing.T) {
 		{2026, false}, // not divisible by 4
 		{1900, false}, // divisible by 100 but not 400
 		{2000, true},  // divisible by 400
+		{0, true},     // year zero is in the supported civil domain
 	}
 	for _, tc := range tests {
-		d := mustDate(tc.year, time.January, 1)
+		d := Date{year: tc.year}
 		if got := d.IsLeapYear(); got != tc.want {
 			t.Errorf("year %d: IsLeapYear() = %v, want %v", tc.year, got, tc.want)
 		}
+	}
+}
+
+func invalidDateQueryReceivers() []struct {
+	name string
+	date Date
+} {
+	return []struct {
+		name string
+		date Date
+	}{
+		{name: "zero value", date: Date{}},
+		{name: "invalid year", date: Date{year: -1, month: time.January, day: 1}},
+		{name: "invalid month", date: Date{year: 2026, month: 13, day: 1}},
+		{name: "invalid day", date: Date{year: 2026, month: time.February, day: 30}},
+	}
+}
+
+func assertInvalidDateQueryError(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, ErrInvalidDate) {
+		t.Fatalf("error = %v, want ErrInvalidDate", err)
+	}
+	var te *TimeError
+	if !errors.As(err, &te) {
+		t.Fatalf("error = %T, want *TimeError", err)
+	}
+	if te.Code != CodeInvalidDate {
+		t.Errorf("TimeError.Code = %q, want %q", te.Code, CodeInvalidDate)
+	}
+	if te.Hint == "" {
+		t.Error("TimeError.Hint is empty")
 	}
 }
 

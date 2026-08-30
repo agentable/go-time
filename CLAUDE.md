@@ -48,7 +48,7 @@ github.com/agentable/go-time/
 ├── instant.go          # Instant (absolute UTC; checked epoch/difference projections; Add(Duration) only)
 ├── datetime.go         # DateTime (zoned local time; checked Add; AddPeriod→LocalResolution; .Clock()→Time)
 ├── local_datetime.go   # LocalDateTime (date + clock before zone resolution; Resolve(Zone)→candidates)
-├── date.go             # Date (calendar date; checked Add(Period)/DaysUntil; unresolved until paired with Time + Zone)
+├── date.go             # Date (calendar date; checked queries/Add(Period)/DaysUntil; unresolved until paired with Time + Zone)
 ├── time.go             # Time (clock time; unresolved until paired with Date + Zone)
 ├── duration.go         # Duration = type Duration time.Duration (no Day constant); .Decompose()→DurationComponents
 ├── period.go           # Period = struct{Years, Months, Days int32} (EOM clamp); fields exported directly, no Decompose
@@ -148,7 +148,7 @@ These nine principles override all SPECS and code. When a current API contradict
 2. **Names read as English.** `gotime.Now()`, `dt.In(zone)`, `iv.Contains(t)`.
 3. **No surprise.** Functions that can fail return `error`. The only `Must*` is `MustLoadZone` (mirrors `regexp.MustCompile` for `var` initialization).
 4. **Primitives, not products.** Parsing, value semantics, arithmetic, structured diagnostics — nothing else. No formatting/display, ambiguity UX, scheduling, persistence, CLI protocol.
-5. **Immutable values, method receivers.** All value objects immutable; methods over package helpers when receiver is obvious.
+5. **Non-mutating value methods.** Value-receiver methods do not mutate; pointer JSON decoders explicitly replace their targets.
 6. **One concept per type.** `Duration` is exact nanoseconds. `Period` is calendar Y/M/D. `Interval` carries no formatting state.
 7. **Stable wire format.** Every JSON shape is deterministic. Never recompute at marshal time from `time.Now()` or other ambient state.
 8. **Errors compose with stdlib.** Sentinel `Err*` for `errors.Is`, typed `*TimeError` for `errors.As` — same pattern as `os.ErrNotExist` + `*fs.PathError`.
@@ -172,7 +172,7 @@ Operational corollaries:
 - Follow [Google Go Style Decisions](https://google.github.io/go-style/decisions)
 - KISS/DRY/YAGNI — no premature abstractions, no unused features, no duplicated logic
 - Explicit error handling — return errors, wrap with context via `fmt.Errorf("%w")`
-- All value objects are immutable — all operations return new values, no setters
+- Concrete value methods do not mutate their receiver except pointer JSON decoders, which replace their target; no setters
 - Use concrete time types (`Instant`, `DateTime`, `Date`, `Time`, `Duration`, `Period`, `Interval`, `Zone`) — never `string` or `any` for time values
 - Public API never exposes locale / formatter / i18n types — accept `language.Tag` only for parser hints
 - Every error must include an actionable Hint — tell the user how to fix it

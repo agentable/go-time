@@ -2,9 +2,28 @@
 
 ## Overview
 
-All public API lives in the top-level `gotime` package. The design favors concrete immutable values, typed parsing, explicit arithmetic, and stdlib bridges.
+All public API lives in the top-level `gotime` package. The design favors
+concrete values with non-mutating value methods, typed parsing, explicit
+arithmetic, and stdlib bridges.
 
 There is no public subpackage API and no formatting layer.
+
+## Ownership And Concurrency
+
+Value-receiver methods do not mutate their receiver. Concrete pointer JSON
+decoders replace their target and require caller-provided exclusive access
+during decoding. Concurrent reads of independent values are safe while no
+alias is mutating the same decoder target or exported slice backing array.
+
+`ParseResult.Warnings`, `ParseResult.Candidates`, and
+`LocalResolution.Candidates` are caller-owned slices. A containing struct copy
+aliases those slices; callers clone the slices they need to mutate
+independently and coordinate concurrent aliases. Each `Parse` call uses a local
+option config.
+
+`Zones()` returns a sorted cloned caller-owned slice. `UTC` is a named
+read-only value for normal use, not mutable configuration, a process default,
+or the owner of zero-Zone semantics.
 
 ## Surface Decisions
 
@@ -138,6 +157,22 @@ const (
 ```
 
 There is no `Day` duration constant. Use `24 * gotime.Hour` for exact 24-hour time, and `gotime.Days(n)` for calendar days.
+
+## Date Queries
+
+```go
+func (d Date) Weekday() (time.Weekday, error)
+func (d Date) ISOWeek() (year, week int, err error)
+func (d Date) YearDay() (int, error)
+func (d Date) DaysInMonth() (int, error)
+func (d Date) IsLeapYear() bool
+```
+
+`Weekday`, `ISOWeek`, and `YearDay` require a valid complete Date. Invalid
+receivers return the signature's zero result and match `ErrInvalidDate`.
+`DaysInMonth` requires only a year in `0000..9999` and a valid month; day does
+not participate. `IsLeapYear` is a year-only total query and keeps its `bool`
+return.
 
 ## Parsing
 
@@ -275,9 +310,11 @@ Unresolved `Date` and `Time` values cross to stdlib only after
 
 ## JSON
 
-All value objects and `ParseResult` use only Go 1.27.0's native
-`encoding/json/v2` and `encoding/json/jsontext`. No compatibility adapter or
-alternate JSON implementation is supported.
+All package JSON uses only Go 1.27.0's native `encoding/json/v2` and
+`encoding/json/jsontext`. No compatibility adapter or alternate JSON
+implementation is supported.
+
+Concrete value objects have strict bidirectional JSON contracts:
 
 Stable value JSON:
 
@@ -298,6 +335,13 @@ RFC 3339 offsets in `Instant` and `Interval` endpoints normalize to UTC `Z` on
 marshal.
 
 `Duration` ISO strings use canonical decimal seconds for sub-second precision; scientific notation is outside the wire domain. A zero `Zone` encodes with `id:"UTC"` to match its total UTC projection behavior.
+
+`ParseResult` and `TimeError` instead provide one-way diagnostic JSON output.
+`ParseResult` has no supported decoder and omits runtime-only parse metadata,
+typed accessor storage, and ambiguity cause. `TimeError` omits `Err` and its
+underlying cause chain, so JSON does not restore `errors.Is` identity. The
+parsing and error specifications own those diagnostic boundaries; they do not
+weaken the concrete value decoder contract above.
 
 ## Removed Or Forbidden API
 

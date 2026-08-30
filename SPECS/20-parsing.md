@@ -119,10 +119,33 @@ type ParseResult struct {
 
 `Candidates` is recursive: each candidate is a resolved `ParseResult`. Access parsed values through comma-ok accessors.
 
+`Warnings` and `Candidates` are caller-owned slices. Copying a `ParseResult`
+copies the slice headers and continues to share their backing arrays; it is not
+a deep clone. Clone the specific slices, including nested candidate slices,
+before independent mutation or owner handoff. Concurrent reads are safe only
+while no alias mutates the same backing array. Each `Parse` call builds and
+uses its own option config; the package exposes no runtime locale-registration
+or mutable parser-registry API.
+
 `ParseResult.MarshalJSON` rejects states that cannot form the tagged-sum wire
 contract: unknown statuses or resolved/ambiguous kinds, invalid results without
 an error, and ambiguous results with fewer than two resolved same-kind
 candidates. Fields omitted by the selected status do not affect the wire shape.
+
+### Diagnostic JSON Output
+
+`ParseResult` JSON is a one-way diagnostic tagged output, not a persistence or
+runtime-state recovery format. Depending on `Status`, it serializes the stable
+diagnostic fields `status`, `input`, `warnings`, `value_kind`, `value`, `zone`,
+`candidates`, and `error`. The in-process `Reference`, `HasZone`, typed accessor
+storage, option presence, and package-owned ambiguity cause are intentionally
+not serialized.
+
+There is no supported `ParseResult.UnmarshalJSON`. Decoding the emitted object
+into an arbitrary Go struct does not restore comma-ok accessor values,
+ambiguity identity, parser options, or runtime metadata. A caller that needs a
+new runtime result must retain the original result or parse the original input
+again with explicit options.
 
 ```go
 switch result.Status {

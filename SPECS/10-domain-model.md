@@ -2,7 +2,10 @@
 
 ## Overview
 
-go-time has nine immutable value objects. Each represents exactly one time concept and exposes only the operations that make sense for that concept.
+go-time has nine value objects. Each represents exactly one time concept and
+exposes only the operations that make sense for that concept. Value-receiver
+methods do not mutate their receiver; pointer JSON decoders are the explicit
+mutation boundary.
 
 The most important split is `Duration` vs `Period`: exact elapsed time and calendar offsets are different types, so the compiler prevents accidental mixing.
 
@@ -30,6 +33,22 @@ All public stdlib and zone projections validate the resulting civil year.
 `ErrOverflow` rather than producing a `Date` or `DateTime` outside
 `0000..9999`. `NowIn` and `TodayIn` remain total because the process clock is
 already inside that domain.
+
+### Ownership And Concurrent Access
+
+- **Decision**: Value-receiver methods do not mutate their receiver. Independent
+  copies may be read concurrently while no aliased exported slice or pointer
+  decoder target is being modified.
+- **Decision**: Every concrete value `UnmarshalJSON` method replaces its pointer
+  receiver. The caller provides exclusive access to that receiver for the
+  duration of decoding and publishes the value only after decoding completes.
+- **Decision**: Exported result slices are caller-owned. Copying a containing
+  struct copies its slice header, not its backing array; aliases require caller
+  coordination, and callers clone the slices they need to mutate independently.
+- **Why**: These rules preserve ordinary Go value ergonomics without pretending
+  that pointer writes or slice aliases are immutable or automatically synchronized.
+- **Rejected**: Per-value locks, package-owned mutation of returned slices,
+  implicit deep clones, and new public clone wrappers.
 
 ## Value Objects
 
@@ -103,6 +122,11 @@ Key API: `NewLocalDateTime`, `Resolve`, `String`.
 
 `LocalResolution.Only()` returns the single `DateTime` or a typed error (`ErrNonexistentTime`, `ErrDuplicateTime`, `ErrInvalidDate`, or `ErrInvalidTime`).
 
+`LocalResolution.Candidates` is a caller-owned slice. Copying a
+`LocalResolution` aliases that slice's backing array; clone the candidate slice
+before independent mutation or owner handoff, and coordinate any concurrent
+read/write access to an aliased backing array.
+
 The exported `LocalResolution` fields also permit caller-constructed states.
 `Only` accepts only `LocalResolved` with exactly one candidate. A resolved state
 with any other candidate count, a valid local time labeled `LocalInvalid`, an
@@ -126,6 +150,14 @@ Key API: `NewDate`, `DateFromTime`, `Year`, `Month`, `Day`, `Weekday`, `ISOWeek`
 `Date` accepts `Period`, never `Duration`.
 `DaysUntil` returns `(int, error)` and matches `ErrInvalidDate` with an
 actionable hint when either endpoint is invalid.
+
+Calendar-derived queries are checked according to the components they consume.
+`Weekday`, `ISOWeek`, and `YearDay` require a valid complete Date and return
+their zero result plus `ErrInvalidDate` when any component is invalid.
+`DaysInMonth` returns `(int, error)` and validates only a year in `0000..9999`
+and a month from January through December; it does not require a valid day.
+`IsLeapYear() bool` remains a total year-only Gregorian query, including for
+year `0000`, and does not inspect month or day.
 
 ### Time
 
@@ -244,7 +276,7 @@ be operationally meaningful, marshalable, both, or neither.
 | `Instant{}` | The zero stdlib instant; `IsZero` is true. | Marshals as the canonical year-0001 UTC instant. | Checked scalar projections may still return `ErrOverflow` outside their scalar range. |
 | `DateTime{}` | The zero stdlib instant with zero-zone UTC projection; `IsZero` is true. | Marshals as the canonical year-0001 UTC datetime. | Checked projection and arithmetic report domain overflow when applicable. |
 | `LocalDateTime{}` | Invalid because its zero `Date` has no calendar month or day. | Marshal returns `ErrInvalidDate`. | `Resolve` produces `LocalInvalid`; `Only` returns `ErrInvalidDate`. |
-| `Date{}` | Invalid calendar components; `IsZero` is true. | Marshal returns `ErrInvalidDate`. | Checked date operations return `ErrInvalidDate`. |
+| `Date{}` | Invalid calendar components; `IsZero` is true. | Marshal returns `ErrInvalidDate`. | Full-date queries and checked operations return `ErrInvalidDate`; `IsLeapYear` remains year-only. |
 | `Time{}` | Valid midnight; `IsZero` is true. | Marshals as `00:00:00`. | No error solely because the value is zero. |
 | `Duration(0)` | Valid zero elapsed time. | Marshals as `PT0S`. | No error solely because the value is zero. |
 | `Period{}` | Valid no-op calendar offset. | Marshals as `P0D`. | No error solely because the value is zero. |
@@ -305,7 +337,7 @@ JSON shapes are part of the long-term contract.
 ## Forbidden
 
 - Do not merge `Instant` and `DateTime`.
-- Do not make value objects mutable.
+- Do not make value-receiver operations mutate their receiver.
 - Do not couple `Zone` and locale.
 - Do not give `Duration` calendar semantics.
 - Do not put zone context on `Interval`.
