@@ -491,9 +491,11 @@ publish(date)
 
 `ParseResult.Warnings`, `ParseResult.Candidates`, and
 `LocalResolution.Candidates` are caller-owned slices. Copying the containing
-struct still shares each slice backing array. Clone the slices you need to
-mutate independently, and coordinate concurrent access whenever an alias may
-write.
+struct still shares each slice backing array, and copying `ParseResult` also
+shares its `Error *TimeError` pointer. Treat these aliased fields as immutable
+after publishing or handing off a result. Before mutation, clone the slices,
+including nested candidate slices as needed, and clone or rebuild the
+`TimeError`; coordinate concurrent access whenever an alias may write.
 
 ## Handle Errors
 

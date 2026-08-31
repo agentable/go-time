@@ -13,13 +13,17 @@ There is no public subpackage API and no formatting layer.
 Value-receiver methods do not mutate their receiver. Concrete pointer JSON
 decoders replace their target and require caller-provided exclusive access
 during decoding. Concurrent reads of independent values are safe while no
-alias is mutating the same decoder target or exported slice backing array.
+alias is mutating the same decoder target, exported slice backing array, or
+shared `TimeError`.
 
 `ParseResult.Warnings`, `ParseResult.Candidates`, and
 `LocalResolution.Candidates` are caller-owned slices. A containing struct copy
-aliases those slices; callers clone the slices they need to mutate
-independently and coordinate concurrent aliases. Each `Parse` call uses a local
-option config.
+aliases each slice backing array, and copying `ParseResult` also shares its
+`Error *TimeError` pointer. After publishing or handing off a result, callers
+treat the aliased slices and error as immutable. Before mutation, they clone
+the slices, including nested candidate slices as needed, and clone or rebuild
+the `TimeError` they intend to change; concurrent aliases require caller
+coordination. Each `Parse` call uses a local option config.
 
 `Zones()` returns a sorted cloned caller-owned slice. `UTC` is a named
 read-only value for normal use, not mutable configuration, a process default,
