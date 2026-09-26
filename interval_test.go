@@ -137,7 +137,7 @@ func TestInterval_Contains_HalfOpen(t *testing.T) {
 		t.Error("Should contain midpoint")
 	}
 	// Just before end — still inside
-	justBeforeEnd := ivEnd.Add(Duration(-1))
+	justBeforeEnd := mustInstantAdd(t, ivEnd, Duration(-1))
 	if !iv.Contains(justBeforeEnd) {
 		t.Error("Should contain instant just before end")
 	}
@@ -147,7 +147,7 @@ func TestInterval_Contains_HalfOpen(t *testing.T) {
 		t.Error("Should not contain instant before start")
 	}
 	// After end
-	after := ivEnd.Add((1 * Second))
+	after := mustInstantAdd(t, ivEnd, (1 * Second))
 	if iv.Contains(after) {
 		t.Error("Should not contain instant after end")
 	}
@@ -156,17 +156,17 @@ func TestInterval_Contains_HalfOpen(t *testing.T) {
 func TestInterval_Overlaps_HalfOpen(t *testing.T) {
 	iv1 := mustInterval(t, ivStart, ivEnd)
 	// Overlapping
-	iv2 := mustInterval(t, ivStart.Add((4 * Hour)), ivEnd.Add((4 * Hour)))
+	iv2 := mustInterval(t, mustInstantAdd(t, ivStart, (4*Hour)), mustInstantAdd(t, ivEnd, (4*Hour)))
 	if !iv1.Overlaps(iv2) {
 		t.Error("overlapping intervals should overlap")
 	}
 	// Touching at endpoint — half-open: [0,9) and [9,10) don't share any moment
-	iv3 := mustInterval(t, ivEnd, ivEnd.Add((1 * Hour)))
+	iv3 := mustInterval(t, ivEnd, mustInstantAdd(t, ivEnd, (1*Hour)))
 	if iv1.Overlaps(iv3) {
 		t.Error("touching at endpoint should NOT overlap (half-open)")
 	}
 	// Disjoint
-	iv4 := mustInterval(t, ivEnd.Add((1 * Second)), ivEnd.Add((1 * Hour)))
+	iv4 := mustInterval(t, mustInstantAdd(t, ivEnd, (1*Second)), mustInstantAdd(t, ivEnd, (1*Hour)))
 	if iv1.Overlaps(iv4) {
 		t.Error("disjoint intervals should not overlap")
 	}
@@ -175,7 +175,7 @@ func TestInterval_Overlaps_HalfOpen(t *testing.T) {
 func TestInterval_Adjacent(t *testing.T) {
 	iv1 := mustInterval(t, ivStart, ivEnd)
 	// [0,9) and [9,10) are adjacent
-	iv2 := mustInterval(t, ivEnd, ivEnd.Add((1 * Hour)))
+	iv2 := mustInterval(t, ivEnd, mustInstantAdd(t, ivEnd, (1*Hour)))
 	if !iv1.Adjacent(iv2) {
 		t.Error("[0,9) and [9,10) should be adjacent")
 	}
@@ -184,12 +184,12 @@ func TestInterval_Adjacent(t *testing.T) {
 		t.Error("[9,10) and [0,9) should be adjacent (symmetric)")
 	}
 	// Overlapping — not adjacent
-	iv3 := mustInterval(t, ivStart.Add((4 * Hour)), ivEnd.Add((4 * Hour)))
+	iv3 := mustInterval(t, mustInstantAdd(t, ivStart, (4*Hour)), mustInstantAdd(t, ivEnd, (4*Hour)))
 	if iv1.Adjacent(iv3) {
 		t.Error("overlapping intervals should not be adjacent")
 	}
 	// Gap — not adjacent
-	iv4 := mustInterval(t, ivEnd.Add((1 * Hour)), ivEnd.Add((2 * Hour)))
+	iv4 := mustInterval(t, mustInstantAdd(t, ivEnd, (1*Hour)), mustInstantAdd(t, ivEnd, (2*Hour)))
 	if iv1.Adjacent(iv4) {
 		t.Error("intervals with a gap should not be adjacent")
 	}
@@ -197,28 +197,28 @@ func TestInterval_Adjacent(t *testing.T) {
 
 func TestInterval_Intersect(t *testing.T) {
 	iv1 := mustInterval(t, ivStart, ivEnd)
-	iv2 := mustInterval(t, ivStart.Add((4 * Hour)), ivEnd.Add((4 * Hour)))
+	iv2 := mustInterval(t, mustInstantAdd(t, ivStart, (4*Hour)), mustInstantAdd(t, ivEnd, (4*Hour)))
 
 	overlap, ok := iv1.Intersect(iv2)
 	if !ok {
 		t.Fatal("overlapping intervals should intersect")
 	}
-	if !overlap.Start().Equal(ivStart.Add((4 * Hour))) {
-		t.Errorf("Intersect Start = %v, want %v", overlap.Start(), ivStart.Add((4 * Hour)))
+	if !overlap.Start().Equal(mustInstantAdd(t, ivStart, (4 * Hour))) {
+		t.Errorf("Intersect Start = %v, want %v", overlap.Start(), mustInstantAdd(t, ivStart, (4*Hour)))
 	}
 	if !overlap.End().Equal(ivEnd) {
 		t.Errorf("Intersect End = %v, want %v", overlap.End(), ivEnd)
 	}
 
 	// Adjacent half-open intervals share no moment.
-	iv3 := mustInterval(t, ivEnd, ivEnd.Add((1 * Hour)))
+	iv3 := mustInterval(t, ivEnd, mustInstantAdd(t, ivEnd, (1*Hour)))
 	_, ok = iv1.Intersect(iv3)
 	if ok {
 		t.Error("adjacent intervals should not intersect")
 	}
 
 	// Disjoint
-	iv3 = mustInterval(t, ivEnd.Add((1 * Second)), ivEnd.Add((1 * Hour)))
+	iv3 = mustInterval(t, mustInstantAdd(t, ivEnd, (1*Second)), mustInstantAdd(t, ivEnd, (1*Hour)))
 	_, ok = iv1.Intersect(iv3)
 	if ok {
 		t.Error("disjoint intervals should not intersect")
@@ -227,7 +227,7 @@ func TestInterval_Intersect(t *testing.T) {
 
 func TestInterval_Union(t *testing.T) {
 	iv1 := mustInterval(t, ivStart, ivEnd)
-	iv2 := mustInterval(t, ivStart.Add((4 * Hour)), ivEnd.Add((4 * Hour)))
+	iv2 := mustInterval(t, mustInstantAdd(t, ivStart, (4*Hour)), mustInstantAdd(t, ivEnd, (4*Hour)))
 
 	u, err := iv1.Union(iv2)
 	if err != nil {
@@ -236,22 +236,22 @@ func TestInterval_Union(t *testing.T) {
 	if !u.Start().Equal(ivStart) {
 		t.Errorf("Union Start = %v, want %v", u.Start(), ivStart)
 	}
-	if !u.End().Equal(ivEnd.Add((4 * Hour))) {
-		t.Errorf("Union End = %v, want %v", u.End(), ivEnd.Add((4 * Hour)))
+	if !u.End().Equal(mustInstantAdd(t, ivEnd, (4 * Hour))) {
+		t.Errorf("Union End = %v, want %v", u.End(), mustInstantAdd(t, ivEnd, (4*Hour)))
 	}
 
 	// Adjacent intervals can be unioned: [0,9) ∪ [9,10)
-	iv3 := mustInterval(t, ivEnd, ivEnd.Add((1 * Hour)))
+	iv3 := mustInterval(t, ivEnd, mustInstantAdd(t, ivEnd, (1*Hour)))
 	u2, err := iv1.Union(iv3)
 	if err != nil {
 		t.Fatalf("adjacent union error: %v", err)
 	}
-	if !u2.Start().Equal(ivStart) || !u2.End().Equal(ivEnd.Add((1 * Hour))) {
-		t.Errorf("Union of adjacent = [%v, %v), want [%v, %v)", u2.Start(), u2.End(), ivStart, ivEnd.Add((1 * Hour)))
+	if !u2.Start().Equal(ivStart) || !u2.End().Equal(mustInstantAdd(t, ivEnd, (1*Hour))) {
+		t.Errorf("Union of adjacent = [%v, %v), want [%v, %v)", u2.Start(), u2.End(), ivStart, mustInstantAdd(t, ivEnd, (1*Hour)))
 	}
 
 	// Disjoint with gap → error
-	iv4 := mustInterval(t, ivEnd.Add((1 * Second)), ivEnd.Add((1 * Hour)))
+	iv4 := mustInterval(t, mustInstantAdd(t, ivEnd, (1*Second)), mustInstantAdd(t, ivEnd, (1*Hour)))
 	_, err = iv1.Union(iv4)
 	if err == nil {
 		t.Error("disjoint intervals with gap should return error on Union")
@@ -260,12 +260,15 @@ func TestInterval_Union(t *testing.T) {
 
 func TestInterval_Shift(t *testing.T) {
 	iv := mustInterval(t, ivStart, ivEnd)
-	shifted := iv.Shift((1 * Hour))
-	if !shifted.Start().Equal(ivStart.Add((1 * Hour))) {
-		t.Errorf("Shift Start = %v, want %v", shifted.Start(), ivStart.Add((1 * Hour)))
+	shifted, err := iv.Shift((1 * Hour))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !shifted.End().Equal(ivEnd.Add((1 * Hour))) {
-		t.Errorf("Shift End = %v, want %v", shifted.End(), ivEnd.Add((1 * Hour)))
+	if !shifted.Start().Equal(mustInstantAdd(t, ivStart, (1 * Hour))) {
+		t.Errorf("Shift Start = %v, want %v", shifted.Start(), mustInstantAdd(t, ivStart, (1*Hour)))
+	}
+	if !shifted.End().Equal(mustInstantAdd(t, ivEnd, (1 * Hour))) {
+		t.Errorf("Shift End = %v, want %v", shifted.End(), mustInstantAdd(t, ivEnd, (1*Hour)))
 	}
 }
 
@@ -275,11 +278,11 @@ func TestInterval_Expand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expand() error = %v", err)
 	}
-	if !expanded.Start().Equal(ivStart.Add((-15 * Minute))) {
-		t.Errorf("Expand Start = %v, want %v", expanded.Start(), ivStart.Add((-15 * Minute)))
+	if !expanded.Start().Equal(mustInstantAdd(t, ivStart, (-15 * Minute))) {
+		t.Errorf("Expand Start = %v, want %v", expanded.Start(), mustInstantAdd(t, ivStart, (-15*Minute)))
 	}
-	if !expanded.End().Equal(ivEnd.Add((15 * Minute))) {
-		t.Errorf("Expand End = %v, want %v", expanded.End(), ivEnd.Add((15 * Minute)))
+	if !expanded.End().Equal(mustInstantAdd(t, ivEnd, (15 * Minute))) {
+		t.Errorf("Expand End = %v, want %v", expanded.End(), mustInstantAdd(t, ivEnd, (15*Minute)))
 	}
 }
 
@@ -369,5 +372,103 @@ func TestInterval_StdRange(t *testing.T) {
 	}
 	if start.Location() != time.UTC || end.Location() != time.UTC {
 		t.Errorf("StdRange should be UTC, got start=%v end=%v", start.Location(), end.Location())
+	}
+}
+
+func TestIntervalEmptyRelations(t *testing.T) {
+	t.Parallel()
+	outer := mustInterval(t, UnixSeconds(0), UnixSeconds(10))
+	for _, anchor := range []int64{-1, 0, 5, 10, 11} {
+		empty := mustInterval(t, UnixSeconds(anchor), UnixSeconds(anchor))
+		for _, point := range []int64{anchor - 1, anchor, anchor + 1} {
+			if empty.Contains(UnixSeconds(point)) {
+				t.Fatal("empty interval contains a moment")
+			}
+		}
+		for _, pair := range [][2]Interval{{outer, empty}, {empty, outer}} {
+			if pair[0].Overlaps(pair[1]) {
+				t.Errorf("empty anchor %d overlaps", anchor)
+			}
+			_, ok := pair[0].Intersect(pair[1])
+			if ok {
+				t.Errorf("empty anchor %d intersects", anchor)
+			}
+			union, err := pair[0].Union(pair[1])
+			if anchor < 0 || anchor > 10 {
+				if !errors.Is(err, ErrIntervalsDisjoint) {
+					t.Errorf("outside empty union error = %v", err)
+				}
+			} else if err != nil || !union.Start().Equal(outer.Start()) || !union.End().Equal(outer.End()) {
+				t.Errorf("inside empty union = %v, %v", union, err)
+			}
+		}
+		same, err := empty.Union(empty)
+		if err != nil || same != empty {
+			t.Errorf("same empty union = %v, %v", same, err)
+		}
+		other := mustInterval(t, UnixSeconds(anchor+1), UnixSeconds(anchor+1))
+		if _, err := empty.Union(other); !errors.Is(err, ErrIntervalsDisjoint) {
+			t.Errorf("distinct empty union error = %v", err)
+		}
+	}
+	intervals := []Interval{outer, mustInterval(t, UnixSeconds(5), UnixSeconds(5)), mustInterval(t, UnixSeconds(5), UnixSeconds(15)), mustInterval(t, UnixSeconds(10), UnixSeconds(20)), mustInterval(t, UnixSeconds(11), UnixSeconds(20))}
+	for _, a := range intervals {
+		for _, b := range intervals {
+			intersection, ok := a.Intersect(b)
+			reverse, rok := b.Intersect(a)
+			if a.Overlaps(b) != ok || ok != rok || ok && intersection != reverse {
+				t.Errorf("relations disagree for %v, %v", a, b)
+			}
+		}
+	}
+}
+
+func TestIntervalRejectsSaturatedArithmetic(t *testing.T) {
+	t.Parallel()
+	upper := UnixSeconds(9223371974719179007)
+	lower := InstantFromTime(time.Unix(9223371974719179008, 0))
+	for _, makeInterval := range []func() (Interval, error){
+		func() (Interval, error) { return NewIntervalStartingAt(upper, Second) },
+		func() (Interval, error) { return NewIntervalEndingAt(lower, Second) },
+		func() (Interval, error) {
+			iv, err := NewInterval(upper, upper)
+			if err != nil {
+				return iv, err
+			}
+			return iv.Expand(0, Second)
+		},
+		func() (Interval, error) {
+			iv, err := NewInterval(lower, lower)
+			if err != nil {
+				return iv, err
+			}
+			return iv.Expand(Second, 0)
+		},
+	} {
+		got, err := makeInterval()
+		if !errors.Is(err, ErrOverflow) || got != (Interval{}) {
+			t.Errorf("saturation: %v %v", got, err)
+		}
+	}
+}
+
+func TestIntervalCheckedShiftPreservesEndpoints(t *testing.T) {
+	t.Parallel()
+	start := UnixSeconds(0)
+	end := UnixSeconds(10000000000)
+	iv := mustInterval(t, start, end)
+	for _, delta := range []Duration{-1 << 63, 1<<63 - 1, -Nanosecond, 0, Nanosecond} {
+		got, err := iv.Shift(delta)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !got.Start().Equal(mustInstantAdd(t, start, delta)) || !got.End().Equal(mustInstantAdd(t, end, delta)) {
+			t.Errorf("shift %d changed span", delta)
+		}
+	}
+	edge := UnixSeconds(9223371974719179007)
+	empty := mustInterval(t, edge, edge)
+	if got, err := empty.Shift(Second); !errors.Is(err, ErrOverflow) || got != (Interval{}) {
+		t.Errorf("saturated shift: %v %v", got, err)
 	}
 }

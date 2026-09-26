@@ -114,7 +114,11 @@ func parseTime24(input string, m []string, cfg *config) ParseResult {
 			"Hours must be 0-23, minutes and seconds 0-59")
 	}
 	r := resolvedResult(input, KindTime, cfg)
-	r.timeVal = timeFromComponents(h, min, sec, 0)
+	ns, truncated := parseFracNano(m[4])
+	r.timeVal = timeFromComponents(h, min, sec, ns)
+	if truncated {
+		r.Warnings = append(r.Warnings, truncatedPrecisionWarning())
+	}
 	return r
 }
 

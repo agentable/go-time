@@ -109,6 +109,8 @@ func naturalErrorSentinel(kind natural.ErrorKind) error {
 	switch kind {
 	case natural.ErrorOverflow:
 		return ErrOverflow
+	case natural.ErrorInvalidTime:
+		return ErrInvalidTime
 	case natural.ErrorInvalidDuration:
 		return ErrInvalidDuration
 	default:

@@ -24,11 +24,11 @@ type Zone struct {
 
 // LoadZone loads a Zone by IANA timezone id.
 func LoadZone(id string) (Zone, error) {
-	if id == "" {
+	if id == "" || id == "Local" {
 		return Zone{}, newTimeError(
 			ErrInvalidZone,
-			"zone id must not be empty",
-			"",
+			"zone id must be an explicit IANA identity",
+			id,
 			"provide a non-empty IANA zone id like Asia/Tokyo",
 		)
 	}
@@ -39,7 +39,7 @@ func LoadZone(id string) (Zone, error) {
 			err,
 			fmt.Sprintf("unknown time zone: %s", id),
 			id,
-			"use IANA zone ids like Asia/Tokyo; call gotime.Zones() for all valid ids",
+			"use IANA zone ids like Asia/Tokyo; call gotime.Zones() for the generated IANA catalog",
 		)
 	}
 	return Zone{id: id, loc: loc}, nil
@@ -100,9 +100,6 @@ func (z Zone) MarshalJSON() ([]byte, error) {
 			"represent numeric offsets as instant syntax, not as zone identity",
 		)
 	}
-	if _, err := LoadZone(z.ID()); err != nil {
-		return nil, err
-	}
 	return json.Marshal(struct {
 		Kind string `json:"kind"`
 		ID   string `json:"id"`
@@ -145,11 +142,11 @@ func (z *Zone) UnmarshalJSON(b []byte) error {
 // case-insensitive IANA matches, and Windows timezone names.
 // Legacy IANA aliases such as "US/Eastern" are handled by Go's time.LoadLocation.
 func ResolveZone(id string) (Zone, error) {
-	if id == "" {
+	if id == "" || id == "Local" {
 		return Zone{}, newTimeError(
 			ErrInvalidZone,
-			"zone id must not be empty",
-			"",
+			"zone id must be an explicit IANA identity",
+			id,
 			"provide a non-empty IANA id or Windows zone name",
 		)
 	}
@@ -160,11 +157,12 @@ func ResolveZone(id string) (Zone, error) {
 		ErrInvalidZone,
 		fmt.Sprintf("cannot resolve timezone: %s", id),
 		id,
-		"use a canonical IANA id (e.g. Asia/Tokyo); call gotime.Zones() for the full list",
+		"use a canonical IANA id (e.g. Asia/Tokyo); call gotime.Zones() for the generated IANA catalog",
 	)
 }
 
-// Zones returns a sorted caller-owned copy of all known IANA timezone identifiers.
+// Zones returns a sorted caller-owned copy of the generated IANA catalog.
+// LoadZone also accepts IANA links that are absent from this catalog.
 func Zones() []string {
 	return slices.Clone(ianazone.Zones)
 }

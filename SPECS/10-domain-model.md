@@ -23,8 +23,8 @@ The most important split is `Duration` vs `Period`: exact elapsed time and calen
 
 ### Constructible Domain
 
-- **Decision**: Checked constructors and parse/unmarshal paths share the stable wire domain. `Date` years are `0000..9999`, matching the fixed-width ISO calendar shape used by parsing and JSON.
-- **Why**: A caller should not be able to create a checked calendar value that the public wire contract cannot carry.
+- **Decision**: Date and LocalDateTime use civil years `0000..9999`; DateTime constructors validate the projected local civil year. Instant runtime values use stdlib time.Time, while Instant and Interval JSON require UTC years `0000..9999`. DateTime JSON must satisfy both its civil domain and its instant's UTC wire domain.
+- **Why**: Calendar validity and wire representability are distinct boundaries. A valid local DateTime near a year boundary can project outside the UTC wire domain; construction success does not make encoding infallible.
 - **Rejected**: Extended years without a new wire grammar, and constructor normalization of invalid dates.
 - **Contract Impact**: Invalid calendar components fail construction instead of being normalized.
 
@@ -73,6 +73,9 @@ sub-millisecond precision. Marshal rejects an instant whose UTC year cannot be
 represented by the matching RFC3339 decoder.
 Instant decode accepts RFC 3339 numeric offsets because they identify the same
 absolute value; marshal normalizes every accepted instant to UTC with `Z`.
+Decode rejects offsets whose UTC normalization leaves years `0000..9999`
+with `ErrOverflow`. Interval endpoints obey the same UTC wire domain, so
+a successfully decoded endpoint can be encoded again.
 
 ### DateTime
 
@@ -98,8 +101,9 @@ arithmetic: it preserves local wall-clock intent, applies end-of-month clamping,
 and returns a `LocalResolution` so a target DST gap or overlap is not silently
 normalized or selected.
 `Add(Duration)` returns `ErrOverflow` if the exact result would project outside
-the `DateTime` civil year domain; `Instant.Add(Duration)` remains total because
-an `Instant` has no civil projection.
+the `DateTime` civil year domain. `Instant.Add(Duration)` returns `(Instant, error)`
+and rejects any stdlib saturation or non-exact result with `ErrOverflow`. Neither
+operation returns a partial value on failure.
 
 ### LocalDateTime
 
@@ -309,6 +313,9 @@ JSON shapes are part of the long-term contract.
 - Marshal output must not depend on `time.Now()`, process locale, mutable globals, or ambient zone state.
 - Unmarshal rejects wrong `kind`, missing required fields, unknown fields,
   values outside the concrete type's grammar, and invalid identities.
+- Clock-bearing wire values reject more than nine fractional second digits,
+  including trailing zeros, with `ErrInvalidFormat`; decoding never silently
+  loses sub-nanosecond precision. Failed decoding leaves the target unchanged.
 - Accepted input spellings need not equal marshal output byte-for-byte. In
   particular, RFC 3339 offsets in `Instant` and `Interval` endpoints are
   accepted and normalized to UTC `Z`; successful marshal/unmarshal/marshal is

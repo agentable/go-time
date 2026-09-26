@@ -160,3 +160,8 @@ Only `MustLoadZone` may panic. Every other public API returns a value plus `erro
 - Do not encode `Parse` ambiguity as a Go `error`.
 - Do not mix `Code*` and `Err*` naming.
 - Do not add public panic APIs beyond `MustLoadZone`.
+
+Nonexistent-local-time diagnostics identify the invalid full date/time and zone.
+Their hints suggest an existing full local date/time or an explicit offset;
+they do not guess transition boundaries or suggest unverified replacement
+clocks. This applies to non-hour transitions and skipped dates as well as DST.

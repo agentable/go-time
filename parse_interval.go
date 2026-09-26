@@ -1,7 +1,9 @@
 package gotime
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -13,75 +15,88 @@ func parseInterval(input string, cfg *config) ParseResult {
 			"Use ISO 8601 interval format: start/end, start/duration, or duration/end")
 	}
 
-	startIsDur := strings.HasPrefix(left, "P")
-	endIsDur := strings.HasPrefix(right, "P")
+	startIsDur := strings.HasPrefix(left, "P") || strings.HasPrefix(left, "-P")
+	endIsDur := strings.HasPrefix(right, "P") || strings.HasPrefix(right, "-P")
 
-	var startInstant, endInstant Instant
-
-	switch {
-	case !startIsDur && !endIsDur:
-		sr, ok := parseIntervalBoundary(input, left, "start", cfg)
-		if !ok {
-			return sr
-		}
-		er, ok := parseIntervalBoundary(input, right, "end", cfg)
-		if !ok {
-			return er
-		}
-		startInstant, ok = toInstant(&sr)
-		if !ok {
-			return invalidIntervalType(input, "start", sr.Kind)
-		}
-		endInstant, ok = toInstant(&er)
-		if !ok {
-			return invalidIntervalType(input, "end", er.Kind)
-		}
-
-	case !startIsDur && endIsDur:
-		sr, ok := parseIntervalBoundary(input, left, "start", cfg)
-		if !ok {
-			return sr
-		}
-		dr, ok := parseIntervalDuration(input, right)
-		if !ok {
-			return dr
-		}
-		startInstant, ok = toInstant(&sr)
-		if !ok {
-			return invalidIntervalType(input, "start", sr.Kind)
-		}
-		endInstant = startInstant.Add(dr.duration)
-
-	case startIsDur && !endIsDur:
-		dr, ok := parseIntervalDuration(input, left)
-		if !ok {
-			return dr
-		}
-		er, ok := parseIntervalBoundary(input, right, "end", cfg)
-		if !ok {
-			return er
-		}
-		endInstant, ok = toInstant(&er)
-		if !ok {
-			return invalidIntervalType(input, "end", er.Kind)
-		}
-		startInstant = endInstant.Add(-dr.duration)
-
-	default:
-		return invalidResult(input, ErrInvalidFormat,
-			"interval cannot have two duration components",
+	if startIsDur && endIsDur {
+		return invalidResult(input, ErrInvalidFormat, "interval cannot have two duration components",
 			"Use ISO 8601 interval format: start/end, start/duration, or duration/end")
 	}
-
-	iv, err := NewInterval(startInstant, endInstant)
-	if err != nil {
-		return invalidResult(input, ErrIntervalReversed,
-			"interval end is before start",
-			"Ensure the interval end is at or after the start")
+	var sr, er ParseResult
+	if startIsDur {
+		sr, _ = parseIntervalDuration(input, left)
+	} else {
+		sr, _ = parseIntervalBoundary(input, left, "start", cfg)
 	}
-	r := resolvedResult(input, KindInterval, cfg)
-	r.interval = iv
-	return r
+	if endIsDur {
+		er, _ = parseIntervalDuration(input, right)
+	} else {
+		er, _ = parseIntervalBoundary(input, right, "end", cfg)
+	}
+	if sr.Status == StatusInvalid {
+		return sr
+	}
+	if er.Status == StatusInvalid {
+		return er
+	}
+
+	var candidates []ParseResult
+	starts, ends := intervalPartCandidates(sr), intervalPartCandidates(er)
+	for si := range starts {
+		for ei := range ends {
+			iv, err := intervalFromParts(starts[si], ends[ei])
+			if errors.Is(err, ErrIntervalReversed) {
+				continue
+			}
+			if err != nil {
+				return ParseResult{Status: StatusInvalid, Input: input, Error: newTimeErrorWithCause(
+					ErrOverflow, err, "interval arithmetic overflow", input, "use an endpoint and duration whose result can be represented")}
+			}
+			candidate := intervalParseResult(input, cfg, starts[si], ends[ei])
+			candidate.interval = iv
+			candidates = append(candidates, candidate)
+		}
+	}
+	slices.SortFunc(candidates, func(a, b ParseResult) int {
+		if order := a.interval.start.Compare(b.interval.start); order != 0 {
+			return order
+		}
+		return a.interval.end.Compare(b.interval.end)
+	})
+	candidates = slices.CompactFunc(candidates, func(a, b ParseResult) bool {
+		return a.interval.start.Equal(b.interval.start) && a.interval.end.Equal(b.interval.end)
+	})
+	switch len(candidates) {
+	case 0:
+		return invalidResult(input, ErrIntervalReversed, "interval end is before start", "Ensure the interval end is at or after the start")
+	case 1:
+		return candidates[0]
+	default:
+		r := intervalParseResult(input, cfg, sr, er)
+		r.Status = StatusAmbiguous
+		r.Candidates = candidates
+		r.ambiguity = ambiguityDuplicateTime
+		return r
+	}
+}
+
+func intervalPartCandidates(r ParseResult) []ParseResult {
+	if r.Status == StatusAmbiguous {
+		return r.Candidates
+	}
+	return []ParseResult{r}
+}
+
+func intervalFromParts(start, end ParseResult) (Interval, error) {
+	startInstant, _ := toInstant(&start)
+	endInstant, _ := toInstant(&end)
+	if start.Kind == KindDuration {
+		return NewIntervalEndingAt(endInstant, start.duration)
+	}
+	if end.Kind == KindDuration {
+		return NewIntervalStartingAt(startInstant, end.duration)
+	}
+	return NewInterval(startInstant, endInstant)
 }
 
 func parseIntervalBoundary(input, part, label string, cfg *config) (ParseResult, bool) {
@@ -109,6 +124,9 @@ func validateIntervalPart(input, label string, r ParseResult) (ParseResult, bool
 	case StatusResolved:
 		if label == "duration" {
 			if r.Kind == KindDuration {
+				if r.duration.IsNegative() {
+					return invalidResult(input, ErrInvalidDuration, "interval length must not be negative", "use a non-negative exact duration"), false
+				}
 				return r, true
 			}
 			return invalidResult(input, ErrIncompatibleTypes,
@@ -156,4 +174,19 @@ func toInstant(r *ParseResult) (Instant, bool) {
 	default:
 		return Instant{}, false
 	}
+}
+
+func intervalParseResult(input string, cfg *config, start, end ParseResult) ParseResult {
+	r := resolvedResult(input, KindInterval, cfg)
+	r.HasZone = start.HasZone || end.HasZone
+	for _, part := range []*ParseResult{&start, &end} {
+		for _, warning := range part.Warnings {
+			if !slices.ContainsFunc(r.Warnings, func(existing Warning) bool {
+				return existing.Code == warning.Code && existing.Message == warning.Message
+			}) {
+				r.Warnings = append(r.Warnings, warning)
+			}
+		}
+	}
+	return r
 }

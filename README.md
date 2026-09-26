@@ -83,7 +83,7 @@ Typed parsers return `(value, error)` and are the default choice when the input 
 | Zoned local datetime | `ParseDateTime` | `2026-11-05T09:30:00` with `WithZone` |
 | Floating local datetime | `ParseLocalDateTime` | `2026-11-05T09:30:00` |
 | Calendar date | `ParseDate` | `2026-11-05` |
-| Clock time | `ParseTime` | `09:30` |
+| Clock time | `ParseTime` | `09:30`, `09:30:00.123456789` |
 | Exact duration | `ParseDuration` | `PT1H30M` |
 | Calendar period | `ParsePeriod` | `P1M` |
 | Absolute interval | `ParseInterval` | `2026-11-05T14:30:00Z/2026-11-05T16:00:00Z` |
@@ -243,6 +243,19 @@ billingStep := gotime.Period{Months: 1}
 nextWeek := gotime.Days(7)
 ```
 
+### Move an instant by elapsed time
+
+Handle the error when adding an exact duration or shifting a whole interval.
+Both operations reject results outside the runtime time domain.
+
+```go
+expires, err := deadline.Instant().Add(15 * gotime.Minute)
+if err != nil {
+	return err
+}
+fmt.Println(expires)
+```
+
 ### Measure exact and calendar differences
 
 Difference APIs return errors when the scalar or endpoint cannot represent the
@@ -334,7 +347,17 @@ start, end := window.StdRange()
 fmt.Println(start, end)
 ```
 
-Use `Overlaps`, `Adjacent`, `Intersect`, `Union`, `Shift`, and `Expand` for common interval operations.
+Use `Overlaps`, `Adjacent`, `Intersect`, and `Union` to compare or combine windows.
+`Shift` moves both endpoints by the same exact duration; handle overflow as with
+`Expand` and the duration-based constructors:
+
+```go
+shifted, err := window.Shift(30 * gotime.Minute)
+if err != nil {
+	return err
+}
+fmt.Println(shifted.Start(), shifted.End())
+```
 
 ## Work With Time Zones
 
@@ -362,8 +385,10 @@ fmt.Println(deadline.Instant())
 ```
 
 `gotime.UTC` is a named value for reading, comparison, and arguments; assigning
-to it does not configure a process-wide default. `Zones()` returns a sorted,
-caller-owned copy, so changing the returned slice does not affect later calls.
+to it does not configure a process-wide default. Supply an explicit IANA identity;
+`Local` is rejected. `Zones()` returns a sorted, caller-owned copy of the generated
+IANA name catalog. Use `LoadZone` to validate an identifier: it also accepts IANA
+links such as `US/Eastern` that may be absent from the catalog.
 
 Use `LocalDateTime.Resolve` when a local wall time may fall in a DST gap or overlap and the application needs to inspect that state directly:
 
@@ -435,7 +460,8 @@ fmt.Println(components.Hours, components.Minutes) // 1 30
 
 Epoch projections return `ErrOverflow` when the selected `int64` precision
 cannot represent the instant. Keep the `Instant` or use `Std()` when a scalar
-projection is not required.
+projection is not required. `UnixSeconds` follows the representable range of
+stdlib `time.Unix`; not every `int64` second value denotes a valid runtime time.
 
 ## Serialize Values
 
@@ -456,7 +482,10 @@ if err := json.Unmarshal(payload, &restored); err != nil {
 fmt.Println(restored.Zone().ID()) // America/New_York
 ```
 
-Decoding validates the value at the boundary. See [SPECS/10-domain-model.md](SPECS/10-domain-model.md) for the complete wire contract instead of mirroring schemas in application code.
+Handle construction and encoding errors separately: a valid local DateTime near
+the year boundary can fall outside the UTC range supported by JSON. Decoding
+validates the value at the boundary. See [SPECS/10-domain-model.md](SPECS/10-domain-model.md)
+for the complete wire contract.
 
 `ParseResult` and `TimeError` JSON are diagnostic output, not runtime recovery
 formats. Marshal them when sending inspection data to a log pipeline or API:

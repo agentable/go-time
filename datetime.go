@@ -135,11 +135,7 @@ func (dt DateTime) MarshalJSON() ([]byte, error) {
 			"represent numeric offsets as instant syntax, not as DateTime zone identity",
 		)
 	}
-	loadedZone, err := LoadZone(zoneID)
-	if err != nil {
-		return nil, err
-	}
-	projected, err := DateTimeFromTime(dt.t, loadedZone)
+	projected, err := DateTimeFromTime(dt.t, z)
 	if err != nil {
 		return nil, err
 	}

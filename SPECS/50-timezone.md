@@ -16,13 +16,15 @@ func Zones() []string
 func ZoneCatalogVersion() string
 ```
 
-- `LoadZone` is strict IANA lookup through `time.LoadLocation`.
+- `LoadZone` is strict IANA lookup through `time.LoadLocation`; `Local` is
+  rejected by both loaders and by Zone/DateTime JSON decoders with `ErrInvalidZone`.
 - `MustLoadZone` is only for source-code constants in `var` or `init` paths.
 - `ResolveZone` accepts real-world zone names: exact IANA, case-insensitive IANA, Windows names, and legacy aliases handled by Go's `time.LoadLocation`.
 - `ResolveZone` does not resolve timezone abbreviations. Abbreviations are
   point-in-time display metadata available through stdlib `time.Time.Zone`.
 - `Zones` returns a sorted, cloned, caller-owned copy of the generated IANA
-  identifier catalog. Mutating it does not affect the internal catalog or a
+  identifier catalog, not every loadable IANA link. Do not use catalog membership
+  as a loader allowlist. Mutating it does not affect the internal catalog or a
   later call. `ZoneCatalogVersion` returns the IANA tzdb version used to
   generate that catalog; it does not describe the transition-rule data used by
   `time.LoadLocation`.
@@ -58,6 +60,12 @@ the zero value; parse option presence is tracked separately.
 ```
 
 It never emits offset, abbreviation, DST flags, or any field that would require a reference instant. A zero `Zone` marshals as `{"kind":"zone","id":"UTC"}` to match its total UTC projection behavior. Fixed UTC offsets are not zone identities; `ResolveZone("+08:00")` and `ResolveZone("UTC+8")` return `ErrInvalidZone`, and marshaling an internally malformed fixed-offset `Zone` returns `ErrInvalidZone` instead of emitting `{"kind":"zone","id":"+08:00"}`.
+
+Encoding an already-loaded Zone or DateTime uses its held rules and does not
+reload the zone from the environment. Replacing or deleting rule files cannot
+change that value's encoding. Decoding loads the named rules at decode time;
+the wire format does not promise a fixed tzdb snapshot across environments.
+Civil and UTC wire domain checks still apply.
 
 RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax for an absolute moment, not a persisted zone identity.
 
@@ -108,9 +116,10 @@ RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax fo
   reviewable and prevent hand-maintained drift.
 - **Rejected**: runtime CLDR/XML dependencies, network lookup, target-ID
   canonicalization, and rewriting valid backward-compatible IANA links.
-- **Contract Impact**: `ResolveZone` stays allocation-free and data-only at
-  runtime; generation preserves CLDR targets verbatim and verifies that every
-  target loads through `time.LoadLocation`.
+- **Contract Impact**: `ResolveZone` combines static name mappings with stdlib
+  transition-rule loading at runtime; no allocation-free guarantee is made.
+  Generation preserves CLDR targets verbatim and verifies that every target
+  loads through `time.LoadLocation`.
 
 ### Generator Inputs Are Content-Locked
 

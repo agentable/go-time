@@ -85,3 +85,12 @@ func mustDateTimeAddPeriod(t *testing.T, dt DateTime, p Period) DateTime {
 	}
 	return result
 }
+
+func mustInstantAdd(t *testing.T, i Instant, d Duration) Instant {
+	t.Helper()
+	result, err := i.Add(d)
+	if err != nil {
+		t.Fatalf("Instant.Add(%v): %v", d, err)
+	}
+	return result
+}

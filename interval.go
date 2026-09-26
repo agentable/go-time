@@ -39,7 +39,11 @@ func NewIntervalStartingAt(start Instant, length Duration) (Interval, error) {
 			"provide a non-negative length or use NewIntervalEndingAt for an interval ending at a known instant",
 		)
 	}
-	return NewInterval(start, start.Add(length))
+	end, err := start.Add(length)
+	if err != nil {
+		return Interval{}, err
+	}
+	return NewInterval(start, end)
 }
 
 // NewIntervalEndingAt creates an Interval from an end Instant and non-negative length.
@@ -52,7 +56,11 @@ func NewIntervalEndingAt(end Instant, length Duration) (Interval, error) {
 			"provide a non-negative length or use NewIntervalStartingAt for an interval starting at a known instant",
 		)
 	}
-	return NewInterval(end.Add(-length), end)
+	start, err := end.Add(-length)
+	if err != nil {
+		return Interval{}, err
+	}
+	return NewInterval(start, end)
 }
 
 // Start returns the start instant (inclusive).
@@ -82,7 +90,8 @@ func (iv Interval) Contains(i Instant) bool {
 // Overlaps reports whether iv and other share any moment.
 // Half-open intervals [a, b) and [b, c) do NOT overlap — they are adjacent.
 func (iv Interval) Overlaps(other Interval) bool {
-	return iv.start.Before(other.end) && other.start.Before(iv.end)
+	_, ok := iv.Intersect(other)
+	return ok
 }
 
 // Adjacent reports whether iv and other share exactly one boundary with no overlap and no gap.
@@ -103,10 +112,10 @@ func (iv Interval) Intersect(other Interval) (Interval, bool) {
 }
 
 // Union returns the smallest interval containing both iv and other.
-// Adjacent intervals ([a, b) and [b, c)) can be unioned.
+// Adjacent intervals and empty anchors within either boundary can be unioned.
 // Returns an error if the intervals are disjoint with a gap between them.
 func (iv Interval) Union(other Interval) (Interval, error) {
-	if !iv.Overlaps(other) && !iv.Adjacent(other) {
+	if iv.end.Before(other.start) || other.end.Before(iv.start) {
 		return Interval{}, newTimeError(
 			ErrIntervalsDisjoint,
 			"intervals are disjoint",
@@ -135,11 +144,16 @@ func laterInstant(a, b Instant) Instant {
 }
 
 // Shift returns a new Interval with start and end each advanced by d.
-func (iv Interval) Shift(d Duration) Interval {
-	return Interval{
-		start: iv.start.Add(d),
-		end:   iv.end.Add(d),
+func (iv Interval) Shift(d Duration) (Interval, error) {
+	start, err := iv.start.Add(d)
+	if err != nil {
+		return Interval{}, err
 	}
+	end, err := iv.end.Add(d)
+	if err != nil {
+		return Interval{}, err
+	}
+	return NewInterval(start, end)
 }
 
 // Expand returns a new Interval with start moved back by before and end moved forward by after.
@@ -160,7 +174,15 @@ func (iv Interval) Expand(before, after Duration) (Interval, error) {
 			"provide a non-negative duration for after",
 		)
 	}
-	return NewInterval(iv.start.Add(-before), iv.end.Add(after))
+	start, err := iv.start.Add(-before)
+	if err != nil {
+		return Interval{}, err
+	}
+	end, err := iv.end.Add(after)
+	if err != nil {
+		return Interval{}, err
+	}
+	return NewInterval(start, end)
 }
 
 // String returns the ISO 8601 interval notation "<start>/<end>".
@@ -232,7 +254,20 @@ func (iv *Interval) UnmarshalJSON(b []byte) error {
 			"use an RFC3339 instant such as 2026-03-27T05:00:00Z",
 		)
 	}
-	result, err := NewInterval(InstantFromTime(st), InstantFromTime(et))
+	if err := requireJSONPrecision(wire.Start); err != nil {
+		return err
+	}
+	if err := requireJSONPrecision(wire.End); err != nil {
+		return err
+	}
+	start, end := InstantFromTime(st), InstantFromTime(et)
+	if err := start.validateWireDomain(); err != nil {
+		return err
+	}
+	if err := end.validateWireDomain(); err != nil {
+		return err
+	}
+	result, err := NewInterval(start, end)
 	if err != nil {
 		return fmt.Errorf("gotime: %w", err)
 	}

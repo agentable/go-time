@@ -77,17 +77,6 @@ func TestDateTimeMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
 	}
 }
 
-func TestDateTimeMarshalJSON_UnknownPrivateZoneRejectsWire(t *testing.T) {
-	dt := DateTime{
-		t:    time.Date(2026, time.March, 27, 13, 0, 0, 0, time.UTC),
-		zone: Zone{id: "Mars/Olympus", loc: time.UTC},
-	}
-	_, err := json.Marshal(dt)
-	if !errors.Is(err, ErrInvalidZone) {
-		t.Fatalf("Marshal error = %v, want ErrInvalidZone", err)
-	}
-}
-
 func TestDateTimeMarshalJSON_ZeroZoneProjectionsUseUTC(t *testing.T) {
 	t.Parallel()
 

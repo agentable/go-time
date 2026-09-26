@@ -8,7 +8,7 @@ import (
 // ResolveLocation resolves an IANA name, case-insensitive IANA name, Windows
 // timezone name into a canonical ID and location.
 func ResolveLocation(id string) (string, *time.Location, bool) {
-	if id == "" {
+	if id == "" || id == "Local" {
 		return "", nil, false
 	}
 

@@ -148,3 +148,32 @@ func TestDurationUnmarshalJSON_InvalidComponents(t *testing.T) {
 		})
 	}
 }
+
+func TestDurationSignedISOParsing(t *testing.T) {
+	t.Parallel()
+	for _, d := range []Duration{Duration(-1 << 63), Duration(1<<63 - 1), -Nanosecond, 0, Nanosecond} {
+		got, err := ParseDuration(d.ISO8601())
+		if err != nil || got != d {
+			t.Errorf("%s: %v %v", d.ISO8601(), got, err)
+		}
+	}
+	for _, iso := range []string{"-PT2562047H47M16.854775808S", "-PT9223372036.854775808S"} {
+		d, err := ParseDuration(iso)
+		if err != nil || d != Duration(-1<<63) {
+			t.Errorf("%s: %v %v", iso, d, err)
+		}
+		var decoded Duration
+		if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"`+iso+`"}`), &decoded); err != nil || decoded != Duration(-1<<63) {
+			t.Errorf("wire %s: %v %v", iso, decoded, err)
+		}
+	}
+	for _, iso := range []string{"PT9223372036.854775808S", "-PT9223372036.854775809S"} {
+		if _, err := ParseDuration(iso); !errors.Is(err, ErrOverflow) {
+			t.Errorf("%s: %v", iso, err)
+		}
+		var d Duration
+		if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"`+iso+`"}`), &d); err == nil {
+			t.Errorf("wire overflow accepted: %s", iso)
+		}
+	}
+}

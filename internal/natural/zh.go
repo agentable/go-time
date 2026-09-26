@@ -116,11 +116,11 @@ func zhWeekDate(base time.Time, modifier, wdChar string) time.Time {
 	wd := zhWeekdayChar(wdChar)
 	switch modifier {
 	case "下": // next week's weekday
-		return nextWeekday(base, wd)
+		return thisWeekday(base, wd).AddDate(0, 0, 7)
 	case "本", "这", "這": // this week's weekday
 		return thisWeekday(base, wd)
 	case "上": // last week's weekday
-		return lastWeekday(base, wd)
+		return thisWeekday(base, wd).AddDate(0, 0, -7)
 	default:
 		return base
 	}

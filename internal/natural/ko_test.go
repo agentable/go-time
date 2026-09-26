@@ -86,8 +86,8 @@ func TestKo_DateTime(t *testing.T) {
 		input    string
 		wantTime time.Time
 	}{
-		// 다음 주 금요일 오후 3시 → 2026-04-03 15:00
-		{"다음 주 금요일 오후 3시", time.Date(2026, 4, 3, 15, 0, 0, 0, loc)},
+		// 다음 주 금요일 오후 3시 → 2026-04-10 15:00
+		{"다음 주 금요일 오후 3시", time.Date(2026, 4, 10, 15, 0, 0, 0, loc)},
 		// 내일 오전 9시 → tomorrow 09:00
 		{"내일 오전 9시", time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 9, 0, 0, 0, loc)},
 		// 오늘 오후 2시 30분 → today 14:30

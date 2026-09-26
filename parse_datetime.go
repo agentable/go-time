@@ -20,17 +20,28 @@ func tryParseDateTime(input string, cfg *config) (ParseResult, bool) {
 				"Use an offset between -23:59 and +23:59, e.g. +09:00"), true
 		}
 	}
+	if strings.Count(timePart, ":") == 1 {
+		timePart += ":00"
+	}
 	fullStr := datePart + "T" + timePart + normalizeOffset(offsetPart)
 	t, err := time.Parse(time.RFC3339Nano, fullStr)
 	if err != nil {
-		// Try without fractional seconds
-		t, err = time.Parse(time.RFC3339, fullStr)
-		if err != nil {
-			return invalidResult(input, ErrInvalidFormat,
-				fmt.Sprintf("invalid datetime %q", input),
-				"Use RFC 3339 format, e.g. 2026-03-27T13:00:00+09:00"), true
+		sentinel := ErrInvalidFormat
+		hint := "Use RFC 3339 format, e.g. 2026-03-27T13:00:00+09:00"
+		year, mon, day := parseDateComponents(datePart)
+		clock, _, _ := strings.Cut(strings.ReplaceAll(timePart, ",", "."), ".")
+		parts := strings.Split(clock, ":")
+		if validateDateComponents(year, mon, day) != "" {
+			sentinel = ErrInvalidDate
+			hint = "Provide a valid calendar date"
+		} else if validateTimeComponents(atoi(parts[0]), atoi(parts[1]), atoi(parts[2]), 0) != "" {
+			sentinel = ErrInvalidTime
+			hint = "Use hours 0-23 and minutes and seconds 0-59"
 		}
+		return ParseResult{Status: StatusInvalid, Input: input,
+			Error: newTimeErrorWithCause(sentinel, err, fmt.Sprintf("invalid datetime %q", input), input, hint)}, true
 	}
+
 	r := buildDateTimeResult(input, t, cfg)
 	if truncated {
 		r.Warnings = append(r.Warnings, truncatedPrecisionWarning())
@@ -63,9 +74,6 @@ func tryParseDateTimeNoOffset(input string, cfg *config) (ParseResult, bool) {
 		sec = atoi(secStr)
 	}
 	year, mon, day := parseDateComponents(m[1])
-	if year == 0 {
-		return ParseResult{}, false
-	}
 
 	return localDateTimeResult(input, cfg, year, mon, day, hour, min, sec, ns, truncated)
 }
@@ -106,7 +114,6 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 	}
 
 	z := normalizeZone(cfg.zone)
-	loc := z.Location()
 	ldt := NewLocalDateTime(
 		dateFromComponents(year, time.Month(mon), day),
 		timeFromComponents(hour, min, sec, ns),
@@ -115,18 +122,15 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 
 	switch resolution.Status {
 	case LocalNonexistent:
-		// Compute the post-normalization time for the hint message.
-		tNorm := time.Date(year, time.Month(mon), day, hour, min, sec, 0, loc)
 		return ParseResult{
 			Status: StatusInvalid,
 			Input:  input,
 			Error: newTimeError(
 				ErrNonexistentTime,
-				fmt.Sprintf("local time %02d:%02d does not exist on %04d-%02d-%02d in %s (DST spring-forward gap)",
+				fmt.Sprintf("local time %02d:%02d does not exist on %04d-%02d-%02d in %s",
 					hour, min, year, mon, day, z.ID()),
 				input,
-				fmt.Sprintf("Clocks skip %02d:00-%02d:00 in %s on this date. Try %02d:%02d or %02d:%02d instead.",
-					hour, tNorm.Hour(), z.ID(), hour-1, min, tNorm.Hour(), tNorm.Minute()),
+				"Choose an existing full local date and time in this zone, or specify an explicit UTC offset for an absolute instant.",
 			),
 		}, true
 	case LocalAmbiguous:
@@ -186,12 +190,12 @@ func tryParseCompactDateTime(input string, cfg *config) (ParseResult, bool) {
 	var nsec int
 	truncated := false
 	if m[5] != "" {
+		if m[4] == "" {
+			return invalidResult(input, ErrInvalidFormat, "fraction requires an explicit seconds component", "write seconds before the fraction, e.g. 20260327T133000.5"), true
+		}
 		nsec, truncated = parseFracNano(m[5])
 	}
 	year, mon, day := parseDateComponents(dateStr)
-	if year == 0 {
-		return ParseResult{}, false
-	}
 	if msg := validateDateComponents(year, mon, day); msg != "" {
 		return invalidResult(input, ErrInvalidDate, msg,
 			"Provide a valid calendar date, e.g. 20260327T130000"), true

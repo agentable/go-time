@@ -14,7 +14,7 @@ var (
 
 	// reKoWeekRelative matches week-relative expressions like 다음 주 월요일.
 	// \s* allows with or without spaces around 주.
-	reKoWeekRelative = regexp.MustCompile(`^(다음\s*주|이번\s*주|지난\s*주)\s*(월요일?|화요일?|수요일?|목요일?|금요일?|토요일?|일요일?)$`)
+	reKoWeekRelative = regexp.MustCompile(`^(다음|이번|지난)\s*주\s*(월요일?|화요일?|수요일?|목요일?|금요일?|토요일?|일요일?)$`)
 
 	// reKoDateTime matches date phrase + optional space + 오전/오후 + hour + 시 + optional minutes.
 	// Group 1: date phrase, Group 2: AM/PM, Group 3: hour, Group 4: minute digits (without 분)
@@ -117,14 +117,13 @@ func koRelativeDateOffset(base time.Time, keyword string) time.Time {
 
 func koWeekDate(base time.Time, modifier, wdStr string) time.Time {
 	wd := koWeekdayStr(wdStr)
-	modNorm := strings.ReplaceAll(modifier, " ", "")
-	switch modNorm {
-	case "다음주":
-		return nextWeekday(base, wd)
-	case "이번주":
+	switch modifier {
+	case "다음":
+		return thisWeekday(base, wd).AddDate(0, 0, 7)
+	case "이번":
 		return thisWeekday(base, wd)
-	case "지난주":
-		return lastWeekday(base, wd)
+	case "지난":
+		return thisWeekday(base, wd).AddDate(0, 0, -7)
 	default:
 		return base
 	}

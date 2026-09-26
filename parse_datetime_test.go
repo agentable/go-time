@@ -1,6 +1,9 @@
 package gotime
 
 import (
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -309,8 +312,8 @@ func TestParse_DateTime_InvalidComponents(t *testing.T) {
 		input    string
 		wantCode ErrorCode
 	}{
-		{input: "2026-03-27T25:00:00Z", wantCode: CodeInvalidFormat},
-		{input: "2026-03-27T13:60:00Z", wantCode: CodeInvalidFormat},
+		{input: "2026-03-27T25:00:00Z", wantCode: CodeInvalidTime},
+		{input: "2026-03-27T13:60:00Z", wantCode: CodeInvalidTime},
 		{input: "20260230T130000", wantCode: CodeInvalidDate},
 		{input: "20260327T250000", wantCode: CodeInvalidTime},
 	}
@@ -351,5 +354,115 @@ func TestParse_DateTime_InvalidOffset(t *testing.T) {
 				t.Errorf("error code = %q, want %q", r.Error.Code, CodeInvalidZone)
 			}
 		})
+	}
+}
+
+func TestParseDateTimeYearDomain(t *testing.T) {
+	t.Parallel()
+	for _, year := range []int{0, 1, 9999} {
+		for _, input := range []string{fmt.Sprintf("%04d-01-01T13:00:00", year), fmt.Sprintf("%04d0101T130000", year)} {
+			local, err := ParseLocalDateTime(input)
+			if err != nil || local.Date.Year() != year || local.Time.Hour() != 13 {
+				t.Errorf("%s: %v %v", input, local, err)
+			}
+			zoned, err := ParseDateTime(input, WithZone(UTC))
+			if err != nil || zoned.Date().Year() != year || zoned.Clock().Hour() != 13 {
+				t.Errorf("%s with UTC: %v %v", input, zoned, err)
+			}
+			r := Parse(input + "Z")
+			instant, ok := r.Instant()
+			if !ok || instant.Std().Year() != year || instant.Std().Hour() != 13 {
+				t.Errorf("%s offset: %#v", input, r)
+			}
+		}
+	}
+	for _, input := range []string{"0000-02-30T13:00:00", "00000230T130000"} {
+		if _, err := ParseLocalDateTime(input); !errors.Is(err, ErrInvalidDate) {
+			t.Errorf("%s: %v", input, err)
+		}
+	}
+}
+
+func TestParseDateTimeReducedPrecision(t *testing.T) {
+	t.Parallel()
+	for _, offset := range []string{"Z", "+09:00", "+0900"} {
+		want, err := ParseInstant("2026-03-27T13:30:00" + offset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, input := range []string{"2026-03-27T13:30" + offset, "20260327T1330" + offset} {
+			got, err := ParseInstant(input)
+			if err != nil || !got.Equal(want) {
+				t.Errorf("%s: %v %v, want %v", input, got, err, want)
+			}
+			iv, err := ParseInterval(input + "/PT1H")
+			if err != nil || !iv.Start().Equal(want) {
+				t.Errorf("interval %s: %v %v", input, iv, err)
+			}
+		}
+	}
+	for _, input := range []string{"20260327T13.5Z", "20260327T1330.5Z", "20260327T13,5", "20260327T1330,5", "2026-03-27T13:30:00+09", "20260327T133000+09"} {
+		r := Parse(input)
+		if r.Status != StatusInvalid || r.Error == nil || r.Error.Hint == "" {
+			t.Errorf("%s: %s, want invalid with hint", input, r.Status)
+		}
+	}
+	for _, tc := range []struct {
+		fraction  string
+		want      int
+		truncated bool
+	}{{".1", 100000000, false}, {".123456789", 123456789, false}, {",1234567891", 123456789, true}} {
+		for _, base := range []string{"2026-03-27T13:30:45", "20260327T133045"} {
+			r := Parse(base + tc.fraction + "Z")
+			i, ok := r.Instant()
+			if !ok || i.Std().Nanosecond() != tc.want || hasWarning(r.Warnings, WarnTruncatedPrecision) != tc.truncated {
+				t.Errorf("%s%s: %v %v", base, tc.fraction, i, r.Error)
+			}
+		}
+	}
+}
+
+func TestParseGapHintsUseKnownFacts(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ zone, input string }{{"America/New_York", "2026-03-08T02:30:00"}, {"Australia/Lord_Howe", "2026-10-04T02:15:00"}, {"Pacific/Apia", "2011-12-30T12:00:00"}} {
+		_, err := ParseDateTime(tc.input, WithZone(MustLoadZone(tc.zone)))
+		var detail *TimeError
+		if !errors.Is(err, ErrNonexistentTime) || !errors.As(err, &detail) {
+			t.Fatalf("%s: %v", tc.zone, err)
+		}
+		if strings.Contains(detail.Hint, "Clocks skip") || strings.Contains(detail.Hint, "Try ") || !strings.Contains(strings.ToLower(detail.Hint), "offset") {
+			t.Errorf("%s: unsupported advice %q", tc.zone, detail.Hint)
+		}
+	}
+}
+
+func TestParseDateTimeComponentErrors(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		local, compact string
+		want           error
+	}{{"2026-13-01T12:00:00", "20261301T120000", ErrInvalidDate}, {"2026-02-30T12:00:00", "20260230T120000", ErrInvalidDate}, {"2026-01-01T25:00:00", "20260101T250000", ErrInvalidTime}, {"2026-01-01T12:60:00", "20260101T126000", ErrInvalidTime}, {"2026-01-01T12:00:60", "20260101T120060", ErrInvalidTime}} {
+		for _, input := range []string{tc.local, tc.compact, tc.local + "Z", tc.compact + "Z"} {
+			r := Parse(input)
+			if !errors.Is(r.Error, tc.want) {
+				t.Errorf("%s: %v want %v", input, r.Error, tc.want)
+			}
+			if strings.HasSuffix(input, "Z") {
+				_, err := ParseInstant(input)
+				if !errors.Is(err, tc.want) {
+					t.Errorf("typed %s: %v", input, err)
+				}
+				_, err = ParseInterval(input + "/PT1H")
+				var detail *TimeError
+				if !errors.Is(err, tc.want) || !errors.As(err, &detail) || detail.Input != input+"/PT1H" || detail.Hint == "" {
+					t.Errorf("interval %s: %v", input, err)
+				}
+			}
+		}
+	}
+	_, err := ParseInstant("2026-02-30T12:00:00Z")
+	var cause *time.ParseError
+	if !errors.As(err, &cause) {
+		t.Errorf("missing stdlib cause: %v", err)
 	}
 }

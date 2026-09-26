@@ -31,7 +31,7 @@ type Option func(*config)
 //
 // For slash dates (e.g. "04/05/2026"), en-US selects month-first while en-GB
 // and en-AU select day-first. Unsupported tags, including bare en and en-CA,
-// use validity inference: one valid interpretation resolves, two are
+// use validity inference: one valid interpretation resolves, two distinct dates are
 // Ambiguous, and zero are Invalid. Unicode -u- extensions do not change the
 // supported locale's order.
 func WithInputLocale(tag language.Tag) Option {

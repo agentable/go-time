@@ -20,9 +20,6 @@ type latinVocab struct {
 	pastPat *regexp.Regexp
 	// units maps unit words (lower-case) to canonical unit names.
 	units map[string]string
-	// unitPrefixes maps a prefix string to a canonical unit name,
-	// used for languages with grammatical case variations (e.g. Russian).
-	unitPrefixes []struct{ prefix, canonical string }
 }
 
 // latinVocabs is the dispatch table for all supported Latin/Cyrillic locales.
@@ -128,21 +125,28 @@ var latinVocabs = []latinVocab{
 		futurePat: regexp.MustCompile(`^через\s+(\d+)\s+(\S+)$`),
 		// Past: "N unit назад" — number comes first
 		pastPat: regexp.MustCompile(`^(\d+)\s+(\S+)\s+назад$`),
-		// unitPrefixes handles Russian grammatical case variations.
-		// Exact units map is kept minimal; prefix matching covers the rest.
 		units: map[string]string{
+			"секунда": "second",
 			"секунду": "second",
+			"секунды": "second",
+			"секунд":  "second",
+			"минута":  "minute",
 			"минуту":  "minute",
+			"минуты":  "minute",
+			"минут":   "minute",
 			"час":     "hour",
-		},
-		unitPrefixes: []struct{ prefix, canonical string }{
-			{"секунд", "second"},
-			{"минут", "minute"},
-			{"час", "hour"},
-			{"ден", "day"}, // день/дней/дня
-			{"дн", "day"},  // дней (alternative stem)
-			{"недел", "week"},
-			{"месяц", "month"},
+			"часа":    "hour",
+			"часов":   "hour",
+			"день":    "day",
+			"дня":     "day",
+			"дней":    "day",
+			"неделя":  "week",
+			"неделю":  "week",
+			"недели":  "week",
+			"недель":  "week",
+			"месяц":   "month",
+			"месяца":  "month",
+			"месяцев": "month",
 		},
 	},
 }
@@ -209,15 +213,7 @@ func latinVocabFor(locale string) *latinVocab {
 }
 
 // lookupUnit resolves a (lowercased) unit word to its canonical name.
-// It checks the exact units map first, then falls back to prefix matching.
 func (v *latinVocab) lookupUnit(word string) (string, bool) {
-	if canonical, ok := v.units[word]; ok {
-		return canonical, true
-	}
-	for _, p := range v.unitPrefixes {
-		if strings.HasPrefix(word, p.prefix) {
-			return p.canonical, true
-		}
-	}
-	return "", false
+	canonical, ok := v.units[word]
+	return canonical, ok
 }

@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"bytes"
 	"errors"
 	"maps"
 	"strings"
@@ -343,5 +344,123 @@ func assertJSONStructuralError(t *testing.T, err error, causeType string) {
 		if !errors.As(err, &cause) {
 			t.Fatalf("Unmarshal error = %v, want wrapped *json.SemanticError", err)
 		}
+	}
+}
+
+func TestJSONClockPrecision(t *testing.T) {
+	t.Parallel()
+	date := mustDate(2026, time.March, 27)
+	clock := mustTime(13, 30, 45)
+	tests := []struct {
+		name      string
+		kind      string
+		fields    map[string]any
+		target    any
+		unchanged func() bool
+	}{
+		newJSONStructuralCase("instant", "instant", map[string]any{"iso": "2026-03-27T13:30:45%sZ"}, UnixNanos(1)),
+		newJSONStructuralCase("time", "time", map[string]any{"value": "13:30:45%s"}, clock),
+		newJSONStructuralCase("local", "local_datetime", map[string]any{"value": "2026-03-27T13:30:45%s"}, NewLocalDateTime(date, clock)),
+		newJSONStructuralCase("datetime", "datetime", map[string]any{"instant": "2026-03-27T13:30:45%sZ", "zone": "UTC"}, mustDateTime(date, clock, UTC)),
+		newJSONStructuralCase("interval", "interval", map[string]any{"start": "2026-03-27T13:30:45%sZ", "end": "2026-03-28T13:30:45%sZ"}, mustInterval(t, UnixNanos(0), UnixNanos(1))),
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, fraction := range []string{"", ".1", ".123456789", ".1234567890", ".1234567891"} {
+				fields := maps.Clone(tc.fields)
+				fields["kind"] = tc.kind
+				for key, value := range tc.fields {
+					fields[key] = strings.ReplaceAll(value.(string), "%s", fraction)
+				}
+				before := mustJSON(t, tc.target)
+				err := json.Unmarshal(mustJSON(t, fields), tc.target)
+				if len(fraction) > 10 {
+					assertJSONStructuralError(t, err, "")
+					if after := mustJSON(t, tc.target); !bytes.Equal(after, before) {
+						t.Fatalf("failed decode changed receiver: %s -> %s", before, after)
+					}
+					continue
+				}
+				if err != nil {
+					t.Fatalf("fraction %q: %v", fraction, err)
+				}
+				encoded := mustJSON(t, tc.target)
+				if err := json.Unmarshal(encoded, tc.target); err != nil {
+					t.Fatal(err)
+				}
+				if again := mustJSON(t, tc.target); !bytes.Equal(again, encoded) {
+					t.Fatalf("unstable round trip: %s -> %s", encoded, again)
+				}
+			}
+		})
+	}
+}
+
+func TestIntervalJSONRejectsPrecisionCollapse(t *testing.T) {
+	t.Parallel()
+	for _, endpoints := range [][2]string{
+		{".1234567891", ".1234567892"},
+		{".1234567891", ".2"},
+		{".1", ".1234567892"},
+	} {
+		original := mustInterval(t, UnixNanos(0), UnixNanos(1))
+		got := original
+		input := map[string]string{"kind": "interval", "start": "2026-03-27T13:30:45" + endpoints[0] + "Z", "end": "2026-03-27T13:30:45" + endpoints[1] + "Z"}
+		assertJSONStructuralError(t, json.Unmarshal(mustJSON(t, input), &got), "")
+		if got != original {
+			t.Fatal("failed precision decode changed interval")
+		}
+	}
+}
+
+func TestJSONUTCWireDomain(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		iso      string
+		overflow bool
+	}{
+		{"0000-01-01T00:00:00+01:00", true},
+		{"9999-12-31T23:59:59-01:00", true},
+		{"0000-01-01T00:00:00Z", false},
+		{"9999-12-31T23:59:59Z", false},
+		{"0000-01-01T01:00:00+01:00", false},
+		{"9999-12-31T22:59:59-01:00", false},
+	} {
+		t.Run(tc.iso, func(t *testing.T) {
+			instant := UnixNanos(1)
+			interval := mustInterval(t, UnixNanos(0), UnixNanos(1))
+			for _, c := range []struct {
+				value  map[string]string
+				target any
+			}{
+				{map[string]string{"kind": "instant", "iso": tc.iso}, &instant},
+				{map[string]string{"kind": "interval", "start": tc.iso, "end": tc.iso}, &interval},
+				{map[string]string{"kind": "interval", "start": "0000-01-01T00:00:00Z", "end": tc.iso}, &interval},
+				{map[string]string{"kind": "interval", "start": tc.iso, "end": "9999-12-31T23:59:59Z"}, &interval},
+			} {
+				before := mustJSON(t, c.target)
+				err := json.Unmarshal(mustJSON(t, c.value), c.target)
+				if tc.overflow {
+					var detail *TimeError
+					if !errors.Is(err, ErrOverflow) || !errors.As(err, &detail) || detail.Hint == "" {
+						t.Fatalf("decode %v: %v, want overflow with hint", c.value, err)
+					}
+					if after := mustJSON(t, c.target); !bytes.Equal(after, before) {
+						t.Fatal("overflow changed receiver")
+					}
+				} else {
+					if err != nil {
+						t.Fatal(err)
+					}
+					encoded := mustJSON(t, c.target)
+					if err := json.Unmarshal(encoded, c.target); err != nil {
+						t.Fatal(err)
+					}
+					if again := mustJSON(t, c.target); !bytes.Equal(again, encoded) {
+						t.Fatal("unstable encoding")
+					}
+				}
+			}
+		})
 	}
 }

@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"testing"
 
@@ -198,5 +199,170 @@ func TestParse_Interval_RejectsNaturalLanguageEndpoint(t *testing.T) {
 	)
 	if r.Status != StatusInvalid {
 		t.Fatalf("status = %v, want Invalid", r.Status)
+	}
+}
+
+func TestParseIntervalValidatesBothSides(t *testing.T) {
+	t.Parallel()
+	const fold = "2026-11-01T01:30:00"
+	zone := MustLoadZone("America/New_York")
+	for _, tc := range []struct {
+		part string
+		want error
+	}{
+		{"garbage", ErrInvalidFormat}, {"2026-02-30T00:00:00", ErrInvalidDate},
+		{"2026-03-08T02:30:00", ErrNonexistentTime}, {"2026-03-27", ErrIncompatibleTypes},
+		{"PTbad", ErrInvalidFormat}, {"PT999999999999999999999H", ErrOverflow},
+	} {
+		for _, input := range []string{fold + "/" + tc.part, tc.part + "/" + fold} {
+			r := Parse(input, WithZone(zone))
+			if r.Status != StatusInvalid || !errors.Is(r.Error, tc.want) {
+				t.Errorf("%s: %s %v, want %v", input, r.Status, r.Error, tc.want)
+				continue
+			}
+			_, err := ParseInterval(input, WithZone(zone))
+			var detail *TimeError
+			if !errors.Is(err, tc.want) || !errors.As(err, &detail) || detail.Input != input || detail.Hint == "" {
+				t.Errorf("typed %s: %#v", input, err)
+			}
+		}
+	}
+	input := "2026-02-30T00:00:00/garbage"
+	if _, err := ParseInterval(input, WithZone(zone)); !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("first error = %v", err)
+	}
+}
+
+func TestParseIntervalCompleteCandidates(t *testing.T) {
+	t.Parallel()
+	zone := MustLoadZone("America/New_York")
+	for _, tc := range []struct {
+		left, right string
+		want        [][2]string
+	}{
+		{"01:30:00", "03:00:00", [][2]string{{"05:30:00", "08:00:00"}, {"06:30:00", "08:00:00"}}},
+		{"01:30:00", "01:15:00", [][2]string{{"05:30:00", "06:15:00"}}},
+		{"01:15:00", "01:30:00", [][2]string{{"05:15:00", "05:30:00"}, {"05:15:00", "06:30:00"}, {"06:15:00", "06:30:00"}}},
+		{"01:30:00", "01:30:00", [][2]string{{"05:30:00", "05:30:00"}, {"05:30:00", "06:30:00"}, {"06:30:00", "06:30:00"}}},
+		{"01:30:00", "PT1H", [][2]string{{"05:30:00", "06:30:00"}, {"06:30:00", "07:30:00"}}},
+		{"PT1H", "01:30:00", [][2]string{{"04:30:00", "05:30:00"}, {"05:30:00", "06:30:00"}}},
+		{"01:30:00", "PT0S", [][2]string{{"05:30:00", "05:30:00"}, {"06:30:00", "06:30:00"}}},
+		{"03:00:00", "01:30:00", nil},
+	} {
+		left, right := tc.left, tc.right
+		if left[0] != 'P' {
+			left = "2026-11-01T" + left
+		}
+		if right[0] != 'P' {
+			right = "2026-11-01T" + right
+		}
+		input := left + "/" + right
+		t.Run(input, func(t *testing.T) {
+			r := Parse(input, WithZone(zone))
+			if len(tc.want) == 0 {
+				if r.Status != StatusInvalid || !errors.Is(r.Error, ErrIntervalReversed) {
+					t.Fatalf("reversed result = %#v", r)
+				}
+				return
+			}
+			wantStatus := StatusResolved
+			if len(tc.want) > 1 {
+				wantStatus = StatusAmbiguous
+			}
+			if r.Status != wantStatus || r.Kind != KindInterval {
+				t.Fatalf("result = %s/%s, want %s/interval", r.Status, r.Kind, wantStatus)
+			}
+			candidates := r.Candidates
+			if r.Status == StatusResolved {
+				candidates = []ParseResult{r}
+			}
+			if len(candidates) != len(tc.want) {
+				t.Fatalf("candidates = %d, want %d", len(candidates), len(tc.want))
+			}
+			for n, c := range candidates {
+				iv, ok := c.Interval()
+				if !ok || c.Input != input {
+					t.Fatalf("candidate %d is not complete interval: %#v", n, c)
+				}
+				if iv.Start().String() != "2026-11-01T"+tc.want[n][0]+"Z" || iv.End().String() != "2026-11-01T"+tc.want[n][1]+"Z" {
+					t.Errorf("candidate %d = %v, want %v", n, iv, tc.want[n])
+				}
+			}
+			if _, err := json.Marshal(r); err != nil {
+				t.Errorf("diagnostic JSON: %v", err)
+			}
+			_, err := ParseInterval(input, WithZone(zone))
+			if len(tc.want) > 1 {
+				if !errors.Is(err, ErrDuplicateTime) {
+					t.Errorf("typed ambiguity = %v", err)
+				}
+			} else if err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	for _, input := range []string{"2026-11-01T01:30:00/-PT1H", "-PT1H/2026-11-01T01:30:00"} {
+		if _, err := ParseInterval(input, WithZone(zone)); !errors.Is(err, ErrInvalidDuration) {
+			t.Errorf("negative interval length %s: %v", input, err)
+		}
+	}
+}
+
+func TestParseIntervalMetadata(t *testing.T) {
+	t.Parallel()
+	zone := MustLoadZone("America/New_York")
+	for _, tc := range []struct {
+		input           string
+		zone, precision bool
+	}{
+		{"2026-01-01T00:00:00Z/2026-01-01T01:00:00Z", true, false},
+		{"2026-01-01T00:00:00Z/2026-01-01T01:00:00", true, false},
+		{"2026-01-01T00:00:00/2026-01-01T01:00:00", false, false},
+		{"2026-01-01T00:00:00.1234567891Z/PT1H", true, true},
+		{"PT1H/2026-01-01T01:00:00.1234567891Z", true, true},
+		{"2026-11-01T01:30:00.1234567891/2026-11-01T08:00:00Z", true, true},
+		{"2026-11-01T01:30:00.1234567891/2026-11-01T03:00:00", false, true},
+		{"2026-11-01T01:15:00.1234567891/2026-11-01T01:30:00.1234567891", false, true},
+	} {
+		input := tc.input
+		r := Parse(input, WithZone(zone))
+		if r.Status == StatusInvalid {
+			t.Fatalf("%s: %v", input, r.Error)
+		}
+		results := append([]ParseResult{r}, r.Candidates...)
+		for _, result := range results {
+			if result.Input != input || result.HasZone != tc.zone || hasWarning(result.Warnings, WarnTruncatedPrecision) != tc.precision {
+				t.Errorf("%s: metadata zone=%v warnings=%v", input, result.HasZone, result.Warnings)
+			}
+			count := 0
+			for _, w := range result.Warnings {
+				if w.Code == WarnTruncatedPrecision {
+					count++
+				}
+			}
+			if count > 1 {
+				t.Errorf("duplicate precision warning: %v", result.Warnings)
+			}
+		}
+	}
+	r := Parse("2026-11-01T01:30:00/2026-11-01T03:00:00", WithZone(zone))
+	for _, candidate := range r.Candidates {
+		iv, ok := candidate.Interval()
+		if !ok {
+			t.Fatal("not interval")
+		}
+		want := iv.Start().Std().In(zone.Location()).Format("MST (-07:00)")
+		found := false
+		for _, w := range candidate.Warnings {
+			if w.Code == WarnDuplicateTime {
+				found = true
+				if w.Message != want {
+					t.Errorf("fold warning=%q, want %q", w.Message, want)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("missing fold warning for %v", iv)
+		}
 	}
 }

@@ -18,6 +18,8 @@ const (
 	ErrorOverflow ErrorKind = iota + 1
 	// ErrorInvalidDuration means a recognized duration uses an unsupported unit.
 	ErrorInvalidDuration
+	// ErrorInvalidTime means a recognized clock component is out of range.
+	ErrorInvalidTime
 )
 
 const (

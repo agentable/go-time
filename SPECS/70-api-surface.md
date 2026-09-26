@@ -91,7 +91,10 @@ errors. They never normalize invalid dates, invalid clock times, DST gaps,
 duplicate local times, or years outside `0000..9999`. Use `DateTimeFromTime`
 when the caller already has a stdlib `time.Time` with the intended offset.
 
-Epoch construction accepts the full `int64` input range. Epoch projection is
+Epoch constructors follow their stdlib counterparts. In particular, not every
+`int64` second count corresponds to a representable `time.Time`; `UnixSeconds`
+does not promise a wider domain than `time.Unix`. Millisecond and nanosecond
+constructors retain their stdlib input semantics. Epoch projection is
 checked separately: `UnixNano` and `UnixMilli` match `ErrOverflow` when the
 selected scalar cannot represent the instant. `UnixMilli` preserves stdlib
 millisecond truncation for representable values.
@@ -241,7 +244,7 @@ const (
 ## Arithmetic And Comparison
 
 ```go
-func (i Instant) Add(d Duration) Instant
+func (i Instant) Add(d Duration) (Instant, error)
 func (i Instant) Sub(other Instant) (Duration, error)
 func (i Instant) Compare(other Instant) int
 
@@ -274,7 +277,7 @@ func (iv Interval) Overlaps(other Interval) bool
 func (iv Interval) Adjacent(other Interval) bool
 func (iv Interval) Intersect(other Interval) (Interval, bool)
 func (iv Interval) Union(other Interval) (Interval, error)
-func (iv Interval) Shift(d Duration) Interval
+func (iv Interval) Shift(d Duration) (Interval, error)
 func (iv Interval) Expand(before, after Duration) (Interval, error)
 ```
 

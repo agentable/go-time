@@ -34,8 +34,8 @@ var (
 	reDuration = regexp.MustCompile(
 		`^(-?)P(?:([+-]?\d+(?:[.,]\d+)?)Y)?(?:([+-]?\d+(?:[.,]\d+)?)M)?(?:([+-]?\d+(?:[.,]\d+)?)W)?(?:([+-]?\d+(?:[.,]\d+)?)D)?(?:T(?:(\d+(?:[.,]\d+)?)H)?(?:(\d+(?:[.,]\d+)?)M)?(?:(\d+(?:[.,]\d+)?)S)?)?$`,
 	)
-	// 24h time: HH:MM or HH:MM:SS
-	reTime24 = regexp.MustCompile(`^(\d{1,2}):(\d{2})(?::(\d{2}))?$`)
+	// 24h time: HH:MM or HH:MM:SS[.fraction]
+	reTime24 = regexp.MustCompile(`^(\d{1,2}):(\d{2})(?::(\d{2})(?:[.,](\d+))?)?$`)
 	// 12h time: 3pm, 3:30pm, 3:30 PM
 	reTime12 = regexp.MustCompile(`(?i)^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(am|pm)$`)
 	// Ambiguous slash date: M/D/YYYY or D/M/YYYY

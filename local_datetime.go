@@ -90,6 +90,9 @@ func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 		}
 		return newTimeErrorWithCause(sentinel, err, message, wire.Value, hint)
 	}
+	if err := requireJSONPrecision(wire.Value); err != nil {
+		return err
+	}
 	date, err := DateFromTime(parsed)
 	if err != nil {
 		return err

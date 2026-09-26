@@ -27,6 +27,12 @@ There are two entry paths:
 | ISO date period | `P1Y3M`, `P7D`, `P2W` | `KindPeriod` |
 | ISO interval | `2026-03-27T00:00:00Z/2026-03-28T00:00:00Z`, `2026-03-27T09:00:00Z/PT9H` | `KindInterval` |
 
+Formal local, compact, and offset datetimes accept civil years `0000..9999`;
+year `0000` is a value, never a missing-component marker.
+Minute-precision extended and compact datetimes default seconds to zero.
+Fractions follow explicit seconds only; fractional hours or minutes are not
+supported. Explicit offsets use `Z`, `±HH:MM`, or `±HHMM`; `±HH` is rejected.
+
 `P{date-only}` routes to `Period`. `PT{time-only}` routes to `Duration`. Mixed date/time duration forms such as `P1DT2H` are invalid because no single go-time type can carry both calendar and sub-day exact semantics.
 Date-only Period components may carry individual signs so every valid Period
 has a lossless public text round trip, for example `P+1Y-2M+3D`.
@@ -236,6 +242,20 @@ second parser engine.
 
 Interval boundaries must resolve to `KindInstant` or `KindDateTime`. Date-only interval boundaries are invalid because an interval is an absolute UTC range and a bare date has no time or zone.
 Natural-language interval boundaries are invalid even when `WithInputLocale` and `WithReference` are supplied.
+Both interval sides are validated before ambiguity is returned. An invalid or
+incompatible side takes precedence over ambiguity; if both sides fail, the
+first error in input order is reported.
+Valid endpoint candidates are combined into complete intervals. Reversed
+combinations are discarded; equal endpoints remain valid empty intervals.
+Distinct intervals are sorted by start, then end. Zero valid combinations
+return `ErrIntervalReversed`, one resolves, and multiple return ambiguous
+`KindInterval` with resolved Interval candidates. Duration forms require a
+non-negative exact duration and follow the same candidate rules.
+Interval results and their candidates retain complete input text. `HasZone`
+is true when either endpoint explicitly includes an offset, not merely when
+`WithZone` is supplied. Endpoint warnings are merged in input order, with
+equal code/message pairs deduplicated. Candidate fold warnings describe
+only the occurrences used by that complete interval.
 When a formal interval endpoint is recognized but semantically invalid, the
 interval preserves that endpoint's precise error category, such as
 `ErrInvalidDate`, `ErrInvalidTime`, `ErrInvalidZone`, `ErrNonexistentTime`, or
@@ -278,3 +298,35 @@ kind remains `ErrIncompatibleTypes`.
   payload.
 - Invalid slash dates never surface as ambiguity with invalid candidates.
 - Interval tests prove date-only and natural-language boundaries are rejected unless a future spec deliberately changes the interval grammar.
+
+## Controlled Natural Grammar
+
+Chinese (explicit zh-Hans/zh-Hant), Japanese, and Korean week phrases use
+Monday–Sunday calendar weeks: previous/current/next week selects the weekday
+in that week. English next/last weekday continues to mean the next/previous
+occurrence. Korean whitespace accepted by the grammar does not change the
+week modifier's meaning. Japanese region and Unicode extension tags route to
+the Japanese grammar.
+
+English AM/PM hours must be 1..12 before conversion; 12am is midnight and 12pm
+is noon. Invalid hours return `ErrInvalidTime`. Russian relative units use a
+finite table of complete words, including the 1/2/5 forms for seconds, minutes,
+hours, days, weeks, and months; arbitrary suffixes return `ErrUnparseable`.
+
+## Formal Component Boundaries
+
+Equivalent offset, local, and compact datetime forms report `ErrInvalidDate`
+for invalid calendar components and `ErrInvalidTime` for invalid clocks.
+Invalid offsets report `ErrInvalidZone`. Actual stdlib parser failures remain
+in the error cause chain. Unrecognized text can still be `ErrUnparseable`;
+this classification does not expand the grammar.
+
+Time-only parsing accepts `HH:MM:SS.fraction` (decimal point or comma), with
+fractions only after explicit seconds. It reads canonical `Time.String()`
+values exactly; excess human-input precision truncates with
+`WarnTruncatedPrecision`. The wire grammar remains strict.
+
+Duration parsing and JSON decoding accept the full signed nanosecond range,
+including both decomposed and single-seconds spellings of MinInt64. Component
+magnitudes and their sum are checked against the sign-specific limit; values
+outside it fail instead of wrapping. Human and wire grammars remain distinct.

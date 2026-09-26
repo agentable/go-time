@@ -89,8 +89,8 @@ func TestJa_DateTime(t *testing.T) {
 		input    string
 		wantTime time.Time
 	}{
-		// 来週金曜日の午後3時 → 2026-04-03 15:00
-		{"来週金曜日の午後3時", time.Date(2026, 4, 3, 15, 0, 0, 0, loc)},
+		// 来週金曜日の午後3時 → 2026-04-10 15:00
+		{"来週金曜日の午後3時", time.Date(2026, 4, 10, 15, 0, 0, 0, loc)},
 		// 明日の午前10時 → tomorrow 10:00
 		{"明日の午前10時", time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 10, 0, 0, 0, loc)},
 		// 今日の午後2時30分 → today 14:30

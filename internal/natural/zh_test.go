@@ -55,14 +55,14 @@ func TestZh_WeekRelative(t *testing.T) {
 		input    string
 		wantDate time.Time
 	}{
-		// 下周五 with RelativeTo=Monday 2026-03-30 → 2026-04-03 (Friday)
-		{"下周五", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
+		// 下周五 with RelativeTo=Monday 2026-03-30 → 2026-04-10 (Friday)
+		{"下周五", time.Date(2026, 4, 10, 0, 0, 0, 0, loc)},
 		// 本周五 → 2026-04-03 (this week's Friday)
 		{"本周五", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
 		// 上周三 → 2026-03-25 (last Wednesday)
 		{"上周三", time.Date(2026, 3, 25, 0, 0, 0, 0, loc)},
 		// Traditional variants
-		{"下週五", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
+		{"下週五", time.Date(2026, 4, 10, 0, 0, 0, 0, loc)},
 		{"本週五", time.Date(2026, 4, 3, 0, 0, 0, 0, loc)},
 		{"上週三", time.Date(2026, 3, 25, 0, 0, 0, 0, loc)},
 		{"這週一", time.Date(2026, 3, 30, 0, 0, 0, 0, loc)},
@@ -141,7 +141,7 @@ func TestZh_DateTime(t *testing.T) {
 		{"今天下午十一点", time.Date(today.Year(), today.Month(), today.Day(), 23, 0, 0, 0, loc)},
 		{"今天13点45分", time.Date(today.Year(), today.Month(), today.Day(), 13, 45, 0, 0, loc)},
 		{"今天九点半", time.Date(today.Year(), today.Month(), today.Day(), 9, 30, 0, 0, loc)},
-		{"下周五下午三点", time.Date(2026, 4, 3, 15, 0, 0, 0, loc)},
+		{"下周五下午三点", time.Date(2026, 4, 10, 15, 0, 0, 0, loc)},
 		{"今天晚上十二点", time.Date(today.Year(), today.Month(), today.Day(), 12, 0, 0, 0, loc)},
 	}
 	for _, tt := range tests {

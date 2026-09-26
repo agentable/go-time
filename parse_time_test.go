@@ -1,6 +1,9 @@
 package gotime
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestParse_Time_24h(t *testing.T) {
 	tests := []struct {
@@ -66,5 +69,34 @@ func TestParse_Time_Invalid(t *testing.T) {
 	}
 	if r.Error.Code != CodeInvalidTime {
 		t.Errorf("error code = %q, want %q", r.Error.Code, CodeInvalidTime)
+	}
+}
+
+func TestParseTimeNanosecondRoundTrip(t *testing.T) {
+	t.Parallel()
+	for _, tc := range [][4]int{{0, 0, 0, 0}, {12, 30, 45, 0}, {12, 30, 45, 1}, {12, 30, 45, 120000000}, {23, 59, 59, 999999999}} {
+		clock, err := NewTimeNanos(tc[0], tc[1], tc[2], tc[3])
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := ParseTime(clock.String())
+		if err != nil || got != clock {
+			t.Errorf("%s: %v %v", clock, got, err)
+		}
+	}
+	r := Parse("12:30:45.1234567891")
+	clock, ok := r.Time()
+	if !ok || clock.Nanosecond() != 123456789 || !hasWarning(r.Warnings, WarnTruncatedPrecision) {
+		t.Errorf("truncation: %v %v", clock, r.Error)
+	}
+	for _, input := range []string{"12:30.5", "12:30:45.1pm", "12:30:45."} {
+		if Parse(input).Status != StatusInvalid {
+			t.Errorf("accepted %s", input)
+		}
+	}
+	for _, input := range []string{"25:00:00.1", "12:60:00.1", "12:30:60.1"} {
+		if _, err := ParseTime(input); !errors.Is(err, ErrInvalidTime) {
+			t.Errorf("%s: %v", input, err)
+		}
 	}
 }

@@ -11,8 +11,8 @@ task test          # Run all tests with race detection
 task lint          # Run golangci-lint v2 + go mod tidy check
 task fmt           # Format Go code
 task vet           # Run go vet
-task verify        # Full verification: deps, fmt, vet, lint, test, vuln
-task deps          # Download and tidy dependencies
+task verify        # Download deps; check tidy, fmt, vet, lint, YAML, tests, vulnerabilities
+task deps          # Download dependencies
 task deps:update   # Update all dependencies
 task clean         # Clean build artifacts
 task vuln          # Run govulncheck
@@ -45,7 +45,7 @@ Three-layer architecture with strict unidirectional dependencies. Upper layers n
 github.com/agentable/go-time/
 ├── current.go          # Current-time helpers: Now / NowIn / TodayIn (no Today() — must specify zone)
 ├── options.go          # Parse options: WithInputLocale(language.Tag), WithZone, WithReference
-├── instant.go          # Instant (absolute UTC; checked epoch/difference projections; Add(Duration) only)
+├── instant.go          # Instant (absolute UTC; checked Add, epoch and difference projections)
 ├── datetime.go         # DateTime (zoned local time; checked Add; AddPeriod→LocalResolution; .Clock()→Time)
 ├── local_datetime.go   # LocalDateTime (date + clock before zone resolution; Resolve(Zone)→candidates)
 ├── date.go             # Date (calendar date; checked queries/Add(Period)/DaysUntil; unresolved until paired with Time + Zone)
@@ -67,7 +67,7 @@ github.com/agentable/go-time/
 
 **Layer dependency rules:**
 
-- Layer 1 (value objects) — semantics and arithmetic use stdlib only; wire methods use Go 1.27.0's native `encoding/json/v2` and `encoding/json/jsontext`. `zone.go` also imports `internal/zone` for static generated data.
+- Layer 1 (value objects) — semantics and arithmetic use stdlib and the internal timezone boundary; wire methods use Go 1.27.0's native `encoding/json/v2` and `encoding/json/jsontext`. `zone.go` uses `internal/zone` for generated names and resolution; `LocalDateTime.Resolve` uses its runtime DST projection.
 - Layer 2 (`parse.go`, `internal/natural/`) — depends only on Layer 1 + stdlib + `golang.org/x/text/language`
 - Layer 3 (arithmetic methods on value objects) — depends only on Layer 1
 - User-visible API is `gotime.*` only — no internal dependencies leak
@@ -183,18 +183,20 @@ Operational corollaries:
 - `Period.String()` equals `ISO8601()` and must round-trip every valid mixed-sign value. A leading `-P` applies only to unsigned components; never accept a second component sign under a leading sign.
 - `Period` month/year add applies end-of-month clamping (Jan 31 + Months(1) = Feb 28/29). Never overflow.
 - `Instant.Sub`, `DateTime.Sub`, and `Interval.Length` return `(Duration, error)` and match `ErrOverflow` instead of exposing `time.Time.Sub` saturation.
+- `Instant.Add` and `Interval.Shift` return a value plus `error`; reject runtime overflow with a zero result and `ErrOverflow`. Duration-based interval constructors and `Expand` propagate the same checked endpoint arithmetic. Do not impose the narrower JSON year domain on runtime arithmetic.
+- `UnixSeconds` follows stdlib `time.Unix` representability; do not promise all `int64` seconds are valid time values. `InstantFromTime` remains a total UTC bridge.
 - `Instant.UnixNano` and `UnixMilli` check representability before calling the stdlib scalar projection. `Date.DaysUntil` validates both endpoints and returns `(int, error)`; calendar Y/M/D decomposition is caller policy, so there is no `PeriodUntil`.
 - Intervals are half-open `[start, end)` — `Contains` excludes end, `Overlaps` excludes touching endpoints, use `Adjacent` for boundary detection
 - `Interval.Expand(before, after)` returns `(Interval, error)` — reject negative expansion durations and preserve the same `end >= start` invariant as constructors.
 - `Interval` carries no zone field — projection zone belongs to the rendering layer (which is outside this module)
-- Use `ResolveZone` for fuzzy timezone resolution (Windows names and case-insensitive IANA names) — use `LoadZone` for strict IANA-only. Fixed offsets are not zones; RFC3339 numeric offsets parse to `Instant`.
+- Use `ResolveZone` for fuzzy timezone resolution (Windows names and case-insensitive IANA names) — use `LoadZone` for strict IANA-only. Require explicit identities; reject the process-dependent `Local` name. Fixed offsets are not zones; RFC3339 numeric offsets parse to `Instant`.
 - Treat `internal/zone/catalog.go` and `internal/zone/windows.go` as generated artifacts. Regenerate them only from local inputs verified against `internal/zone/sources.json`; headers derive version and source filename from the lock, never the local path. Never hand-edit or canonicalize CLDR territory `001` targets.
 - `.Std()` returns stdlib types (`time.Time` / `time.Duration`); `.Clock()` returns a `Time`; `Duration.Decompose()` returns `DurationComponents` (clock slots only). Naming is load-bearing: stdlib vs. clock vs. structured slot. `Period` has no `Decompose` — read `p.Years` / `p.Months` / `p.Days` directly (exported fields), no parallel struct.
 - `Zone.Location()` is total — the zero `Zone` falls back to `UTC`; do not reintroduce parallel fallback helpers
 - Parse option presence is explicit: `WithZone(Zone{})` means UTC and `WithReference(Instant{})` means the Go zero instant; never infer presence with `IsZero`.
 - Relative natural dates/datetimes require both `WithReference` and `WithZone`; formal floating datetimes may omit `WithZone` and remain `LocalDateTime`.
 - `internal/natural` receives an already-projected civil reference and returns civil components plus closed internal error categories only; it does not own ambiguity or zone resolution. `LocalDateTime.Resolve` at the gotime boundary is the sole owner of natural datetime zone resolution.
-- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC` — never call `time.Now()` during marshal. Time-dependent offset and abbreviation projection belongs to stdlib `time.Time.Zone`.
+- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC`. Encode Zone and DateTime from their held values; never reload timezone rules or call `time.Now()` during marshal. Time-dependent offset and abbreviation projection belongs to stdlib `time.Time.Zone`.
 - `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
 - `ParseResult` has no public `Value() any` escape hatch — dispatch unknown input with `Status`, `Kind`, and comma-ok accessors.
 - `ParseResult.HasZone` indicates whether the input explicitly included timezone/offset information — use this to detect floating times
@@ -280,7 +282,7 @@ Sentinel + typed struct hybrid (`os.ErrNotExist` + `*fs.PathError` pattern). Go 
 `ErrorCode` constants (typed string, prefix `Code*`):
 `CodeEmptyInput`, `CodeInvalidFormat`, `CodeInvalidDate`, `CodeInvalidTime`, `CodeInvalidDuration`, `CodeInvalidPeriod`, `CodeInvalidZone`, `CodeAmbiguousDate`, `CodeNonexistentTime`, `CodeDuplicateTime`, `CodeIntervalReversed`, `CodeIntervalsDisjoint`, `CodeUnparseable`, `CodeOverflow`, `CodeIncompatibleTypes`.
 
-Sentinel `*TimeError` instances (one per code, prefix `Err*`):
+Sentinel `error` values created with `errors.New` (one per code, prefix `Err*`):
 `ErrEmptyInput`, `ErrInvalidFormat`, `ErrInvalidDate`, `ErrInvalidTime`, `ErrInvalidDuration`, `ErrInvalidPeriod`, `ErrInvalidZone`, `ErrAmbiguousDate`, `ErrNonexistentTime`, `ErrDuplicateTime`, `ErrIntervalReversed`, `ErrIntervalsDisjoint`, `ErrUnparseable`, `ErrOverflow`, `ErrIncompatibleTypes`.
 
 Pattern:

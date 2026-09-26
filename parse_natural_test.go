@@ -2,6 +2,8 @@ package gotime
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -640,4 +642,154 @@ func TestParse_Natural_Race(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestParseNaturalCalendarWeeks(t *testing.T) {
+	t.Parallel()
+	for _, monday := range []time.Time{time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC), time.Date(2025, 12, 29, 12, 0, 0, 0, time.UTC)} {
+		for day := range 7 {
+			ref := InstantFromTime(monday.AddDate(0, 0, day))
+			for _, tc := range []struct {
+				locale    string
+				modifiers [3]string
+				weekdays  [2]string
+				clock     string
+			}{
+				{"zh-Hans", [3]string{"上周", "本周", "下周"}, [2]string{"五", "日"}, "下午三点"},
+				{"ja", [3]string{"先週", "今週", "来週"}, [2]string{"金曜日", "日曜日"}, "午後3時"},
+				{"ko", [3]string{"지난 주 ", "이번 주 ", "다음 주 "}, [2]string{"금요일", "일요일"}, " 오후 3시"},
+			} {
+				opts := []Option{WithInputLocale(language.MustParse(tc.locale)), WithReference(ref), WithZone(UTC)}
+				for week, modifier := range tc.modifiers {
+					for wd, weekday := range tc.weekdays {
+						want := monday.AddDate(0, 0, (week-1)*7+4+wd*2).Format("2006-01-02")
+						input := modifier + weekday
+						d, err := ParseDate(input, opts...)
+						if err != nil || d.String() != want {
+							t.Errorf("ref=%s %s: %v %v want %s", ref, input, d, err, want)
+						}
+						dt, err := ParseDateTime(input+tc.clock, opts...)
+						if err != nil || dt.Date().String() != want || dt.Clock().Hour() != 15 {
+							t.Errorf("ref=%s %s: %v %v want %s 15:00", ref, input, dt, err, want)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestParseNaturalEnglishHourDomain(t *testing.T) {
+	t.Parallel()
+	opts := []Option{WithInputLocale(language.English), WithReference(fixedNow), WithZone(UTC)}
+	for _, input := range []string{"tomorrow at 0am", "tomorrow at 0pm", "tomorrow at 13am", "tomorrow at 13pm", "tomorrow at 23am", "tomorrow at 23pm", "tomorrow at 1:60am"} {
+		_, err := ParseDateTime(input, opts...)
+		var detail *TimeError
+		if !errors.Is(err, ErrInvalidTime) || !errors.As(err, &detail) || detail.Hint == "" {
+			t.Errorf("%s: %v", input, err)
+		}
+		r := Parse(input, opts...)
+		if r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) {
+			t.Errorf("%s: %#v", input, r)
+		}
+	}
+	for _, tc := range []struct {
+		input string
+		hour  int
+	}{{"1am", 1}, {"11am", 11}, {"12am", 0}, {"1pm", 13}, {"11pm", 23}, {"12pm", 12}} {
+		dt, err := ParseDateTime("tomorrow at "+tc.input, opts...)
+		if err != nil || dt.Clock().Hour() != tc.hour || dt.Date().String() != "2026-03-31" {
+			t.Errorf("%s: %v %v", tc.input, dt, err)
+		}
+	}
+}
+
+func TestParseNaturalKoreanWeekWhitespace(t *testing.T) {
+	t.Parallel()
+	opts := []Option{WithInputLocale(language.Korean), WithReference(fixedNow), WithZone(UTC)}
+	for _, tc := range []struct{ modifier, want string }{{"지난", "2026-03-27"}, {"이번", "2026-04-03"}, {"다음", "2026-04-10"}} {
+		for _, space := range []string{"", " ", "   ", "\t"} {
+			input := tc.modifier + space + "주" + space + "금요일"
+			d, err := ParseDate(input, opts...)
+			if err != nil || d.String() != tc.want {
+				t.Errorf("%q: %v %v", input, d, err)
+			}
+			dt, err := ParseDateTime(input+" 오후 3시", opts...)
+			if err != nil || dt.Date().String() != tc.want {
+				t.Errorf("%q: %v %v", input, dt, err)
+			}
+		}
+	}
+	if r := Parse("잘못 주 금요일", opts...); r.Status != StatusInvalid {
+		t.Errorf("invalid modifier: %s", r.Status)
+	}
+}
+
+func TestParseNaturalRussianWholeUnits(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		forms    [3]string
+		duration Duration
+		period   Period
+	}{
+		{[3]string{"секунду", "секунды", "секунд"}, Second, Period{}},
+		{[3]string{"минуту", "минуты", "минут"}, Minute, Period{}},
+		{[3]string{"час", "часа", "часов"}, Hour, Period{}},
+		{[3]string{"день", "дня", "дней"}, 0, Days(1)},
+		{[3]string{"неделю", "недели", "недель"}, 0, Days(7)},
+		{[3]string{"месяц", "месяца", "месяцев"}, 0, Months(1)},
+	} {
+		for index, n := range []int{1, 2, 5} {
+			unit := tc.forms[index]
+			for _, past := range []bool{false, true} {
+				input := fmt.Sprintf("через %d %s", n, unit)
+				sign := 1
+				if past {
+					input = fmt.Sprintf("%d %s назад", n, unit)
+					sign = -1
+				}
+				opts := []Option{WithInputLocale(language.Russian)}
+				if tc.duration != 0 {
+					d, err := ParseDuration(input, opts...)
+					if err != nil || d != Duration(sign*n)*tc.duration {
+						t.Errorf("%s: %v %v", input, d, err)
+					}
+				} else {
+					p, err := ParsePeriod(input, opts...)
+					want := Period{Months: int32(sign*n) * tc.period.Months, Days: int32(sign*n) * tc.period.Days}
+					if err != nil || p != want {
+						t.Errorf("%s: %v %v", input, p, err)
+					}
+				}
+				invalid := strings.Replace(input, unit, unit+"мусор", 1)
+				r := Parse(invalid, opts...)
+				if r.Status != StatusInvalid || !errors.Is(r.Error, ErrUnparseable) {
+					t.Errorf("garbage accepted: %s", invalid)
+				}
+			}
+		}
+	}
+}
+
+func TestParseNaturalJapaneseTags(t *testing.T) {
+	t.Parallel()
+	for _, tag := range []string{"ja", "ja-JP", "ja-u-ca-japanese"} {
+		opts := []Option{WithInputLocale(language.MustParse(tag)), WithReference(fixedNow), WithZone(UTC)}
+		d, err := ParseDate("明日", opts...)
+		if err != nil || d.String() != "2026-03-31" {
+			t.Errorf("%s: %v %v", tag, d, err)
+		}
+		dt, err := ParseDateTime("明日午前0時", opts...)
+		if err != nil || dt.Clock().Hour() != 0 {
+			t.Errorf("%s: %v %v", tag, dt, err)
+		}
+	}
+	for _, tag := range []string{"en", "ko", "zh-Hans"} {
+		if r := Parse("明日", WithInputLocale(language.MustParse(tag)), WithReference(fixedNow), WithZone(UTC)); r.Status != StatusInvalid {
+			t.Errorf("unexpected match: %s", tag)
+		}
+	}
+	if _, ok := natural.Parse("明日", natural.Context{Locale: "jax", RelativeTo: fixedNow.Std()}); ok {
+		t.Error("matched jax")
+	}
 }

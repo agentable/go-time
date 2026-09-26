@@ -19,7 +19,7 @@ resolution, err := dt.AddPeriod(gotime.Days(1))    // calendar
 ## Exact Arithmetic
 
 ```go
-func (i Instant) Add(d Duration) Instant
+func (i Instant) Add(d Duration) (Instant, error)
 func (dt DateTime) Add(d Duration) (DateTime, error)
 ```
 
@@ -30,8 +30,10 @@ previous, err := dt.Add(-30 * gotime.Minute)
 ```
 
 `DateTime.Add` returns `ErrOverflow` if the exact result would leave the civil
-year domain. `Instant.Add` remains total because `Instant` carries no civil
-projection.
+year domain. `Instant.Add` returns `ErrOverflow` if the requested exact result
+cannot be represented by time.Time, including saturation at its boundaries.
+Zero duration is an identity; MinInt64 and MaxInt64 durations are valid inputs
+when the resulting instant is representable. Errors return zero results.
 
 There is no `Sub(Duration)` form. `Sub` means exact difference between two timeline values.
 
@@ -133,7 +135,10 @@ iv, err := gotime.NewIntervalStartingAt(start, 9 * gotime.Hour)
 iv, err := gotime.NewIntervalEndingAt(end, 9 * gotime.Hour)
 ```
 
-Length-based interval constructors reject negative durations with `ErrInvalidDuration`.
+Length-based interval constructors reject negative durations with `ErrInvalidDuration`
+and return `ErrOverflow` if the requested endpoint cannot be represented exactly.
+`Expand` likewise propagates exact endpoint overflow instead of returning a
+shortened interval.
 
 Current interval operations:
 
@@ -148,10 +153,14 @@ Current interval operations:
 | `Adjacent(Interval)` | True when one end equals the other's start. |
 | `Intersect(Interval)` | Returns overlap and `ok`. |
 | `Union(Interval)` | Merges overlapping or adjacent intervals; disjoint intervals return `ErrIntervalsDisjoint`. |
-| `Shift(Duration)` | Moves start and end. |
+| `Shift(Duration)` | Returns `(Interval, error)`; moves both endpoints exactly or returns `ErrOverflow`. |
 | `Expand(before, after Duration)` | Moves start backward and end forward; rejects negative expansion durations. |
 
-`NewInterval` returns `ErrIntervalReversed` when `end < start`. `Expand` returns `(Interval, error)` so it can preserve the same invariant as constructors. Zero-length intervals are allowed.
+`NewInterval` returns `ErrIntervalReversed` when `end < start`. `Expand` returns `(Interval, error)` so it can preserve the same invariant as constructors. Zero-length intervals are allowed. They contain no moment and never overlap.
+`Overlaps` agrees with the nonempty intersection reported by `Intersect`.
+`Union` joins intervals whose endpoint ranges have no gap: an empty anchor
+inside or on a boundary is retained, an outside anchor is disjoint. Two empty
+intervals can be unioned only when their anchors coincide.
 
 ## Duration and Period Display Hooks
 

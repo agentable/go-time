@@ -24,7 +24,8 @@ var slashDateOrders = map[string]slashDateOrder{
 //
 //   - A supported locale selects its documented slash order.
 //   - An unsupported locale tries both; if exactly one parses as a valid
-//     calendar date, return it; otherwise return Ambiguous candidates so
+//     calendar date, or both identify the same date, return it; otherwise
+//     return Ambiguous candidates so
 //     the caller can pick.
 func parseSlashDate(input string, m []string, cfg *config) ParseResult {
 	a, b, year := atoi(m[1]), atoi(m[2]), atoi(m[3])
@@ -36,6 +37,8 @@ func parseSlashDate(input string, m []string, cfg *config) ParseResult {
 	monthFirstValid := validateDateComponents(year, a, b) == ""
 	dayFirstValid := validateDateComponents(year, b, a) == ""
 	switch {
+	case monthFirstValid && dayFirstValid && a == b:
+		return resolvedSlashDate(input, a, b, year, true, cfg)
 	case monthFirstValid && dayFirstValid:
 		return ambiguousSlashDate(input, a, b, year, cfg)
 	case monthFirstValid && !dayFirstValid:

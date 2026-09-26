@@ -49,7 +49,7 @@ func init() {
 }
 
 func (p *jaParser) canHandle(locale string) bool {
-	return locale == "ja"
+	return matchesLocalePrefix(locale, "ja")
 }
 
 func (p *jaParser) parse(input string, ctx Context) (Result, bool) {
@@ -123,11 +123,11 @@ func jaWeekDate(base time.Time, modifier, wdStr string) time.Time {
 	wd := jaWeekdayStr(wdStr)
 	switch modifier {
 	case "来週":
-		return nextWeekday(base, wd)
+		return thisWeekday(base, wd).AddDate(0, 0, 7)
 	case "今週":
 		return thisWeekday(base, wd)
 	case "先週":
-		return lastWeekday(base, wd)
+		return thisWeekday(base, wd).AddDate(0, 0, -7)
 	default:
 		return base
 	}

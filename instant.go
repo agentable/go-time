@@ -75,9 +75,27 @@ func (i Instant) In(z Zone) (DateTime, error) {
 	return DateTimeFromTime(i.t, z)
 }
 
-// Add returns a new Instant advanced by d.
-func (i Instant) Add(d Duration) Instant {
-	return Instant{t: i.t.Add(d.Std())}
+// Add returns a new Instant advanced by d, or ErrOverflow if the exact
+// result cannot be represented by time.Time.
+func (i Instant) Add(d Duration) (Instant, error) {
+	seconds := int64(d / Second)
+	nanos := int64(i.t.Nanosecond()) + int64(d%Second)
+	if nanos < 0 {
+		seconds--
+		nanos += int64(Second)
+	} else if nanos >= int64(Second) {
+		seconds++
+		nanos -= int64(Second)
+	}
+	result := i.t.Add(d.Std())
+	// Unsigned subtraction cancels Unix's epoch offset even at scalar wraparound.
+	// The ordering check also rejects a jump across the underlying timeline edge.
+	delta := uint64(result.Unix()) - uint64(i.t.Unix())                   //nolint:gosec // Modular subtraction intentionally preserves all int64 bit patterns.
+	if delta == uint64(seconds) && int64(result.Nanosecond()) == nanos && //nolint:gosec // Negative second deltas are compared modulo 2^64.
+		((d == 0 && result.Equal(i.t)) || (d > 0 && result.After(i.t)) || (d < 0 && result.Before(i.t))) {
+		return Instant{t: result}, nil
+	}
+	return Instant{}, newTimeError(ErrOverflow, "instant addition exceeds the time.Time range", i.String(), "use a smaller duration or an instant farther from the time.Time boundary")
 }
 
 // Sub returns the Duration from other to i.
@@ -129,16 +147,24 @@ func (i Instant) MarshalJSON() ([]byte, error) {
 	}{Kind: "instant", ISO: iso})
 }
 
-func (i Instant) wireISO() (string, error) {
+func (i Instant) validateWireDomain() error {
 	t := i.t.UTC()
 	if year := t.Year(); year < 0 || year > 9999 {
-		return "", newTimeError(
+		return newTimeError(
 			ErrOverflow,
 			"instant year is outside the supported wire domain",
 			fmt.Sprintf("year=%d", year),
 			"marshal an instant whose UTC year is between 0000 and 9999",
 		)
 	}
+	return nil
+}
+
+func (i Instant) wireISO() (string, error) {
+	if err := i.validateWireDomain(); err != nil {
+		return "", err
+	}
+	t := i.t.UTC()
 	iso := t.Format(time.RFC3339Nano)
 	if _, err := time.Parse(time.RFC3339Nano, iso); err != nil {
 		return "", newTimeError(
@@ -177,6 +203,13 @@ func (i *Instant) UnmarshalJSON(b []byte) error {
 			"use an RFC3339 instant such as 2026-03-27T04:00:00Z",
 		)
 	}
-	*i = InstantFromTime(t)
+	if err := requireJSONPrecision(wire.ISO); err != nil {
+		return err
+	}
+	parsed := InstantFromTime(t)
+	if err := parsed.validateWireDomain(); err != nil {
+		return err
+	}
+	*i = parsed
 	return nil
 }

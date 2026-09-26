@@ -58,7 +58,7 @@ Layer 2: parsing and natural-language helpers
 Layer 1: value objects and stable JSON
 ```
 
-Layer 1 is stdlib-only except `zone.go`, which reads static IANA data from `internal/zone`. There is no formatting layer.
+Layer 1 uses stdlib plus `internal/zone`: `zone.go` reads generated names and resolves identities; `LocalDateTime.Resolve` uses its runtime DST projection. There is no formatting layer.
 
 ## Module Path
 

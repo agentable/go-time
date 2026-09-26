@@ -69,6 +69,11 @@ func (p *enParser) parse(input string, ctx Context) (Result, bool) {
 		}
 
 		hour, _ := strconv.Atoi(hourStr)
+		if hour < 1 || hour > 12 {
+			r := invalidResult(ErrorInvalidTime, "AM/PM hour must be between 1 and 12", "use 12am for midnight or 12pm for noon")
+			r.NeedsReference = true
+			return r, true
+		}
 		min := 0
 		if minStr != "" {
 			min, _ = strconv.Atoi(minStr)

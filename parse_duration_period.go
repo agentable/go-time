@@ -90,7 +90,8 @@ func parseISOPeriodMatch(input string, m []string, cfg *config) ParseResult {
 
 func parseISODurationMatch(input string, m []string, cfg *config) ParseResult {
 	neg := m[1] == "-"
-	var totalNs int64
+	limit := durationMagnitudeLimit(neg)
+	var totalNs uint64
 	for _, component := range []struct {
 		raw  string
 		name string
@@ -103,21 +104,17 @@ func parseISODurationMatch(input string, m []string, cfg *config) ParseResult {
 		if component.raw == "" {
 			continue
 		}
-		ns, ok := parseDurationComponent(component.raw, component.unit)
+		ns, ok := parseDurationComponent(component.raw, component.unit, limit)
 		if !ok {
 			return invalidDurationComponent(input, component.name, component.raw)
 		}
-		total, ok := checkedAddInt64(totalNs, ns)
-		if !ok {
+		if ns > limit-totalNs {
 			return durationOverflow(input)
 		}
-		totalNs = total
-	}
-	if neg {
-		totalNs = -totalNs
+		totalNs += ns
 	}
 	r := resolvedResult(input, KindDuration, cfg)
-	r.duration = Duration(totalNs)
+	r.duration = durationFromMagnitude(totalNs, neg)
 	return r
 }
 
@@ -132,14 +129,14 @@ func invalidPeriodComponent(input, component, raw string) ParseResult {
 		"Use whole-number calendar period components such as P1Y, P2M, P3W, or P4D")
 }
 
-func parseDurationComponent(raw string, unit time.Duration) (int64, bool) {
+func parseDurationComponent(raw string, unit time.Duration, limit uint64) (uint64, bool) {
 	wholeText, fracText, hasFrac := cutDecimal(raw)
-	whole, err := strconv.ParseInt(wholeText, 10, 64)
+	whole, err := strconv.ParseUint(wholeText, 10, 64)
 	if err != nil {
 		return 0, false
 	}
-	unitNs := int64(unit)
-	if whole > maxInt64/unitNs {
+	unitNs := uint64(unit) //nolint:gosec // Both callers pass only positive time.Hour, time.Minute, or time.Second constants.
+	if whole > limit/unitNs {
 		return 0, false
 	}
 	total := whole * unitNs
@@ -149,13 +146,16 @@ func parseDurationComponent(raw string, unit time.Duration) (int64, bool) {
 	if fracText == "" || len(fracText) > 9 {
 		return 0, false
 	}
-	frac, err := strconv.ParseInt(fracText, 10, 64)
+	frac, err := strconv.ParseUint(fracText, 10, 64)
 	if err != nil {
 		return 0, false
 	}
 	scale := pow10(len(fracText))
 	fractionNs := frac * (unitNs / scale)
-	return checkedAddInt64(total, fractionNs)
+	if fractionNs > limit-total {
+		return 0, false
+	}
+	return total + fractionNs, true
 }
 
 func cutDecimal(raw string) (whole, frac string, ok bool) {
@@ -166,8 +166,8 @@ func cutDecimal(raw string) (whole, frac string, ok bool) {
 	return whole, frac, ok
 }
 
-func pow10(n int) int64 {
-	p := int64(1)
+func pow10(n int) uint64 {
+	p := uint64(1)
 	for range n {
 		p *= 10
 	}
@@ -186,9 +186,20 @@ func durationOverflow(input string) ParseResult {
 		"Use a smaller duration")
 }
 
-func checkedAddInt64(a, b int64) (int64, bool) {
-	if (b > 0 && a > maxInt64-b) || (b < 0 && a < minInt64-b) {
-		return 0, false
+func durationMagnitudeLimit(negative bool) uint64 {
+	if negative {
+		return 1 << 63
 	}
-	return a + b, true
+	return 1<<63 - 1
+}
+
+func durationFromMagnitude(magnitude uint64, negative bool) Duration {
+	if negative && magnitude == 1<<63 {
+		return Duration(minInt64)
+	}
+	d := Duration(magnitude) //nolint:gosec // Callers enforce the sign-specific limit; the sole value above MaxInt64 is handled above.
+	if negative {
+		return -d
+	}
+	return d
 }

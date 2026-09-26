@@ -92,8 +92,8 @@ func TestInstant_UnixNanoRejectsOverflow(t *testing.T) {
 		name    string
 		instant Instant
 	}{
-		{name: "below minimum", instant: UnixNanos(math.MinInt64).Add(-Nanosecond)},
-		{name: "above maximum", instant: UnixNanos(math.MaxInt64).Add(Nanosecond)},
+		{name: "below minimum", instant: mustInstantAdd(t, UnixNanos(math.MinInt64), -Nanosecond)},
+		{name: "above maximum", instant: mustInstantAdd(t, UnixNanos(math.MaxInt64), Nanosecond)},
 		{name: "zero value", instant: Instant{}},
 	}
 	for _, tc := range tests {
@@ -121,7 +121,7 @@ func TestInstant_UnixMilliBoundaries(t *testing.T) {
 		{name: "minimum", instant: UnixMillis(math.MinInt64), want: math.MinInt64},
 		{
 			name:    "maximum",
-			instant: UnixMillis(math.MaxInt64).Add(Millisecond - Nanosecond),
+			instant: mustInstantAdd(t, UnixMillis(math.MaxInt64), Millisecond-Nanosecond),
 			want:    math.MaxInt64,
 		},
 	}
@@ -146,8 +146,8 @@ func TestInstant_UnixMilliRejectsOverflow(t *testing.T) {
 		name    string
 		instant Instant
 	}{
-		{name: "below minimum", instant: UnixMillis(math.MinInt64).Add(-Nanosecond)},
-		{name: "above maximum", instant: UnixMillis(math.MaxInt64).Add(Millisecond)},
+		{name: "below minimum", instant: mustInstantAdd(t, UnixMillis(math.MinInt64), -Nanosecond)},
+		{name: "above maximum", instant: mustInstantAdd(t, UnixMillis(math.MaxInt64), Millisecond)},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -190,7 +190,7 @@ func TestNow_InstantNonZero(t *testing.T) {
 
 func TestInstant_AddSub(t *testing.T) {
 	i := UnixNanos(0)
-	i2 := i.Add((1 * Hour))
+	i2 := mustInstantAdd(t, i, (1 * Hour))
 	d, err := i2.Sub(i)
 	if err != nil {
 		t.Fatalf("Sub after Add((1 * Hour)) error = %v", err)
@@ -213,7 +213,7 @@ func TestInstant_SubExactDurationBoundaries(t *testing.T) {
 
 	start := UnixNanos(0)
 	for _, want := range []Duration{Duration(math.MinInt64), Duration(math.MaxInt64)} {
-		end := start.Add(want)
+		end := mustInstantAdd(t, start, want)
 		got, err := end.Sub(start)
 		if err != nil {
 			t.Fatalf("Sub(%v) error = %v", want, err)
@@ -221,8 +221,8 @@ func TestInstant_SubExactDurationBoundaries(t *testing.T) {
 		if got != want {
 			t.Errorf("Sub(%v) = %v, want %v", want, got, want)
 		}
-		if !start.Add(got).Equal(end) {
-			t.Errorf("start.Add(Sub) = %v, want %v", start.Add(got), end)
+		if !mustInstantAdd(t, start, got).Equal(end) {
+			t.Errorf("start.Add(Sub) = %v, want %v", mustInstantAdd(t, start, got), end)
 		}
 	}
 }
@@ -235,8 +235,8 @@ func TestInstant_SubRejectsOverflow(t *testing.T) {
 		name string
 		end  Instant
 	}{
-		{name: "positive", end: start.Add(Duration(math.MaxInt64)).Add(Nanosecond)},
-		{name: "negative", end: start.Add(Duration(math.MinInt64)).Add(-Nanosecond)},
+		{name: "positive", end: mustInstantAdd(t, mustInstantAdd(t, start, Duration(math.MaxInt64)), Nanosecond)},
+		{name: "negative", end: mustInstantAdd(t, mustInstantAdd(t, start, Duration(math.MinInt64)), -Nanosecond)},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -345,5 +345,47 @@ func TestInstant_String(t *testing.T) {
 	// Should contain the epoch year
 	if !strings.Contains(s, "1970") {
 		t.Errorf("String() = %q, expected epoch year 1970", s)
+	}
+}
+
+func TestInstantCheckedAddBoundaries(t *testing.T) {
+	t.Parallel()
+	upper := UnixSeconds(9223371974719179007)
+	lower := InstantFromTime(time.Unix(9223371974719179008, 0))
+	for _, tc := range []struct {
+		start    Instant
+		delta    Duration
+		overflow bool
+	}{
+		{UnixSeconds(0), Duration(math.MinInt64), false}, {UnixSeconds(0), Duration(math.MaxInt64), false},
+		{upper, Nanosecond, false}, {upper, -Nanosecond, false}, {upper, Second, true}, {upper, Duration(math.MaxInt64), true}, {upper, Duration(math.MinInt64), false},
+		{lower, -Nanosecond, true}, {lower, -Second, true}, {lower, Second, false}, {lower, Duration(math.MinInt64), true}, {lower, Duration(math.MaxInt64), false}, {lower, 0, false},
+		{UnixSeconds(0), -Second, false}, {UnixSeconds(0), Nanosecond, false}, {InstantFromTime(time.Now()), 0, false},
+	} {
+		got, err := tc.start.Add(tc.delta)
+		if tc.overflow {
+			var detail *TimeError
+			if !errors.Is(err, ErrOverflow) || !errors.As(err, &detail) || detail.Hint == "" || got != (Instant{}) {
+				t.Errorf("add %d to %d: %v %v", tc.delta, tc.start.Std().Unix(), got, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("add %d to %d: %v", tc.delta, tc.start.Std().Unix(), err)
+			continue
+		}
+		// Decompose the requested displacement into two differences strictly inside
+		// Duration's limits; saturation cannot satisfy either assertion.
+		half := tc.delta / 2
+		middle := tc.start.Std().Add(half.Std())
+		if tc.delta == 0 {
+			if !got.Equal(tc.start) {
+				t.Error("zero moved instant")
+			}
+			continue
+		}
+		if middle.Sub(tc.start.Std()) != half.Std() || got.Std().Sub(middle) != (tc.delta-half).Std() {
+			t.Errorf("inexact add %d", tc.delta)
+		}
 	}
 }

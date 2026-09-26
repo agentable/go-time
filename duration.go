@@ -136,10 +136,7 @@ func parseISO8601Duration(s string) (Duration, error) {
 	}
 
 	negative := m[1] == "-"
-	limit := uint64(1<<63 - 1)
-	if negative {
-		limit++
-	}
+	limit := durationMagnitudeLimit(negative)
 	var totalNs uint64
 	for _, component := range []struct {
 		raw  string
@@ -153,24 +150,17 @@ func parseISO8601Duration(s string) (Duration, error) {
 		if component.raw == "" {
 			continue
 		}
-		ns, ok := parseDurationComponent(component.raw, component.unit)
+		magnitude, ok := parseDurationComponent(component.raw, component.unit, limit)
 		if !ok {
 			return 0, fmt.Errorf("duration %s component %q: %w", component.name, component.raw, errInvalidISO8601Duration)
 		}
-		magnitude := uint64(ns) //nolint:gosec // parseDurationComponent returns only non-negative values.
 		if magnitude > limit-totalNs {
 			return 0, fmt.Errorf("duration %q overflows nanoseconds: %w", s, errInvalidISO8601Duration)
 		}
 		totalNs += magnitude
 	}
 
-	if !negative {
-		return Duration(totalNs), nil
-	}
-	if totalNs == uint64(1)<<63 {
-		return Duration(-1 << 63), nil
-	}
-	return Duration(-int64(totalNs)), nil
+	return durationFromMagnitude(totalNs, negative), nil
 }
 
 // Decompose breaks d into renderable slots: Hours, Minutes, Seconds,
