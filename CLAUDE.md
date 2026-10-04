@@ -329,10 +329,6 @@ When you encounter a bug, limitation, or unexpected behavior in a dependency lib
 
 The `reports/` directory is checked by team members after each work cycle. Reports are routed to the appropriate dependency maintainer for resolution.
 
-## Monorepo Context
-
-This package is part of a Go monorepo. See [root CLAUDE.md](../CLAUDE.md) for shared conventions.
-
 ## Agent Skills
 
 Common implementation skills in `.agents/skills/`:
