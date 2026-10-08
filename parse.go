@@ -199,7 +199,7 @@ func Parse(input string, opts ...Option) ParseResult {
 }
 
 // MarshalJSON serializes r as diagnostic output using the stable schema defined
-// in SPECS/20-parsing.md. ParseResult has no supported JSON decoder.
+// in SPECS/20-parsing.md. JSON decoding is explicitly rejected.
 func (r ParseResult) MarshalJSON() ([]byte, error) {
 	if err := r.validateWire(); err != nil {
 		return nil, err
@@ -224,6 +224,13 @@ func (r ParseResult) MarshalJSON() ([]byte, error) {
 		wire.Error = r.Error
 	}
 	return json.Marshal(wire)
+}
+
+// UnmarshalJSON rejects diagnostic JSON, which cannot restore runtime parse
+// state. It leaves r unchanged; parse the original input with explicit options.
+func (r *ParseResult) UnmarshalJSON([]byte) error {
+	return newTimeError(ErrInvalidFormat, "ParseResult JSON is diagnostic output only", "",
+		"call Parse with the original input and explicit options to obtain a runtime result")
 }
 
 func (r ParseResult) validateWire() error {

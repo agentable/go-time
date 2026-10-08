@@ -8,6 +8,30 @@ import (
 	"golang.org/x/text/language"
 )
 
+func TestParseIntervalRejectsAmbiguousDates(t *testing.T) {
+	t.Parallel()
+	for _, locale := range []string{"", "en-CA", "en-US", "en-GB"} {
+		for _, input := range []string{"PT1H/04/05/2026", "2026-01-01T00:00:00Z/04/05/2026"} {
+			opts := []Option{WithInputLocale(language.Make(locale))}
+			r := Parse(input, opts...)
+			if _, ok := r.Interval(); ok || r.Status != StatusInvalid || !errors.Is(r.Error, ErrIncompatibleTypes) {
+				t.Errorf("%s locale=%q: status=%s error=%v", input, locale, r.Status, r.Error)
+			}
+			iv, err := ParseInterval(input, opts...)
+			var detail *TimeError
+			if !iv.IsZero() || !errors.Is(err, ErrIncompatibleTypes) || !errors.As(err, &detail) || detail.Input != input || detail.Hint == "" {
+				t.Errorf("%s locale=%q: interval=%v error=%v", input, locale, iv, err)
+			}
+		}
+	}
+	// A valid first candidate must not hide an incompatible later candidate.
+	r := Parse("2026-11-01T01:30:00", WithZone(MustLoadZone("America/New_York")))
+	r.Candidates = append(r.Candidates, Parse("2026-11-01"))
+	if got, _ := validateIntervalPart("interval", "end", r); !errors.Is(got.Error, ErrIncompatibleTypes) {
+		t.Errorf("mixed endpoint candidates accepted: %#v", got)
+	}
+}
+
 func TestParse_Interval_InvalidEndpointPreservesSemanticError(t *testing.T) {
 	t.Parallel()
 

@@ -704,6 +704,130 @@ func TestParseNaturalEnglishHourDomain(t *testing.T) {
 	}
 }
 
+func TestParseNaturalJapaneseKoreanHourDomain(t *testing.T) {
+	t.Parallel()
+	for _, grammar := range []struct {
+		locale, date, suffix string
+		markers              []string
+	}{
+		{"ja", "今日", "時", []string{"午前", "午後"}},
+		{"ko", "오늘 ", "시", []string{"오전", "오후"}},
+	} {
+		opts := []Option{WithInputLocale(language.Make(grammar.locale)), WithReference(fixedNow), WithZone(UTC)}
+		for _, marker := range grammar.markers {
+			for _, hour := range []int{13, 23} {
+				input := fmt.Sprintf("%s%s%d%s", grammar.date, marker, hour, grammar.suffix)
+				r := Parse(input, opts...)
+				_, err := ParseDateTime(input, opts...)
+				var detail *TimeError
+				if r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) || !errors.Is(err, ErrInvalidTime) || !errors.As(err, &detail) || detail.Input != input || detail.Hint == "" {
+					t.Errorf("%s: status=%s error=%v", input, r.Status, err)
+				}
+			}
+		}
+		for _, hour := range []int{0, 1, 11, 12, 13, 23, 24} {
+			input := fmt.Sprintf("%s%d%s", grammar.date, hour, grammar.suffix)
+			dt, err := ParseDateTime(input, opts...)
+			if hour == 24 {
+				if !errors.Is(err, ErrInvalidTime) {
+					t.Errorf("%s: %v", input, err)
+				}
+			} else if err != nil || dt.Clock().Hour() != hour {
+				t.Errorf("%s: %v %v", input, dt, err)
+			}
+		}
+		for _, hour := range []int{0, 1, 11, 12} {
+			input := fmt.Sprintf("%s%s%d%s", grammar.date, grammar.markers[0], hour, grammar.suffix)
+			want := hour % 12
+			if dt, err := ParseDateTime(input, opts...); err != nil || dt.Clock().Hour() != want {
+				t.Errorf("%s: %v %v", input, dt, err)
+			}
+		}
+		minute := "60分"
+		if grammar.locale == "ko" {
+			minute = "60분"
+		}
+		if _, err := ParseDateTime(grammar.date+"1"+grammar.suffix+minute, opts...); !errors.Is(err, ErrInvalidTime) {
+			t.Errorf("minute 60 accepted: %v", err)
+		}
+	}
+}
+
+func TestParseNaturalChineseTwelveHourBoundaries(t *testing.T) {
+	t.Parallel()
+	for _, locale := range []string{"zh-Hans", "zh-Hant"} {
+		opts := []Option{WithInputLocale(language.Make(locale)), WithReference(fixedNow), WithZone(UTC)}
+		for _, marker := range []string{"上午", "早上", "晚上"} {
+			for _, hour := range []string{"十二", "12"} {
+				for _, suffix := range []string{"点", "點", "点30分", "點半"} {
+					input := "今天" + marker + hour + suffix
+					r := Parse(input, opts...)
+					_, err := ParseDateTime(input, opts...)
+					var detail *TimeError
+					if r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) || !errors.Is(err, ErrInvalidTime) || !errors.As(err, &detail) || detail.Input != input || !strings.Contains(detail.Hint, "ISO") {
+						t.Errorf("%s %s: status=%s error=%v", locale, input, r.Status, err)
+					}
+				}
+			}
+		}
+		for _, tc := range []struct {
+			input string
+			hour  int
+		}{{"今天下午十二点", 12}, {"今天下午三点", 15}, {"今天晚上八点", 20}, {"今天下午十一点", 23}, {"今天13点45分", 13}} {
+			if dt, err := ParseDateTime(tc.input, opts...); err != nil || dt.Clock().Hour() != tc.hour {
+				t.Errorf("%s: %v %v", tc.input, dt, err)
+			}
+		}
+	}
+}
+
+func TestParseNaturalHindiDateAmbiguity(t *testing.T) {
+	t.Parallel()
+	for _, reference := range []string{"2026-10-07T12:00:00Z", "2026-03-01T12:00:00Z", "2026-01-01T12:00:00Z", "0000-01-01T12:00:00Z", "9999-12-31T12:00:00Z"} {
+		instant, err := ParseInstant(reference)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			word string
+			days int
+		}{{"कल", 1}, {"परसों", 2}} {
+			opts := []Option{WithInputLocale(language.Hindi), WithReference(instant), WithZone(UTC)}
+			r := Parse(tc.word, opts...)
+			_, err := ParseDate(tc.word, opts...)
+			if strings.HasPrefix(reference, "0000") || strings.HasPrefix(reference, "9999") {
+				if r.Status != StatusInvalid || !errors.Is(err, ErrInvalidDate) {
+					t.Errorf("boundary %s %s: %s %v", reference, tc.word, r.Status, err)
+				}
+				continue
+			}
+			if r.Status != StatusAmbiguous || r.Kind != KindDate || len(r.Candidates) != 2 || !errors.Is(err, ErrAmbiguousDate) {
+				t.Errorf("%s %s: status=%s candidates=%d error=%v", reference, tc.word, r.Status, len(r.Candidates), err)
+				continue
+			}
+			for i, days := range []int{-tc.days, tc.days} {
+				candidate := r.Candidates[i]
+				d, ok := candidate.Date()
+				want := instant.Std().AddDate(0, 0, days).Format("2006-01-02")
+				if !ok || d.String() != want || candidate.Input != tc.word || len(candidate.Warnings) != 0 {
+					t.Errorf("candidate %d: %v want %s", i, candidate, want)
+				}
+			}
+			for _, missing := range []struct {
+				options []Option
+				want    error
+			}{
+				{[]Option{WithInputLocale(language.Hindi), WithZone(UTC)}, ErrInvalidFormat},
+				{[]Option{WithInputLocale(language.Hindi), WithReference(instant)}, ErrInvalidZone},
+			} {
+				if _, err := ParseDate(tc.word, missing.options...); !errors.Is(err, missing.want) {
+					t.Errorf("missing context: %v", err)
+				}
+			}
+		}
+	}
+}
+
 func TestParseNaturalKoreanWeekWhitespace(t *testing.T) {
 	t.Parallel()
 	opts := []Option{WithInputLocale(language.Korean), WithReference(fixedNow), WithZone(UTC)}

@@ -62,6 +62,8 @@ func (d Duration) IsZero() bool { return d == 0 }
 func (d Duration) IsNegative() bool { return d < 0 }
 
 // Abs returns the absolute value of d.
+// Like time.Duration.Abs, it saturates MinInt64 to MaxInt64, which is one
+// nanosecond less than the mathematical absolute value.
 func (d Duration) Abs() Duration {
 	return Duration(time.Duration(d).Abs())
 }
@@ -150,9 +152,9 @@ func parseISO8601Duration(s string) (Duration, error) {
 		if component.raw == "" {
 			continue
 		}
-		magnitude, ok := parseDurationComponent(component.raw, component.unit, limit)
-		if !ok {
-			return 0, fmt.Errorf("duration %s component %q: %w", component.name, component.raw, errInvalidISO8601Duration)
+		magnitude, err := parseDurationComponent(component.raw, component.unit, limit)
+		if err != nil {
+			return 0, fmt.Errorf("duration %s component %q: %w: %w", component.name, component.raw, errInvalidISO8601Duration, err)
 		}
 		if magnitude > limit-totalNs {
 			return 0, fmt.Errorf("duration %q overflows nanoseconds: %w", s, errInvalidISO8601Duration)

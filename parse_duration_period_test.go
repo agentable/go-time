@@ -6,6 +6,41 @@ import (
 	"testing"
 )
 
+func TestParseDurationPrecisionAndRange(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		input string
+		want  Duration
+		err   error
+	}{
+		{"PT0.0000000001S", 0, ErrInvalidDuration},
+		{"PT0.0000000000S", 0, ErrInvalidDuration},
+		{"PT0.0000000001H", 0, ErrInvalidDuration},
+		{"PT0.000000001S", Nanosecond, nil},
+		{"PT9223372036.854775807S", Duration(maxInt64), nil},
+		{"-PT9223372036.854775808S", Duration(minInt64), nil},
+		{"PT9223372036.854775808S", 0, ErrOverflow},
+		{"-PT9223372036.854775809S", 0, ErrOverflow},
+	} {
+		d, err := ParseDuration(tc.input)
+		r := Parse(tc.input)
+		if tc.err == nil {
+			parsed, ok := r.Duration()
+			if err != nil || d != tc.want || !ok || parsed != tc.want {
+				t.Errorf("%s: %v %v", tc.input, d, err)
+			}
+			continue
+		}
+		var detail *TimeError
+		if d != 0 || r.Status != StatusInvalid || !errors.Is(r.Error, tc.err) || !errors.Is(err, tc.err) || !errors.As(err, &detail) || detail.Hint == "" {
+			t.Errorf("%s: status=%s error=%v", tc.input, r.Status, err)
+		}
+		if errors.Is(tc.err, ErrInvalidDuration) && errors.Is(err, ErrOverflow) {
+			t.Errorf("precision error is also overflow: %v", err)
+		}
+	}
+}
+
 func TestParse_Duration(t *testing.T) {
 	tests := []struct {
 		input   string

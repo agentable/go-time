@@ -2,11 +2,36 @@ package gotime
 
 import (
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"encoding/json/v2"
 )
+
+func TestParseResultUnmarshalRejectsDiagnostics(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{"2026-10-07", "04/05/2026", ""} {
+		payload, err := json.Marshal(Parse(input))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, data := range [][]byte{payload, []byte("null")} {
+			for _, initial := range []ParseResult{{}, Parse("2026-01-01")} {
+				target := initial
+				err := json.Unmarshal(data, &target)
+				var detail *TimeError
+				if !errors.Is(err, ErrInvalidFormat) || !errors.As(err, &detail) || !strings.Contains(detail.Hint, "Parse") || !strings.Contains(detail.Hint, "options") {
+					t.Errorf("%s: expected explicit decode rejection, got %v", data, err)
+				}
+				if !reflect.DeepEqual(target, initial) {
+					t.Errorf("failed decode changed receiver: %#v", target)
+				}
+			}
+		}
+	}
+}
 
 func TestParseResultMarshalResolved(t *testing.T) {
 	z := MustLoadZone("Asia/Tokyo")

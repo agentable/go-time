@@ -36,7 +36,7 @@ The API follows constraint-led design: remove every decision the caller should n
 - **Human interpretation is explicit**: natural-language parsing requires `WithInputLocale`; date/datetime phrases that depend on "now" require `WithReference`.
 - **Wire formats are closed**: value JSON rejects unknown fields and contradictory facts instead of accepting unrelated extra data.
 - **External protocols stay outside**: core values expose canonical ISO text and stdlib bridges, not protocol-named rendering helpers.
-- **Timezone facts must be provable**: zones persist as IANA IDs; snapshots expose offset and abbreviation at an explicit instant, not heuristic DST truth.
+- **Timezone projection stays in the stdlib**: zones persist as IANA IDs; callers obtain offset and abbreviation at an explicit instant through `instant.Std().In(zone.Location()).Zone()`.
 - **Intervals are formal ranges**: interval parsing accepts explicit time grammar only and does not inherit the full public `Parse` dispatcher.
 
 ## Architecture

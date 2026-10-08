@@ -344,7 +344,7 @@ marshal.
 `Duration` ISO strings use canonical decimal seconds for sub-second precision; scientific notation is outside the wire domain. A zero `Zone` encodes with `id:"UTC"` to match its total UTC projection behavior.
 
 `ParseResult` and `TimeError` instead provide one-way diagnostic JSON output.
-`ParseResult` has no supported decoder and omits runtime-only parse metadata,
+`ParseResult` explicitly rejects decoding and omits runtime-only parse metadata,
 typed accessor storage, and ambiguity cause. `TimeError` omits `Err` and its
 underlying cause chain, so JSON does not restore `errors.Is` identity. The
 parsing and error specifications own those diagnostic boundaries; they do not

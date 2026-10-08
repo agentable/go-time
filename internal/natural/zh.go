@@ -78,6 +78,11 @@ func (p *zhParser) parse(input string, ctx Context) (Result, bool) {
 		}
 
 		hour := zhHourToInt(hourStr)
+		if hour == 12 && (timeWord == "早上" || timeWord == "上午" || timeWord == "晚上") {
+			r := invalidResult(ErrorInvalidTime, "twelve o'clock with this time-of-day word has no supported interpretation", "use an ISO date-time with an explicit date and 00:00 or 12:00")
+			r.NeedsReference = true
+			return r, true
+		}
 		hour = zhApplyTimeWord(hour, timeWord)
 		min := zhMinutes(halfOrMin, digitMin)
 		return datetimeAt(dateBase, hour, min), true
@@ -182,10 +187,6 @@ func zhHourToInt(s string) int {
 func zhApplyTimeWord(hour int, timeWord string) int {
 	switch timeWord {
 	case "早上", "上午":
-		// Morning: 1-11 stays as-is; 12 → 0 (midnight edge, unlikely)
-		if hour == 12 {
-			return 0
-		}
 		return hour
 	case "下午":
 		// Afternoon: add 12 if hour < 12
@@ -194,7 +195,6 @@ func zhApplyTimeWord(hour int, timeWord string) int {
 		}
 		return hour
 	case "晚上":
-		// Evening: add 12 if hour < 12; 12 stays 12
 		if hour < 12 {
 			return hour + 12
 		}

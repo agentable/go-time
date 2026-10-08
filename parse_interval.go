@@ -50,7 +50,7 @@ func parseInterval(input string, cfg *config) ParseResult {
 			}
 			if err != nil {
 				return ParseResult{Status: StatusInvalid, Input: input, Error: newTimeErrorWithCause(
-					ErrOverflow, err, "interval arithmetic overflow", input, "use an endpoint and duration whose result can be represented")}
+					err, nil, "cannot construct interval", input, "use absolute endpoints and a non-negative duration whose result can be represented")}
 			}
 			candidate := intervalParseResult(input, cfg, starts[si], ends[ei])
 			candidate.interval = iv
@@ -88,8 +88,14 @@ func intervalPartCandidates(r ParseResult) []ParseResult {
 }
 
 func intervalFromParts(start, end ParseResult) (Interval, error) {
-	startInstant, _ := toInstant(&start)
-	endInstant, _ := toInstant(&end)
+	startInstant, startOK := toInstant(&start)
+	endInstant, endOK := toInstant(&end)
+	if !startOK && start.Kind != KindDuration {
+		return Interval{}, invalidIntervalType(start.Input, "start", start.Kind).Error
+	}
+	if !endOK && end.Kind != KindDuration {
+		return Interval{}, invalidIntervalType(end.Input, "end", end.Kind).Error
+	}
 	if start.Kind == KindDuration {
 		return NewIntervalEndingAt(endInstant, start.duration)
 	}
@@ -138,6 +144,15 @@ func validateIntervalPart(input, label string, r ParseResult) (ParseResult, bool
 		}
 		return invalidIntervalType(input, label, r.Kind), false
 	case StatusAmbiguous:
+		for i := range r.Candidates {
+			candidate := &r.Candidates[i]
+			if candidate.Status != StatusResolved {
+				return invalidIntervalType(input, label, candidate.Kind), false
+			}
+			if checked, ok := validateIntervalPart(input, label, *candidate); !ok {
+				return checked, false
+			}
+		}
 		r.Input = input
 		return r, false
 	case StatusInvalid:

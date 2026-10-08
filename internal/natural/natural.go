@@ -55,6 +55,9 @@ type Result struct {
 	Minute     int
 	Second     int
 	Nanosecond int
+	// DateOffsets holds finite alternative calendar-day offsets from the civil
+	// date above. Empty means a single date; the gotime boundary validates them.
+	DateOffsets []int32
 	// NeedsReference reports whether the result was resolved from Context.RelativeTo.
 	NeedsReference bool
 	// DurNanos is the parsed duration when Kind is KindDuration.
@@ -206,6 +209,9 @@ func datetimeAt(dateBase time.Time, hour, min int) Result {
 // applyHourPeriod converts a 12-hour clock value to 0–23 using AM/PM markers.
 // Pass "" for marker to return hour unchanged.
 func applyHourPeriod(hour int, marker, amMark, pmMark string) int {
+	if marker != "" && hour > 12 {
+		return -1
+	}
 	switch marker {
 	case amMark:
 		if hour == 12 {

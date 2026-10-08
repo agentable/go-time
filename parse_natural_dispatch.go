@@ -58,6 +58,20 @@ func naturalResultToParseResult(input string, r *natural.Result, cfg *config) Pa
 		}
 		pr := resolvedResult(input, KindDate, cfg)
 		pr.date = dateFromComponents(r.Year, r.Month, r.Day)
+		if len(r.DateOffsets) != 0 {
+			base := pr.date
+			pr.Status = StatusAmbiguous
+			for _, offset := range r.DateOffsets {
+				date, err := base.Add(Days(offset))
+				if err != nil {
+					return invalidResult(input, ErrInvalidDate, "a possible natural date is outside the supported civil domain", "use an explicit date between 0000-01-01 and 9999-12-31")
+				}
+				candidate := resolvedResult(input, KindDate, cfg)
+				candidate.date = date
+				pr.Candidates = append(pr.Candidates, candidate)
+			}
+			pr.date = Date{}
+		}
 		return pr
 
 	case natural.KindDateTime:

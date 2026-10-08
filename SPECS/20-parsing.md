@@ -147,7 +147,8 @@ diagnostic fields `status`, `input`, `warnings`, `value_kind`, `value`, `zone`,
 storage, option presence, and package-owned ambiguity cause are intentionally
 not serialized.
 
-There is no supported `ParseResult.UnmarshalJSON`. Decoding the emitted object
+`ParseResult.UnmarshalJSON` explicitly rejects JSON, including null, with
+`ErrInvalidFormat` and leaves its receiver unchanged. Decoding the emitted object
 into an arbitrary Go struct does not restore comma-ok accessor values,
 ambiguity identity, parser options, or runtime metadata. A caller that needs a
 new runtime result must retain the original result or parse the original input
@@ -211,8 +212,10 @@ When `WithZone` resolves a formal floating datetime, `ParseResult.Warnings`
 includes `WarnAssumedZone`. Without `WithZone`, the same formal input resolves
 to `KindLocalDateTime` and carries no zone assumption. Relative natural
 date/datetime input instead returns `ErrInvalidZone` when the option is absent.
-When fractional seconds exceed nanosecond precision, `ParseResult.Warnings`
-includes `WarnTruncatedPrecision` and the value is truncated to nanoseconds.
+For clock and datetime input, fractional seconds beyond nanosecond precision
+produce `WarnTruncatedPrecision` and truncate to nanoseconds. Duration components
+with more than nine fractional digits instead return `ErrInvalidDuration`;
+values beyond the signed nanosecond range return `ErrOverflow`.
 Slash-date candidates use `WarnInferredCalendar` to explain month-first vs
 day-first interpretation.
 
@@ -240,7 +243,8 @@ second parser engine.
 
 `HasZone` reports whether the original input explicitly included a timezone or offset. It is the caller's hook for detecting floating time.
 
-Interval boundaries must resolve to `KindInstant` or `KindDateTime`. Date-only interval boundaries are invalid because an interval is an absolute UTC range and a bare date has no time or zone.
+Interval boundaries must resolve to `KindInstant` or `KindDateTime`. This
+constraint applies to every ambiguous candidate before interval construction. Date-only interval boundaries are invalid because an interval is an absolute UTC range and a bare date has no time or zone.
 Natural-language interval boundaries are invalid even when `WithInputLocale` and `WithReference` are supplied.
 Both interval sides are validated before ambiguity is returned. An invalid or
 incompatible side takes precedence over ambiguity; if both sides fail, the
@@ -309,9 +313,20 @@ week modifier's meaning. Japanese region and Unicode extension tags route to
 the Japanese grammar.
 
 English AM/PM hours must be 1..12 before conversion; 12am is midnight and 12pm
-is noon. Invalid hours return `ErrInvalidTime`. Russian relative units use a
+is noon. Invalid hours return `ErrInvalidTime`. Japanese 午前/午後 and Korean
+오전/오후 reject marked hours above 12; unmarked hours remain 24-hour input.
+Their existing zero-hour and twelve-hour conversions are unchanged. Russian relative units use a
 finite table of complete words, including the 1/2/5 forms for seconds, minutes,
 hours, days, weeks, and months; arbitrary suffixes return `ErrUnparseable`.
+
+Chinese 早上/上午/晚上 with twelve o'clock are rejected with
+`ErrInvalidTime`; callers provide an ISO date-time with an explicit date and
+clock instead. The parser does not guess the midnight date boundary.
+
+Hindi bare कल and परसों return chronological Date candidates for respectively
+±1 and ±2 calendar days; they do not imply a future preference. Typed ParseDate
+returns ErrAmbiguousDate. If any alternative leaves the civil year domain, the
+whole expression returns ErrInvalidDate rather than choosing the other direction.
 
 ## Formal Component Boundaries
 

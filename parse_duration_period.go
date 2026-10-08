@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -104,9 +105,13 @@ func parseISODurationMatch(input string, m []string, cfg *config) ParseResult {
 		if component.raw == "" {
 			continue
 		}
-		ns, ok := parseDurationComponent(component.raw, component.unit, limit)
-		if !ok {
-			return invalidDurationComponent(input, component.name, component.raw)
+		ns, err := parseDurationComponent(component.raw, component.unit, limit)
+		if err != nil {
+			if errors.Is(err, ErrInvalidDuration) {
+				return invalidResult(input, ErrInvalidDuration, "duration component exceeds supported decimal precision", "use at most nine fractional digits in each duration component")
+			}
+			return ParseResult{Status: StatusInvalid, Input: input, Error: newTimeErrorWithCause(
+				ErrOverflow, err, fmt.Sprintf("duration %s component overflows nanoseconds: %q", component.name, component.raw), input, "Use a smaller duration component")}
 		}
 		if ns > limit-totalNs {
 			return durationOverflow(input)
@@ -129,33 +134,33 @@ func invalidPeriodComponent(input, component, raw string) ParseResult {
 		"Use whole-number calendar period components such as P1Y, P2M, P3W, or P4D")
 }
 
-func parseDurationComponent(raw string, unit time.Duration, limit uint64) (uint64, bool) {
+func parseDurationComponent(raw string, unit time.Duration, limit uint64) (uint64, error) {
 	wholeText, fracText, hasFrac := cutDecimal(raw)
+	if hasFrac && (fracText == "" || len(fracText) > 9) {
+		return 0, ErrInvalidDuration
+	}
 	whole, err := strconv.ParseUint(wholeText, 10, 64)
 	if err != nil {
-		return 0, false
+		return 0, fmt.Errorf("%w: %w", ErrOverflow, err)
 	}
 	unitNs := uint64(unit) //nolint:gosec // Both callers pass only positive time.Hour, time.Minute, or time.Second constants.
 	if whole > limit/unitNs {
-		return 0, false
+		return 0, ErrOverflow
 	}
 	total := whole * unitNs
 	if !hasFrac {
-		return total, true
-	}
-	if fracText == "" || len(fracText) > 9 {
-		return 0, false
+		return total, nil
 	}
 	frac, err := strconv.ParseUint(fracText, 10, 64)
 	if err != nil {
-		return 0, false
+		return 0, fmt.Errorf("%w: %w", ErrInvalidDuration, err)
 	}
 	scale := pow10(len(fracText))
 	fractionNs := frac * (unitNs / scale)
 	if fractionNs > limit-total {
-		return 0, false
+		return 0, ErrOverflow
 	}
-	return total + fractionNs, true
+	return total + fractionNs, nil
 }
 
 func cutDecimal(raw string) (whole, frac string, ok bool) {
@@ -172,12 +177,6 @@ func pow10(n int) uint64 {
 		p *= 10
 	}
 	return p
-}
-
-func invalidDurationComponent(input, component, raw string) ParseResult {
-	return invalidResult(input, ErrOverflow,
-		fmt.Sprintf("duration %s component overflows nanoseconds: %q", component, raw),
-		"Use a smaller duration component")
 }
 
 func durationOverflow(input string) ParseResult {

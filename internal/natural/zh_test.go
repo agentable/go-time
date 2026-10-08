@@ -136,13 +136,11 @@ func TestZh_DateTime(t *testing.T) {
 		{"今天上午十点", time.Date(today.Year(), today.Month(), today.Day(), 10, 0, 0, 0, loc)},
 		// 今天晚上八点 → today 20:00
 		{"今天晚上八点", time.Date(today.Year(), today.Month(), today.Day(), 20, 0, 0, 0, loc)},
-		{"今天上午十二点", time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, loc)},
 		{"今天下午十二点", time.Date(today.Year(), today.Month(), today.Day(), 12, 0, 0, 0, loc)},
 		{"今天下午十一点", time.Date(today.Year(), today.Month(), today.Day(), 23, 0, 0, 0, loc)},
 		{"今天13点45分", time.Date(today.Year(), today.Month(), today.Day(), 13, 45, 0, 0, loc)},
 		{"今天九点半", time.Date(today.Year(), today.Month(), today.Day(), 9, 30, 0, 0, loc)},
 		{"下周五下午三点", time.Date(2026, 4, 10, 15, 0, 0, 0, loc)},
-		{"今天晚上十二点", time.Date(today.Year(), today.Month(), today.Day(), 12, 0, 0, 0, loc)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

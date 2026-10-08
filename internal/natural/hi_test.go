@@ -14,8 +14,6 @@ func TestHindiRelativeDates(t *testing.T) {
 		wantDays int
 	}{
 		{"आज", 0},
-		{"कल", 1}, // future bias
-		{"परसों", 2},
 	}
 	for _, tt := range tests {
 		r, ok := Parse(tt.input, ctx)

@@ -96,13 +96,13 @@ if errors.Is(err, gotime.ErrAmbiguousDate) {
 
 var te *gotime.TimeError
 if errors.As(err, &te) {
-    log.Printf("code=%s hint=%s", te.Code, te.Hint)
+    log.Printf("code=%s", te.Code)
 }
 ```
 
 Do not use `te.Code` for Go control flow when a sentinel exists.
-Apply an application-owned redaction policy before logging `te.Message` or
-`te.Input`.
+Apply an application-owned redaction policy before logging `te.Message`,
+`te.Input`, or `te.Hint`; all three may include input-derived content.
 
 ## ParseResult Relationship
 

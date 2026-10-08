@@ -47,10 +47,14 @@ func (p *hiParser) parse(input string, ctx Context) (Result, bool) {
 	switch input {
 	case "आज":
 		return dateResult(base), true
-	case "कल":
-		return dateResult(base.AddDate(0, 0, 1)), true
-	case "परसों":
-		return dateResult(base.AddDate(0, 0, 2)), true
+	case "कल", "परसों":
+		days := int32(1)
+		if input == "परसों" {
+			days = 2
+		}
+		r := dateResult(base)
+		r.DateOffsets = []int32{-days, days}
+		return r, true
 	}
 
 	if m := reHiFuture.FindStringSubmatch(input); m != nil {

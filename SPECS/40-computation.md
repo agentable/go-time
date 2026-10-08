@@ -90,6 +90,10 @@ Period component arithmetic returns `ErrOverflow` rather than wrapping an
 `int32` component. ISO rendering remains total and supports the full signed
 component domain.
 
+`Duration.Abs()` follows stdlib `time.Duration.Abs`: MinInt64 saturates to
+MaxInt64, one nanosecond below the mathematical absolute value. It is a scalar
+projection, not the checked component operation provided by `Period.Abs()`.
+
 Exact timeline differences also return `ErrOverflow` when the true nanosecond
 span does not fit `Duration`; they never expose `time.Time.Sub` saturation as
 an exact result. `Interval.Length` follows the same rule while preserving long
