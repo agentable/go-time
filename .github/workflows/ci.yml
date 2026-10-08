@@ -101,6 +101,9 @@ jobs:
           version: ${{ steps.golangci.outputs.version }}
           args: --timeout=30m --concurrency=1 --path-prefix=.
 
+      - name: Check Go formatting
+        run: task fmt-check
+
   security:
     name: Security
     runs-on: ubuntu-latest
