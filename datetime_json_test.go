@@ -69,7 +69,7 @@ func TestDateTimeMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
 	loc := time.FixedZone("+09:00", 9*3600)
 	dt := DateTime{
 		t:    time.Date(2026, time.March, 27, 13, 0, 0, 0, loc),
-		zone: Zone{id: "+09:00", loc: loc},
+		zone: Zone{id: "+09:00"},
 	}
 	_, err := json.Marshal(dt)
 	if !errors.Is(err, ErrInvalidZone) {

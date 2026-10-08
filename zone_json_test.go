@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"testing"
-	"time"
 
 	"encoding/json/v2"
 )
@@ -45,7 +44,7 @@ func TestZoneMarshalJSON_ZeroNormalizesToUTC(t *testing.T) {
 }
 
 func TestZoneMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
-	z := Zone{id: "+08:00", loc: time.FixedZone("+08:00", 8*3600)}
+	z := Zone{id: "+08:00"}
 	_, err := json.Marshal(z)
 	if !errors.Is(err, ErrInvalidZone) {
 		t.Fatalf("Marshal error = %v, want ErrInvalidZone", err)

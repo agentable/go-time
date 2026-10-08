@@ -145,7 +145,7 @@ func (ldt LocalDateTime) Resolve(z Zone) LocalResolution {
 	}
 
 	res := ianazone.ProjectLocalTime(
-		z.Location(),
+		z.rules,
 		ldt.Date.year,
 		ldt.Date.month,
 		ldt.Date.day,

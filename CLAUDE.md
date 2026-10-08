@@ -67,7 +67,7 @@ github.com/agentable/go-time/
 
 **Layer dependency rules:**
 
-- Layer 1 (value objects) — semantics and arithmetic use stdlib and the internal timezone boundary; wire methods use Go 1.27.0's native `encoding/json/v2` and `encoding/json/jsontext`. `zone.go` uses `internal/zone` for generated names and resolution; `LocalDateTime.Resolve` uses its runtime DST projection.
+- Layer 1 (value objects) — semantics and arithmetic use stdlib and the internal timezone boundary; wire methods use Go 1.27.0's native `encoding/json/v2` and `encoding/json/jsontext`. `zone.go` uses `internal/zone` for generated names and resolution; `LocalDateTime.Resolve` uses its runtime DST projection. A private immutable rule snapshot owns both the stdlib Location and complete offset metadata from the same TZif bytes; bundled runtime data provenance lives in `internal/zone/zoneinfo.md`.
 - Layer 2 (`parse.go`, `internal/natural/`) — depends only on Layer 1 + stdlib + `golang.org/x/text/language`
 - Layer 3 (arithmetic methods on value objects) — depends only on Layer 1
 - User-visible API is `gotime.*` only — no internal dependencies leak
@@ -291,7 +291,7 @@ Pattern:
 if errors.Is(err, gotime.ErrAmbiguousDate) { /* control flow */ }
 
 var te *gotime.TimeError
-if errors.As(err, &te) { log.Printf("code=%s hint=%s", te.Code, te.Hint) }
+if errors.As(err, &te) { log.Printf("code=%s", te.Code) }
 ```
 
 `*TimeError` unwraps a chain containing its sentinel and any underlying parser,
@@ -306,6 +306,21 @@ golangci-lint v2. Config in `.golangci.yml`. Includes: errorlint, exhaustive, go
 ## CI
 
 GitHub Actions (`ci.yml`): test + lint on push/PR to main. Separate security job runs `govulncheck`.
+
+## Release Inventory
+
+This repository publishes one Go library module:
+
+| Directory | Module path | Tag | Role |
+|-----------|-------------|-----|------|
+| `.` | `github.com/agentable/go-time` | `vMAJOR.MINOR.PATCH` | Publishable library |
+
+Internal generators are repository tooling within this module; reference and
+skill submodules are study/workflow inputs, not separately published modules.
+The complete release gate is `GOWORK=off task verify`. Validate the exact
+candidate commit from an isolated checkout, push it to `main`, then create and
+push its annotated version tag. Never move a published tag. Verify the remote
+peeled tag and direct Go module resolution against the released commit.
 
 ## Pre-commit Hooks
 

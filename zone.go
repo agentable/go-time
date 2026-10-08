@@ -10,7 +10,7 @@ import (
 	ianazone "github.com/agentable/go-time/internal/zone"
 )
 
-var utcZone = Zone{id: "UTC", loc: time.UTC}
+var utcZone = Zone{id: "UTC"}
 
 // UTC is the named UTC value. Treat it as read-only; assigning to it does not
 // configure package defaults or change zero-Zone semantics.
@@ -18,8 +18,8 @@ var UTC = utcZone
 
 // Zone represents an IANA timezone identity.
 type Zone struct {
-	id  string
-	loc *time.Location
+	id    string
+	rules *ianazone.Rules
 }
 
 // LoadZone loads a Zone by IANA timezone id.
@@ -32,7 +32,7 @@ func LoadZone(id string) (Zone, error) {
 			"provide a non-empty IANA zone id like Asia/Tokyo",
 		)
 	}
-	loc, err := time.LoadLocation(id)
+	rules, err := ianazone.Load(id)
 	if err != nil {
 		return Zone{}, newTimeErrorWithCause(
 			ErrInvalidZone,
@@ -42,7 +42,7 @@ func LoadZone(id string) (Zone, error) {
 			"use IANA zone ids like Asia/Tokyo; call gotime.Zones() for the generated IANA catalog",
 		)
 	}
-	return Zone{id: id, loc: loc}, nil
+	return Zone{id: id, rules: rules}, nil
 }
 
 // MustLoadZone is like LoadZone but panics if id is invalid.
@@ -66,10 +66,7 @@ func (z Zone) ID() string {
 // Location returns the underlying *time.Location for stdlib interop.
 // The zero Zone falls back to time.UTC.
 func (z Zone) Location() *time.Location {
-	if z.IsZero() {
-		return time.UTC
-	}
-	return z.loc
+	return z.rules.Location()
 }
 
 func normalizeZone(z Zone) Zone {
@@ -86,7 +83,7 @@ func (z Zone) String() string { return z.ID() }
 func (z Zone) Equal(other Zone) bool { return z.ID() == other.ID() }
 
 // IsZero reports whether z is the Go zero value.
-func (z Zone) IsZero() bool { return z.id == "" && z.loc == nil }
+func (z Zone) IsZero() bool { return z.id == "" && z.rules == nil }
 
 // MarshalJSON encodes z as {"kind":"zone","id":"<IANA id>"}.
 // The output is deterministic and never depends on time.Now().
@@ -140,7 +137,7 @@ func (z *Zone) UnmarshalJSON(b []byte) error {
 
 // ResolveZone resolves a timezone identifier by trying exact IANA names,
 // case-insensitive IANA matches, and Windows timezone names.
-// Legacy IANA aliases such as "US/Eastern" are handled by Go's time.LoadLocation.
+// Legacy IANA aliases such as "US/Eastern" are handled by the IANA rule sources.
 func ResolveZone(id string) (Zone, error) {
 	if id == "" || id == "Local" {
 		return Zone{}, newTimeError(
@@ -150,8 +147,8 @@ func ResolveZone(id string) (Zone, error) {
 			"provide a non-empty IANA id or Windows zone name",
 		)
 	}
-	if canonical, loc, ok := ianazone.ResolveLocation(id); ok {
-		return Zone{id: canonical, loc: loc}, nil
+	if canonical, rules, ok := ianazone.ResolveLocation(id); ok {
+		return Zone{id: canonical, rules: rules}, nil
 	}
 	return Zone{}, newTimeError(
 		ErrInvalidZone,
@@ -168,7 +165,7 @@ func Zones() []string {
 }
 
 // ZoneCatalogVersion returns the IANA tzdb version used to generate Zones.
-// It does not describe the transition-rule data used by time.LoadLocation.
+// It does not describe the transition-rule data held by a Zone.
 func ZoneCatalogVersion() string {
 	return ianazone.CatalogVersion
 }

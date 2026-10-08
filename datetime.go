@@ -16,7 +16,7 @@ func daysInMonth(year int, month time.Month) int {
 // DateTime is a date and time in a specific timezone.
 // It is the "human-readable" view of a moment.
 type DateTime struct {
-	t    time.Time // in zone.loc
+	t    time.Time // in zone.Location()
 	zone Zone
 }
 

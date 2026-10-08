@@ -138,6 +138,10 @@ Output:
 
 `WithInputLocale` accepts `language.Tag`. See the [parsing specification](SPECS/20-parsing.md) for supported language families and input forms.
 
+Hindi bare `कल` and `परसों` have two date interpretations. Use `Parse` with
+explicit context to inspect the past and future Date candidates; typed
+`ParseDate` returns `ErrAmbiguousDate`.
+
 ### Supply parsing context
 
 Add only the context required by the input your application accepts.
@@ -369,6 +373,8 @@ Choose zone loading based on where the identifier came from.
 | Source-code constant | `MustLoadZone` | `var tokyo = gotime.MustLoadZone("Asia/Tokyo")` |
 | User or migration input | `ResolveZone` | `Eastern Standard Time`, `asia/tokyo` |
 
+IANA rules are bundled for deployments without system timezone files. To supply your own rules, set `ZONEINFO` to a TZif directory or ZIP before the first zone load. Existing Zone values retain their loaded rules.
+
 Never call `MustLoadZone` with user input. Resolve user-provided values before passing the resulting `Zone` to a parser:
 
 ```go
@@ -499,7 +505,8 @@ if err != nil {
 sendDiagnostic(diagnostic)
 ```
 
-Keep the original result when code needs `HasZone`, typed accessors, ambiguity
+`ParseResult` rejects JSON decoding with `ErrInvalidFormat`; diagnostic consumers
+use their own DTO. Keep the original result when code needs `HasZone`, typed accessors, ambiguity
 identity, or `errors.Is`. To obtain a new runtime result later, parse the
 original input again with explicit options. A serialized `TimeError` keeps its
 stable `code` and details, but not the Go sentinel or underlying cause chain.
@@ -539,13 +546,15 @@ if err != nil {
 
 	var timeErr *gotime.TimeError
 	if errors.As(err, &timeErr) {
-		log.Printf("code=%s hint=%s", timeErr.Code, timeErr.Hint)
+		log.Printf("code=%s", timeErr.Code)
 	}
 	return err
 }
 ```
 
-Treat `TimeError.Input` and `TimeError.Message` as caller-provided data and apply the application's redaction policy before logging them.
+Treat `TimeError.Input`, `TimeError.Message`, and `TimeError.Hint` as data that
+may include caller input. Apply the application's redaction policy before
+logging any of these fields.
 
 ## API Overview
 

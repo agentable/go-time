@@ -16,18 +16,17 @@ func Zones() []string
 func ZoneCatalogVersion() string
 ```
 
-- `LoadZone` is strict IANA lookup through `time.LoadLocation`; `Local` is
+- `LoadZone` is strict IANA lookup from TZif rule data; `Local` is
   rejected by both loaders and by Zone/DateTime JSON decoders with `ErrInvalidZone`.
 - `MustLoadZone` is only for source-code constants in `var` or `init` paths.
-- `ResolveZone` accepts real-world zone names: exact IANA, case-insensitive IANA, Windows names, and legacy aliases handled by Go's `time.LoadLocation`.
+- `ResolveZone` accepts real-world zone names: exact IANA, case-insensitive IANA, Windows names, and legacy aliases present in the rule data.
 - `ResolveZone` does not resolve timezone abbreviations. Abbreviations are
   point-in-time display metadata available through stdlib `time.Time.Zone`.
 - `Zones` returns a sorted, cloned, caller-owned copy of the generated IANA
   identifier catalog, not every loadable IANA link. Do not use catalog membership
   as a loader allowlist. Mutating it does not affect the internal catalog or a
   later call. `ZoneCatalogVersion` returns the IANA tzdb version used to
-  generate that catalog; it does not describe the transition-rule data used by
-  `time.LoadLocation`.
+  generate that catalog; it does not describe the transition-rule snapshot held by a Zone.
 - `UTC` is the only predefined zone. Treat it as a named read-only value for
   reading, comparison, and arguments. Assigning to the exported variable is
   not a configuration mechanism and does not change zero-Zone semantics or a
@@ -66,6 +65,14 @@ reload the zone from the environment. Replacing or deleting rule files cannot
 change that value's encoding. Decoding loads the named rules at decode time;
 the wire format does not promise a fixed tzdb snapshot across environments.
 Civil and UTC wire domain checks still apply.
+
+Each Zone holds a single rule snapshot: its `time.Location` and complete set of
+possible UTC offsets are derived from the same TZif bytes. Loads search the
+`ZONEINFO` directory or ZIP, conventional Unix zoneinfo directories, then the
+bundled runtime archive. `ZONEINFO` is captured on first load. Platform-specific packed stores are not read; deployment
+can select a directory or ZIP explicitly. Missing or invalid entries fall through
+to later sources, and an unknown identity returns `ErrInvalidZone`. The bundled
+archive's source and checksum are maintained in `internal/zone/zoneinfo.md`.
 
 RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax for an absolute moment, not a persisted zone identity.
 
@@ -116,10 +123,10 @@ RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax fo
   reviewable and prevent hand-maintained drift.
 - **Rejected**: runtime CLDR/XML dependencies, network lookup, target-ID
   canonicalization, and rewriting valid backward-compatible IANA links.
-- **Contract Impact**: `ResolveZone` combines static name mappings with stdlib
-  transition-rule loading at runtime; no allocation-free guarantee is made.
-  Generation preserves CLDR targets verbatim and verifies that every target
-  loads through `time.LoadLocation`.
+- **Contract Impact**: `ResolveZone` combines static name mappings with the shared TZif
+  snapshot loader at runtime; no allocation-free guarantee is made.
+  Generation preserves CLDR targets verbatim. Tests verify that every generated
+  target loads through the shared snapshot loader.
 
 ### Generator Inputs Are Content-Locked
 
@@ -164,7 +171,16 @@ if err != nil {
 
 - Normal local times return `LocalResolved` with exactly one `DateTime` candidate.
 - Spring-forward nonexistent local times return `LocalNonexistent` with no candidates. Calling `Only()` returns `ErrNonexistentTime`.
-- Fall-back duplicate local times return `LocalAmbiguous` with chronological `DateTime` candidates. Calling `Only()` returns `ErrDuplicateTime`.
+- Fall-back duplicate local times return `LocalAmbiguous` with all distinct chronological `DateTime` candidates. More than two candidates are possible. Calling `Only()` returns `ErrDuplicateTime`.
+
+Resolution enumerates the offsets in the held TZif local-time types and POSIX
+footer (including the default DST increment). For civil time L, it tests each
+candidate L-offset using the held stdlib Location and retains only exact civil
+matches. Classification happens after the entire finite set is checked; it does
+not assume a minimum transition spacing or use `time.Date` normalization to
+prove a gap. Nanoseconds are preserved. Candidate UTC years may lie outside the
+civil `0000..9999` domain when their local projection lies within it. Stdlib owns
+forward rule evaluation; no parallel transition evaluator is introduced.
 
 `NewDateTime(d, t, z)` is the convenience path for callers that require exactly
 one candidate. Formal and natural local datetime parsing with `WithZone` use the
@@ -203,6 +219,7 @@ this package.
 - Point-in-time abbreviation and numeric offset projection uses stdlib
   `time.Time.Zone`; no parallel DTO or string offset API exists.
 - Public API review confirms that no transition enumeration or observance type
-  exists; the focused transition corpus verifies local projection behavior
-  without claiming complete rule discovery.
+  exists. Synthetic TZif cases verify short-lived offsets, multiple overlaps,
+  footer-only offsets, transition endpoints and snapshot consistency; the bundled
+  corpus verifies that inverse resolution retains known forward projections.
 - DST gaps and duplicate local times remain observable through `LocalDateTime.Resolve` and parsing with `WithZone`.

@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-func mustLoadLoc(t *testing.T, name string) *time.Location {
+func mustLoadRules(t *testing.T, name string) *Rules {
 	t.Helper()
-	loc, err := time.LoadLocation(name)
+	loc, err := Load(name)
 	if err != nil {
 		t.Fatalf("LoadLocation(%q): %v", name, err)
 	}
@@ -19,7 +19,7 @@ func mustLoadLoc(t *testing.T, name string) *time.Location {
 }
 
 func TestProjectLocalTime_Normal_UTC(t *testing.T) {
-	loc := time.UTC
+	loc := mustLoadRules(t, "UTC")
 	result := ProjectLocalTime(loc, 2026, time.March, 15, 10, 30, 0)
 	if result.Status != DSTNormal {
 		t.Errorf("status = %v, want DSTNormal", result.Status)
@@ -34,7 +34,7 @@ func TestProjectLocalTime_Normal_UTC(t *testing.T) {
 }
 
 func TestProjectLocalTime_Normal_Tokyo(t *testing.T) {
-	loc := mustLoadLoc(t, "Asia/Tokyo")
+	loc := mustLoadRules(t, "Asia/Tokyo")
 	result := ProjectLocalTime(loc, 2026, time.July, 1, 13, 0, 0)
 	if result.Status != DSTNormal {
 		t.Errorf("status = %v, want DSTNormal", result.Status)
@@ -47,7 +47,7 @@ func TestProjectLocalTime_Normal_Tokyo(t *testing.T) {
 func TestProjectLocalTime_Nonexistent_NYC_SpringForward_2026(t *testing.T) {
 	// NYC spring-forward 2026: on 2026-03-08 at 02:00, clocks jump to 03:00.
 	// 02:30 is in the gap.
-	loc := mustLoadLoc(t, "America/New_York")
+	loc := mustLoadRules(t, "America/New_York")
 	result := ProjectLocalTime(loc, 2026, time.March, 8, 2, 30, 0)
 	if result.Status != DSTNonexistent {
 		t.Errorf("status = %v, want DSTNonexistent", result.Status)
@@ -59,7 +59,7 @@ func TestProjectLocalTime_Nonexistent_NYC_SpringForward_2026(t *testing.T) {
 
 func TestProjectLocalTime_Nonexistent_Paris_SpringForward_2013(t *testing.T) {
 	// Paris spring-forward 2013-03-31 at 02:00 → 03:00.
-	loc := mustLoadLoc(t, "Europe/Paris")
+	loc := mustLoadRules(t, "Europe/Paris")
 	result := ProjectLocalTime(loc, 2013, time.March, 31, 2, 30, 0)
 	if result.Status != DSTNonexistent {
 		t.Errorf("status = %v, want DSTNonexistent", result.Status)
@@ -67,7 +67,7 @@ func TestProjectLocalTime_Nonexistent_Paris_SpringForward_2013(t *testing.T) {
 }
 
 func TestProjectLocalTime_Normal_JustBeforeSpringForwardGap(t *testing.T) {
-	loc := mustLoadLoc(t, "America/New_York")
+	loc := mustLoadRules(t, "America/New_York")
 	result := ProjectLocalTime(loc, 2026, time.March, 8, 1, 59, 0)
 	if result.Status != DSTNormal {
 		t.Errorf("status = %v, want DSTNormal", result.Status)
@@ -78,7 +78,7 @@ func TestProjectLocalTime_Normal_JustBeforeSpringForwardGap(t *testing.T) {
 }
 
 func TestProjectLocalTime_Normal_JustAfterSpringForwardGap(t *testing.T) {
-	loc := mustLoadLoc(t, "America/New_York")
+	loc := mustLoadRules(t, "America/New_York")
 	result := ProjectLocalTime(loc, 2026, time.March, 8, 3, 0, 0)
 	if result.Status != DSTNormal {
 		t.Errorf("status = %v, want DSTNormal", result.Status)
@@ -91,7 +91,7 @@ func TestProjectLocalTime_Normal_JustAfterSpringForwardGap(t *testing.T) {
 func TestProjectLocalTime_Ambiguous_NYC_FallBack_2026(t *testing.T) {
 	// NYC fall-back 2026: on 2026-11-01 at 02:00, clocks fall back to 01:00.
 	// 01:30 occurs twice.
-	loc := mustLoadLoc(t, "America/New_York")
+	loc := mustLoadRules(t, "America/New_York")
 	result := ProjectLocalTime(loc, 2026, time.November, 1, 1, 30, 0)
 	if result.Status != DSTAmbiguous {
 		t.Errorf("status = %v, want DSTAmbiguous", result.Status)
@@ -103,7 +103,7 @@ func TestProjectLocalTime_Ambiguous_NYC_FallBack_2026(t *testing.T) {
 
 func TestProjectLocalTime_Ambiguous_Paris_FallBack_2013(t *testing.T) {
 	// Paris fall-back 2013-10-27 at 03:00 → 02:00.
-	loc := mustLoadLoc(t, "Europe/Paris")
+	loc := mustLoadRules(t, "Europe/Paris")
 	result := ProjectLocalTime(loc, 2013, time.October, 27, 2, 30, 0)
 	if result.Status != DSTAmbiguous {
 		t.Errorf("status = %v, want DSTAmbiguous", result.Status)
@@ -114,7 +114,7 @@ func TestProjectLocalTime_Ambiguous_Paris_FallBack_2013(t *testing.T) {
 }
 
 func TestProjectLocalTime_Normal_JustBeforeFallBack(t *testing.T) {
-	loc := mustLoadLoc(t, "America/New_York")
+	loc := mustLoadRules(t, "America/New_York")
 	result := ProjectLocalTime(loc, 2026, time.November, 1, 0, 59, 0)
 	if result.Status != DSTNormal {
 		t.Errorf("status = %v, want DSTNormal", result.Status)
@@ -125,7 +125,7 @@ func TestProjectLocalTime_Normal_JustBeforeFallBack(t *testing.T) {
 }
 
 func TestProjectLocalTime_Normal_JustAfterFallBack(t *testing.T) {
-	loc := mustLoadLoc(t, "America/New_York")
+	loc := mustLoadRules(t, "America/New_York")
 	result := ProjectLocalTime(loc, 2026, time.November, 1, 2, 0, 0)
 	if result.Status != DSTNormal {
 		t.Errorf("status = %v, want DSTNormal", result.Status)
@@ -136,7 +136,7 @@ func TestProjectLocalTime_Normal_JustAfterFallBack(t *testing.T) {
 }
 
 func TestProjectLocalTime_Ambiguous_TwoInstantsDifferByOneHour(t *testing.T) {
-	loc := mustLoadLoc(t, "America/New_York")
+	loc := mustLoadRules(t, "America/New_York")
 	result := ProjectLocalTime(loc, 2026, time.November, 1, 1, 30, 0)
 	if result.Status != DSTAmbiguous {
 		t.Errorf("status = %v, want DSTAmbiguous", result.Status)
@@ -151,20 +151,20 @@ func TestProjectLocalTime_Ambiguous_TwoInstantsDifferByOneHour(t *testing.T) {
 }
 
 func TestProjectLocalTime_RoundTrip_UTC(t *testing.T) {
-	loc := time.UTC
+	loc := mustLoadRules(t, "UTC")
 	result := ProjectLocalTime(loc, 2026, time.June, 15, 14, 45, 30)
 	if result.Status != DSTNormal {
 		t.Fatalf("status = %v, want DSTNormal", result.Status)
 	}
-	got := result.Times[0].In(loc)
+	got := result.Times[0].In(loc.Location())
 	if got.Year() != 2026 || got.Month() != time.June || got.Day() != 15 ||
 		got.Hour() != 14 || got.Minute() != 45 || got.Second() != 30 {
 		t.Errorf("round-trip failed: got %v", got)
 	}
 }
 
-func TestProjectLocalTime_NilLoc(t *testing.T) {
-	// nil loc should default to UTC without panic
+func TestProjectLocalTime_NilRules(t *testing.T) {
+	// nil rules represent UTC
 	result := ProjectLocalTime(nil, 2026, time.January, 1, 0, 0, 0)
 	if result.Status != DSTNormal {
 		t.Errorf("status = %v, want DSTNormal", result.Status)
@@ -193,14 +193,14 @@ func TestProjectLocalTime_TransitionBoundsCorpus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			loc := mustLoadLoc(t, tt.zone)
-			_, transition := tt.seed.In(loc).ZoneBounds()
+			loc := mustLoadRules(t, tt.zone)
+			_, transition := tt.seed.In(loc.Location()).ZoneBounds()
 			if transition.IsZero() || !transition.After(tt.seed) {
 				t.Fatalf("zone=%s seed=%s: ZoneBounds end = %s, want a later transition (runtime=%s)", tt.zone, tt.seed, transition, timeZoneRuntime())
 			}
 
-			_, oldOffset := transition.Add(-time.Nanosecond).In(loc).Zone()
-			_, newOffset := transition.In(loc).Zone()
+			_, oldOffset := transition.Add(-time.Nanosecond).In(loc.Location()).Zone()
+			_, newOffset := transition.In(loc.Location()).Zone()
 			if oldOffset == newOffset {
 				t.Fatalf("zone=%s transition=%s: adjacent offsets are both %d (runtime=%s)", tt.zone, transition, oldOffset, timeZoneRuntime())
 			}
@@ -246,7 +246,7 @@ func TestProjectLocalTime_TransitionBoundsCorpus(t *testing.T) {
 
 func timeZoneRuntime() string {
 	return fmt.Sprintf(
-		"%s; ZONEINFO=%q; embedded time/tzdata fallback enabled",
+		"%s; ZONEINFO=%q; TZif snapshot loader",
 		runtime.Version(),
 		os.Getenv("ZONEINFO"),
 	)
@@ -280,8 +280,8 @@ func TestResolveLocation_ExactCaseInsensitiveAndWindows(t *testing.T) {
 			if loc == nil {
 				t.Fatalf("ResolveLocation(%q) returned nil location", tt.input)
 			}
-			if loc.String() != tt.wantCanonical {
-				t.Errorf("ResolveLocation(%q) location = %q, want %q", tt.input, loc.String(), tt.wantCanonical)
+			if loc.Location().String() != tt.wantCanonical {
+				t.Errorf("ResolveLocation(%q) location = %q, want %q", tt.input, loc.Location().String(), tt.wantCanonical)
 			}
 		})
 	}
@@ -294,12 +294,12 @@ func TestWindowsToIANA_TargetsLoad(t *testing.T) {
 		windowsName, ianaID := windowsName, ianaID
 		t.Run(windowsName, func(t *testing.T) {
 			t.Parallel()
-			loc, err := time.LoadLocation(ianaID)
+			loc, err := Load(ianaID)
 			if err != nil {
 				t.Fatalf("CLDR target %q for Windows zone %q does not load: %v", ianaID, windowsName, err)
 			}
-			if loc.String() != ianaID {
-				t.Fatalf("loaded location = %q, want CLDR target %q", loc.String(), ianaID)
+			if loc.Location().String() != ianaID {
+				t.Fatalf("loaded location = %q, want CLDR target %q", loc.Location().String(), ianaID)
 			}
 		})
 	}
@@ -356,7 +356,7 @@ func TestResolveLocation_InvalidAndAlias(t *testing.T) {
 	if canonical != "Etc/UTC" {
 		t.Fatalf("ResolveLocation(Etc/UTC) canonical = %q, want Etc/UTC", canonical)
 	}
-	if loc == nil || loc.String() != "Etc/UTC" {
+	if loc == nil || loc.Location().String() != "Etc/UTC" {
 		t.Fatalf("ResolveLocation(Etc/UTC) location = %v, want Etc/UTC", loc)
 	}
 }

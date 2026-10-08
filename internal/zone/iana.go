@@ -14,7 +14,7 @@ const (
 	DSTNormal DSTStatus = iota
 	// DSTNonexistent means the local time falls in a spring-forward gap (no such wall time exists).
 	DSTNonexistent
-	// DSTAmbiguous means the local time falls in a fall-back overlap (two UTC instants map to it).
+	// DSTAmbiguous means the local time falls in a fall-back overlap (multiple UTC instants map to it).
 	DSTAmbiguous
 )
 
@@ -26,60 +26,34 @@ type LocalTimeResult struct {
 	Times []time.Time
 }
 
-// ProjectLocalTime projects a local wall-clock time into loc and classifies the DST status.
-//
-// Algorithm:
-//  1. Construct t = time.Date(year, month, day, hour, minute, second, 0, loc).
-//  2. Gap detection: if t's actual local components differ from requested, the wall time
-//     does not exist. Compare the date too, because some zones skip whole calendar days.
-//  3. Overlap detection: collect nearby UTC offsets and reproject the same wall time under
-//     each offset. This catches non-hour transitions such as Australia/Lord_Howe's 30-minute
-//     fall-back overlap without assuming every DST boundary is exactly one hour.
-//  4. Otherwise → DSTNormal with a single instant.
-func ProjectLocalTime(loc *time.Location, year int, month time.Month, day, hour, minute, second int) LocalTimeResult {
-	if loc == nil {
-		loc = time.UTC
+// ProjectLocalTime enumerates every possible offset from the held snapshot.
+// For civil time L, every solution has the form L-offset. Forward projection
+// rejects offsets that are not active there, including historical and footer
+// offsets. No transition spacing or maximum candidate count is assumed.
+func ProjectLocalTime(rules *Rules, year int, month time.Month, day, hour, minute, second int) LocalTimeResult {
+	loc := rules.Location()
+	offsets := []int{0}
+	if rules != nil {
+		offsets = rules.offsets
 	}
-
-	t := time.Date(year, month, day, hour, minute, second, 0, loc)
-	if !sameLocalTime(t, year, month, day, hour, minute, second) {
-		return LocalTimeResult{Status: DSTNonexistent}
-	}
-
-	candidates := []time.Time{t}
-	_, off0 := t.Zone()
-	utc := t.UTC()
-	for _, delta := range []time.Duration{
-		-24 * time.Hour, -12 * time.Hour, -6 * time.Hour,
-		-3 * time.Hour, -2 * time.Hour, -time.Hour,
-		-30 * time.Minute, -15 * time.Minute,
-		15 * time.Minute, 30 * time.Minute,
-		time.Hour, 2 * time.Hour, 3 * time.Hour,
-		6 * time.Hour, 12 * time.Hour, 24 * time.Hour,
-	} {
-		probe := utc.Add(delta).In(loc)
-		_, off := probe.Zone()
-		if off == off0 {
-			continue
-		}
-		alt := utc.Add(time.Duration(off0-off) * time.Second).In(loc)
-		if sameLocalTime(alt, year, month, day, hour, minute, second) {
-			candidates = appendUniqueTime(candidates, alt)
+	civil := time.Date(year, month, day, hour, minute, second, 0, time.UTC)
+	var candidates []time.Time
+	for _, offset := range offsets {
+		candidate := civil.Add(-time.Duration(offset) * time.Second).In(loc)
+		if sameLocalTime(candidate, year, month, day, hour, minute, second) {
+			candidates = append(candidates, candidate)
 		}
 	}
-
-	if len(candidates) > 1 {
-		slices.SortFunc(candidates, func(a, b time.Time) int { return a.Compare(b) })
-		return LocalTimeResult{
-			Status: DSTAmbiguous,
-			Times:  candidates,
-		}
+	slices.SortFunc(candidates, time.Time.Compare)
+	status := DSTNormal
+	switch len(candidates) {
+	case 0:
+		status = DSTNonexistent
+	case 1:
+	default:
+		status = DSTAmbiguous
 	}
-
-	return LocalTimeResult{
-		Status: DSTNormal,
-		Times:  candidates,
-	}
+	return LocalTimeResult{Status: status, Times: candidates}
 }
 
 func sameLocalTime(t time.Time, year int, month time.Month, day, hour, minute, second int) bool {
@@ -89,13 +63,4 @@ func sameLocalTime(t time.Time, year int, month time.Month, day, hour, minute, s
 		t.Hour() == hour &&
 		t.Minute() == minute &&
 		t.Second() == second
-}
-
-func appendUniqueTime(times []time.Time, t time.Time) []time.Time {
-	for _, existing := range times {
-		if existing.Equal(t) {
-			return times
-		}
-	}
-	return append(times, t)
 }
