@@ -3,7 +3,10 @@ package gotime
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"encoding/json/v2"
 
@@ -16,10 +19,11 @@ var utcZone = Zone{id: "UTC"}
 // configure package defaults or change zero-Zone semantics.
 var UTC = utcZone
 
-// Zone represents an IANA timezone identity.
+// Zone holds a named, immutable timezone rule snapshot.
 type Zone struct {
-	id    string
-	rules *ianazone.Rules
+	id     string
+	rules  *ianazone.Rules
+	custom bool
 }
 
 // LoadZone loads a Zone by IANA timezone id.
@@ -55,7 +59,7 @@ func MustLoadZone(id string) Zone {
 	return z
 }
 
-// ID returns the IANA timezone identifier.
+// ID returns the timezone identifier, which alone does not identify its rules.
 func (z Zone) ID() string {
 	if z.IsZero() {
 		return "UTC"
@@ -79,8 +83,11 @@ func normalizeZone(z Zone) Zone {
 // String returns the zone identifier.
 func (z Zone) String() string { return z.ID() }
 
-// Equal reports whether two zones have the same identifier.
-func (z Zone) Equal(other Zone) bool { return z.ID() == other.ID() }
+// Equal compares the identifier, rule source kind, and exact TZif snapshot.
+// It does not prove semantic equivalence between differently encoded rules.
+func (z Zone) Equal(other Zone) bool {
+	return z.ID() == other.ID() && z.custom == other.custom && z.rules.Equal(other.rules)
+}
 
 // IsZero reports whether z is the Go zero value.
 func (z Zone) IsZero() bool { return z.id == "" && z.rules == nil }
@@ -89,6 +96,9 @@ func (z Zone) IsZero() bool { return z.id == "" && z.rules == nil }
 // The output is deterministic and never depends on time.Now().
 func (z Zone) MarshalJSON() ([]byte, error) {
 	z = normalizeZone(z)
+	if err := z.checkJSON(); err != nil {
+		return nil, err
+	}
 	if isFixedOffsetID(z.ID()) {
 		return nil, newTimeError(
 			ErrInvalidZone,
@@ -104,6 +114,13 @@ func (z Zone) MarshalJSON() ([]byte, error) {
 		Kind: "zone",
 		ID:   z.ID(),
 	})
+}
+
+func (z Zone) checkJSON() error {
+	if z.custom {
+		return newTimeError(ErrInvalidZone, "JSON cannot preserve custom timezone rules", z.ID(), "retain the original rule data, or explicitly convert a DateTime to UTC")
+	}
+	return nil
 }
 
 func isFixedOffsetID(id string) bool {
@@ -168,4 +185,22 @@ func Zones() []string {
 // It does not describe the transition-rule data held by a Zone.
 func ZoneCatalogVersion() string {
 	return ianazone.CatalogVersion
+}
+
+// LoadZoneFromTZData loads an isolated rule snapshot from caller-supplied TZif
+// data, limited to 10 MiB. It does not register the identifier for named lookup.
+// The identifier must be nonblank UTF-8 without control characters and cannot
+// be UTC, Local, or a numeric offset. The data must not change during the call;
+// subsequent changes do not affect the returned Zone. Custom zones and their
+// DateTimes cannot use the IANA-only JSON format and return ErrInvalidZone.
+func LoadZoneFromTZData(id string, data []byte) (Zone, error) {
+	if strings.TrimSpace(id) == "" || !utf8.ValidString(id) || strings.ContainsFunc(id, unicode.IsControl) ||
+		id == "UTC" || id == "Local" || isFixedOffsetID(id) {
+		return Zone{}, newTimeError(ErrInvalidZone, "invalid custom timezone identifier", id, "use a nonblank name without controls, distinct from UTC, Local, and numeric offsets")
+	}
+	rules, err := ianazone.LoadData(id, data)
+	if err != nil {
+		return Zone{}, newTimeErrorWithCause(ErrInvalidZone, err, "cannot load TZif rules", id, "supply valid TZif data")
+	}
+	return Zone{id: id, rules: rules, custom: true}, nil
 }

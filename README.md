@@ -375,6 +375,23 @@ Choose zone loading based on where the identifier came from.
 
 IANA rules are bundled for deployments without system timezone files. To supply your own rules, set `ZONEINFO` to a TZif directory or ZIP before the first zone load. Existing Zone values retain their loaded rules.
 
+For document-owned TZif data, load an isolated snapshot:
+
+```go
+zone, err := gotime.LoadZoneFromTZData("Document/Office", tzifData)
+if err != nil {
+    return err
+}
+resolved := local.Resolve(zone)
+```
+
+This does not register or replace named zones. The label and exact rule data
+participate in `Zone.Equal`; equal names alone are insufficient. Custom Zone
+and DateTime values return `ErrInvalidZone` from JSON encoding because the
+name-only format cannot preserve their rules. Retain the original rule data or
+explicitly convert a DateTime to UTC before encoding. This API consumes TZif;
+it does not parse or compile iCalendar VTIMEZONE definitions.
+
 Never call `MustLoadZone` with user input. Resolve user-provided values before passing the resulting `Zone` to a parser:
 
 ```go
@@ -568,7 +585,7 @@ logging any of these fields.
 | Project an instant to Unix time | checked `Instant.UnixNano`, `Instant.UnixMilli` |
 | Compare and calculate | `Compare`, `Add`, `AddPeriod`, `Sub`, `DaysUntil`, checked date queries |
 | Work with ranges | `NewInterval`, `NewIntervalStartingAt`, `NewIntervalEndingAt`, interval methods |
-| Load time zones | `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ZoneCatalogVersion` |
+| Load time zones | `LoadZone`, `LoadZoneFromTZData`, `MustLoadZone`, `ResolveZone`, `Zones`, `ZoneCatalogVersion` |
 
 For complete signatures and package documentation, use [pkg.go.dev](https://pkg.go.dev/github.com/agentable/go-time). For behavior contracts, use [SPECS/](SPECS/).
 

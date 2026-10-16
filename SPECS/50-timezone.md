@@ -2,7 +2,7 @@
 
 ## Overview
 
-go-time treats IANA timezone IDs as the canonical timezone identity and uses stdlib `time.Location` for projection. Offsets are input aids; abbreviations are display metadata, not durable identity.
+go-time uses named immutable rule snapshots and stdlib `time.Location` for projection. Named lookup and JSON use IANA identities; explicit TZif loading also supports document-owned rules. Offsets are input aids; abbreviations are display metadata, not durable identity.
 
 ## Zone API
 
@@ -10,6 +10,7 @@ go-time treats IANA timezone IDs as the canonical timezone identity and uses std
 var UTC Zone
 
 func LoadZone(id string) (Zone, error)
+func LoadZoneFromTZData(id string, data []byte) (Zone, error)
 func MustLoadZone(id string) Zone
 func ResolveZone(id string) (Zone, error)
 func Zones() []string
@@ -36,6 +37,27 @@ func ZoneCatalogVersion() string
 
 Use `LoadZone` for stable configuration and persisted canonical IDs. Use `ResolveZone` for CLI args, forms, migration input, and compatibility paths.
 
+## Explicit Rule Data
+
+`LoadZoneFromTZData` reads caller-supplied TZif through the same snapshot reader
+as named lookup. It never registers the name, searches the host, or falls back
+to IANA rules. The caller must not mutate data during the call; later mutation
+cannot change the loaded rules. Input is limited to 10 MiB and rejected with
+`ErrInvalidZone` and a typed diagnostic when invalid.
+
+The name is a nonblank UTF-8 label without control characters. `UTC`, `Local`,
+and numeric-offset labels are reserved and rejected; a fixed-offset rule set
+with an ordinary document name is valid. A name alone cannot restore custom
+rules. `Zone` and `DateTime` marshaling therefore reject these values with
+`ErrInvalidZone`, even if the name also exists in IANA. Callers retain source
+data separately or explicitly project a DateTime to UTC before encoding.
+No custom rule JSON protocol, global registry, or VTIMEZONE parser is added.
+
+TZif owns transition and footer semantics, including before/after the listed
+transitions. The loader cannot discover whether a producer truncated its source
+rules; it does not turn a windowed transition sample into a complete definition.
+Protocol-to-TZif compilation and proof of its coverage remain caller-owned.
+
 ## Zone Identity
 
 ```go
@@ -47,6 +69,12 @@ zone.IsZero()
 ```
 
 `Zone.Location()` is total: the zero zone returns `time.UTC`.
+
+`Zone.Equal` compares the label, source kind (named or explicit), and SHA-256
+identity of the exact TZif bytes. Two independent loads of identical bytes with
+the same label and source kind compare equal; replaced rules do not. This is
+snapshot identity, not semantic equivalence between different TZif encodings.
+`ID` remains the external label. DateTime equality remains instant equality.
 
 The zero Zone has UTC value semantics across `ID`, `String`, `Equal`,
 `Location`, and JSON. `IsZero` reports only whether the Go representation is
@@ -80,8 +108,8 @@ RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax fo
 
 ### Identity Is An IANA Zone
 
-- **Decision**: Persisted zones are IANA identifiers only. Numeric offsets identify instants in timestamp syntax, not reusable zone identities.
-- **Why**: A zone carries historical and future transition rules. A fixed offset cannot answer local-time projection questions.
+- **Decision**: Zones persisted through the built-in JSON format are IANA identifiers only. Numeric offsets identify instants in timestamp syntax, not reusable zone identities.
+- **Why**: A zone carries historical and future transition rules. A numeric offset alone does not identify historical or future rule provenance. Explicit TZif may define a named rule set with a constant offset.
 - **Rejected**: Persisting `+08:00` as `Zone`, guessing a zone from an offset, and accepting abbreviations as identity.
 - **Contract Impact**: Offset-bearing RFC 3339 input resolves to `Instant`; `Zone` JSON remains `{"kind":"zone","id":"..."}`.
 
@@ -215,7 +243,8 @@ this package.
 
 ## Acceptance Criteria
 
-- Zone JSON contains only `kind` and `id`, and rejects fixed-offset identities.
+- Named Zone JSON contains only `kind` and `id`; explicit-data Zone and DateTime encoding rejects rule loss.
+- Explicit TZif loading is isolated, bounded, and preserves fold/gap and future footer behavior; same-name different-rule snapshots do not compare equal.
 - Point-in-time abbreviation and numeric offset projection uses stdlib
   `time.Time.Zone`; no parallel DTO or string offset API exists.
 - Public API review confirms that no transition enumeration or observance type

@@ -126,6 +126,9 @@ func (dt DateTime) String() string {
 // MarshalJSON encodes dt as {"kind":"datetime","instant":"<RFC3339Nano UTC>","zone":"<IANA id>"}.
 func (dt DateTime) MarshalJSON() ([]byte, error) {
 	z := normalizeZone(dt.zone)
+	if err := z.checkJSON(); err != nil {
+		return nil, err
+	}
 	zoneID := z.ID()
 	if isFixedOffsetID(zoneID) {
 		return nil, newTimeError(

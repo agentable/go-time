@@ -289,6 +289,7 @@ Interval iteration is not part of this API surface. Cadence, inclusivity, and DS
 var UTC Zone
 
 func LoadZone(id string) (Zone, error)
+func LoadZoneFromTZData(id string, data []byte) (Zone, error)
 func MustLoadZone(id string) Zone
 func ResolveZone(id string) (Zone, error)
 func Zones() []string
@@ -300,6 +301,9 @@ func (z Zone) String() string
 func (z Zone) Equal(other Zone) bool
 func (z Zone) IsZero() bool
 ```
+
+Explicit-data zones have no built-in JSON representation; Zone and DateTime
+encoding returns `ErrInvalidZone` instead of retaining only their labels.
 
 ## Stdlib Bridges
 

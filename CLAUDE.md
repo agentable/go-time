@@ -196,7 +196,8 @@ Operational corollaries:
 - Parse option presence is explicit: `WithZone(Zone{})` means UTC and `WithReference(Instant{})` means the Go zero instant; never infer presence with `IsZero`.
 - Relative natural dates/datetimes require both `WithReference` and `WithZone`; formal floating datetimes may omit `WithZone` and remain `LocalDateTime`.
 - `internal/natural` receives an already-projected civil reference and returns civil components plus closed internal error categories only; it does not own ambiguity or zone resolution. `LocalDateTime.Resolve` at the gotime boundary is the sole owner of natural datetime zone resolution.
-- `Zone.MarshalJSON` outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC`. Encode Zone and DateTime from their held values; never reload timezone rules or call `time.Now()` during marshal. Time-dependent offset and abbreviation projection belongs to stdlib `time.Time.Zone`.
+- Explicit document rules enter through `LoadZoneFromTZData`; they do not register global names. `Zone.Equal` compares label, source kind and exact rule snapshot. Custom Zone/DateTime JSON returns `ErrInvalidZone` rather than losing the rules.
+- `Zone.MarshalJSON` for named zones outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC`. Encode Zone and DateTime from their held values; never reload timezone rules or call `time.Now()` during marshal. Time-dependent offset and abbreviation projection belongs to stdlib `time.Time.Zone`.
 - `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
 - `ParseResult` has no public `Value() any` escape hatch — dispatch unknown input with `Status`, `Kind`, and comma-ok accessors.
 - `ParseResult.HasZone` indicates whether the input explicitly included timezone/offset information — use this to detect floating times

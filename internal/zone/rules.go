@@ -1,6 +1,7 @@
 package zone
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"slices"
@@ -13,6 +14,15 @@ import (
 type Rules struct {
 	location *time.Location
 	offsets  []int
+	digest   [sha256.Size]byte
+}
+
+// Equal compares exact TZif snapshots, not equivalence of their projections.
+func (r *Rules) Equal(other *Rules) bool {
+	if r == nil || other == nil {
+		return r == other
+	}
+	return r.digest == other.digest
 }
 
 // Location returns the stdlib projection of the held rules.
@@ -25,6 +35,14 @@ func (r *Rules) Location() *time.Location {
 
 var errInvalidTZif = errors.New("invalid TZif data")
 
+// LoadData uses the same snapshot reader as named lookup without registering it.
+func LoadData(name string, data []byte) (*Rules, error) {
+	if len(data) > maxTZifSize {
+		return nil, errInvalidTZif
+	}
+	return loadRules(name, data)
+}
+
 func loadRules(name string, data []byte) (*Rules, error) {
 	offsets, err := tzifOffsets(data)
 	if err != nil {
@@ -35,7 +53,7 @@ func loadRules(name string, data []byte) (*Rules, error) {
 		return nil, err
 	}
 	slices.Sort(offsets)
-	return &Rules{location: loc, offsets: slices.Compact(offsets)}, nil
+	return &Rules{location: loc, offsets: slices.Compact(offsets), digest: sha256.Sum256(data)}, nil
 }
 
 // tzifOffsets reads only offset metadata; stdlib owns transition evaluation.

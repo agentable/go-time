@@ -337,6 +337,9 @@ func TestZoneResolutionSnapshotBoundaries(t *testing.T) {
 	}
 	// Replacing rules affects new loads, never the old Location/offset snapshot.
 	fresh := loadSnapshotZone(t, "Test/Multiple", snapshotTZif(nil, nil, []int32{3600}, ""))
+	if z.Equal(fresh) {
+		t.Fatal("same name with replaced rules must not compare equal")
+	}
 	assertSnapshotResolution(t, fresh, at(-5), []time.Time{at(-65)})
 	assertSnapshotResolution(t, z, at(-5), []time.Time{at(-5), at(5), at(15)})
 	if err := os.Remove(filepath.Join(os.Getenv("ZONEINFO"), "Test", "Multiple")); err != nil {
@@ -358,4 +361,122 @@ func TestZoneResolutionSnapshotBoundaries(t *testing.T) {
 			assertSnapshotResolution(t, fixed, tc.civil, []time.Time{want})
 		})
 	}
+}
+
+func TestLoadZoneFromTZDataKeepsDocumentRules(t *testing.T) {
+	t.Parallel()
+	data := snapshotTZif(nil, nil, []int32{-6 * 3600}, "")
+	z, err := LoadZoneFromTZData("America/New_York", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clear(data)
+	local, err := ParseLocalDateTime("2026-10-14T09:00:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dt, err := local.Resolve(z).Only()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 10, 14, 15, 0, 0, 0, time.UTC)
+	if !dt.Instant().Std().Equal(want) || z.ID() != "America/New_York" {
+		t.Fatalf("document rules: %v in %q, want %v", dt, z.ID(), want)
+	}
+	projected, err := InstantFromTime(want).In(z)
+	if err != nil || projected.Clock() != local.Time || projected.Date() != local.Date {
+		t.Fatalf("forward projection: %v, %v", projected, err)
+	}
+	host, err := LoadZone("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostDT, err := local.Resolve(host).Only()
+	if err != nil || hostDT.Instant().Std().Equal(want) {
+		t.Fatalf("document rules polluted named lookup: %v, %v", hostDT, err)
+	}
+}
+
+func TestDocumentZoneIdentityAndEncoding(t *testing.T) {
+	t.Parallel()
+	load := func(id string, offset int32) Zone {
+		t.Helper()
+		z, err := LoadZoneFromTZData(id, snapshotTZif(nil, nil, []int32{offset}, ""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return z
+	}
+	z := load("America/New_York", -21600)
+	other := load("America/New_York", -18000)
+	same := load("America/New_York", -21600)
+	if z.Equal(other) || !z.Equal(same) || z.Equal(load("Other", -21600)) {
+		t.Error("Zone.Equal must compare name and exact rule source identity")
+	}
+	host, err := LoadZone("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if z.Equal(host) || host.Equal(z) {
+		t.Error("custom rules equal named rules")
+	}
+	dt, err := InstantFromTime(time.Date(2026, 10, 14, 15, 0, 0, 0, time.UTC)).In(z)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []any{z, dt} {
+		if _, err := json.Marshal(value); !errors.Is(err, ErrInvalidZone) {
+			t.Errorf("JSON would lose document rules: %T, %v", value, err)
+		}
+	}
+	utc, err := dt.In(Zone{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := json.Marshal(utc); err != nil {
+		t.Fatal(err)
+	}
+	if !utc.Instant().Equal(dt.Instant()) {
+		t.Fatal("explicit UTC conversion changed instant")
+	}
+}
+
+func TestLoadZoneFromTZDataRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+	valid := snapshotTZif(nil, nil, []int32{3600}, "")
+	for _, test := range []struct {
+		name string
+		data []byte
+	}{
+		{"", valid}, {" \t", valid}, {"UTC", valid}, {"Local", valid},
+		{"+08:00", valid}, {"Test\nZone", valid}, {"Test\x00Zone", valid}, {"\xff", valid},
+		{"Test/Zone", nil}, {"Test/Zone", []byte("invalid")},
+		{"Test/Zone", append(append([]byte(nil), valid...), make([]byte, 10<<20)...)},
+	} {
+		z, err := LoadZoneFromTZData(test.name, test.data)
+		var detail *TimeError
+		if !z.IsZero() || !errors.Is(err, ErrInvalidZone) || !errors.As(err, &detail) || detail.Hint == "" {
+			t.Errorf("LoadZoneFromTZData(%q, %d bytes) = %v, %v", test.name, len(test.data), z, err)
+		}
+	}
+}
+
+func TestDocumentZoneTransitionResolution(t *testing.T) {
+	t.Parallel()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := func(minutes int) time.Time { return base.Add(time.Duration(minutes) * time.Minute) }
+	z, err := LoadZoneFromTZData("Document/Zone", snapshotTZif(
+		[]int64{at(2).Unix(), at(8).Unix(), at(12).Unix(), at(18).Unix()},
+		[]byte{1, 0, 2, 0}, []int32{0, -600, -1200}, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSnapshotResolution(t, z, at(-5), []time.Time{at(-5), at(5), at(15)})
+	assertSnapshotResolution(t, z, at(4), nil)
+	assertSnapshotResolution(t, z, at(8), []time.Time{at(8)})
+	future, err := LoadZoneFromTZData("Document/Future", snapshotTZif(nil, nil, []int32{-18000}, "EST5EDT,M3.2.0,M11.1.0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSnapshotResolution(t, future, time.Date(2500, 7, 1, 9, 0, 0, 0, time.UTC), []time.Time{time.Date(2500, 7, 1, 13, 0, 0, 0, time.UTC)})
 }

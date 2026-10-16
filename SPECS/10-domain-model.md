@@ -258,7 +258,12 @@ JSON:
 {"kind":"zone","id":"Asia/Tokyo"}
 ```
 
-Key API: `LoadZone`, `MustLoadZone`, `ResolveZone`, `Zones`, `ID`, `Location`.
+Key API: `LoadZone`, `LoadZoneFromTZData`, `MustLoadZone`, `ResolveZone`, `Zones`, `ID`, `Location`.
+
+Named rules support the JSON shape above. Explicit TZif snapshots and their
+DateTimes reject this name-only encoding with `ErrInvalidZone`; they require
+caller-owned rule persistence or explicit conversion to UTC. `Zone.Equal`
+compares label, source kind, and exact rule snapshot, not the label alone.
 
 `Zone.Location()` is total: a zero `Zone` falls back to UTC. Time-dependent
 abbreviations and numeric offsets come from the stdlib bridge:
