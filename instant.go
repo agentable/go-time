@@ -193,20 +193,10 @@ func (i *Instant) UnmarshalJSON(b []byte) error {
 	if err := requireJSONString("instant", "iso", wire.ISO); err != nil {
 		return err
 	}
-	t, err := time.Parse(time.RFC3339Nano, wire.ISO)
+	parsed, err := parseJSONInstant(wire.ISO)
 	if err != nil {
-		return newTimeErrorWithCause(
-			ErrInvalidFormat,
-			err,
-			"instant iso is not valid RFC3339",
-			wire.ISO,
-			"use an RFC3339 instant such as 2026-03-27T04:00:00Z",
-		)
-	}
-	if err := requireJSONPrecision(wire.ISO); err != nil {
 		return err
 	}
-	parsed := InstantFromTime(t)
 	if err := parsed.validateWireDomain(); err != nil {
 		return err
 	}

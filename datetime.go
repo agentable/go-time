@@ -177,17 +177,10 @@ func (dt *DateTime) UnmarshalJSON(b []byte) error {
 	if err := requireJSONString("datetime", "zone", wire.Zone); err != nil {
 		return err
 	}
-	t, err := time.Parse(time.RFC3339Nano, wire.Instant)
+	instant, err := parseJSONInstant(wire.Instant)
 	if err != nil {
-		return newTimeErrorWithCause(
-			ErrInvalidFormat,
-			err,
-			"datetime instant is not valid RFC3339",
-			wire.Instant,
-			"use a canonical UTC instant such as 2026-03-27T04:00:00Z",
-		)
+		return err
 	}
-	instant := InstantFromTime(t)
 	if canonical := instant.String(); wire.Instant != canonical {
 		return newTimeError(
 			ErrInvalidFormat,

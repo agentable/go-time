@@ -464,3 +464,135 @@ func TestJSONUTCWireDomain(t *testing.T) {
 		})
 	}
 }
+
+func TestJSONInstantProfile(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{
+		"2026-10-19T12:00:00+24:00",
+		"2026-10-19T12:00:00-24:00",
+		"2026-10-19T12:00:00+00:60",
+		"2026-10-19T12:00:00-00:60",
+		"2026-10-19T1:00:00Z",
+		"2026-10-19T12:00:00,1Z",
+		"2026-10-19T12:00Z",
+		"2026-10-19T12:00:00.1234567890Z",
+		"2026-10-19T12:00:00+0100",
+		"2026-10-19 12:00:00Z",
+		"2026-10-19t12:00:00z",
+		" 2026-10-19T12:00:00Z",
+		"2026-10-19T12:00:00Z\n",
+	} {
+		t.Run(input, func(t *testing.T) {
+			instant := UnixNanos(1)
+			interval := mustInterval(t, UnixNanos(0), UnixNanos(1))
+			datetime := mustDateTime(mustDate(2026, time.March, 27), mustTime(13, 30, 45), UTC)
+			for _, tc := range []struct {
+				name   string
+				wire   map[string]string
+				target any
+			}{
+				{"instant", map[string]string{"kind": "instant", "iso": input}, &instant},
+				{"interval start", map[string]string{"kind": "interval", "start": input, "end": "9999-12-31T23:59:59Z"}, &interval},
+				{"interval end", map[string]string{"kind": "interval", "start": "0000-01-01T00:00:00Z", "end": input}, &interval},
+				{"datetime", map[string]string{"kind": "datetime", "instant": input, "zone": "UTC"}, &datetime},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					before := mustJSON(t, tc.target)
+					err := json.Unmarshal(mustJSON(t, tc.wire), tc.target)
+					var detail *TimeError
+					if !errors.Is(err, ErrInvalidFormat) || !errors.As(err, &detail) || detail.Hint == "" {
+						t.Errorf("Unmarshal(%q) = %v, want ErrInvalidFormat with hint", input, err)
+					}
+					if after := mustJSON(t, tc.target); !bytes.Equal(before, after) {
+						t.Errorf("failed decode changed receiver: %s -> %s", before, after)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestJSONInstantNormalization(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ input, want string }{
+		{"2026-10-19T12:00:00+23:59", "2026-10-18T12:01:00Z"},
+		{"2026-10-19T12:00:00-23:59", "2026-10-20T11:59:00Z"},
+		{"2026-10-19T12:00:00.100Z", "2026-10-19T12:00:00.1Z"},
+		{"2026-10-19T12:00:00-00:00", "2026-10-19T12:00:00Z"},
+		{"0000-02-29T12:00:00Z", "0000-02-29T12:00:00Z"},
+		{"0000-01-01T23:59:00+23:59", "0000-01-01T00:00:00Z"},
+		{"9999-12-31T00:00:59.999999999-23:59", "9999-12-31T23:59:59.999999999Z"},
+		{"2026-10-19T12:00:00.123456789Z", "2026-10-19T12:00:00.123456789Z"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			var instant Instant
+			if err := json.Unmarshal(mustJSON(t, map[string]string{"kind": "instant", "iso": tc.input}), &instant); err != nil {
+				t.Fatal(err)
+			}
+			if got := instant.String(); got != tc.want {
+				t.Fatalf("instant = %s, want %s", got, tc.want)
+			}
+			var interval Interval
+			if err := json.Unmarshal(mustJSON(t, map[string]string{"kind": "interval", "start": tc.input, "end": tc.input}), &interval); err != nil {
+				t.Fatal(err)
+			}
+			if !interval.Start().Equal(instant) || !interval.End().Equal(instant) {
+				t.Fatalf("interval endpoints differ from %s: %s", instant, interval)
+			}
+			for _, value := range []any{&instant, &interval} {
+				encoded := mustJSON(t, value)
+				if err := json.Unmarshal(encoded, value); err != nil {
+					t.Fatal(err)
+				}
+				if again := mustJSON(t, value); !bytes.Equal(encoded, again) {
+					t.Fatalf("unstable wire: %s -> %s", encoded, again)
+				}
+			}
+			datetime := mustDateTime(mustDate(2026, time.March, 27), mustTime(13, 30, 45), UTC)
+			before := mustJSON(t, datetime)
+			err := json.Unmarshal(mustJSON(t, map[string]string{"kind": "datetime", "instant": tc.input, "zone": "UTC"}), &datetime)
+			if tc.input != tc.want {
+				if !errors.Is(err, ErrInvalidFormat) {
+					t.Fatalf("noncanonical DateTime input error = %v", err)
+				}
+				if after := mustJSON(t, datetime); !bytes.Equal(before, after) {
+					t.Fatal("failed DateTime decode changed receiver")
+				}
+			} else if err != nil || !datetime.Instant().Equal(instant) {
+				t.Fatalf("canonical DateTime = %s, %v", datetime, err)
+			}
+		})
+	}
+}
+
+func TestJSONInstantCalendarErrorKeepsCause(t *testing.T) {
+	t.Parallel()
+	const invalid = "2026-02-30T12:00:00Z"
+	for _, tc := range []struct {
+		wire   map[string]string
+		target any
+	}{
+		{map[string]string{"kind": "instant", "iso": invalid}, new(Instant)},
+		{map[string]string{"kind": "interval", "start": invalid, "end": "2026-03-01T00:00:00Z"}, new(Interval)},
+		{map[string]string{"kind": "interval", "start": "2026-01-01T00:00:00Z", "end": invalid}, new(Interval)},
+		{map[string]string{"kind": "datetime", "instant": invalid, "zone": "UTC"}, new(DateTime)},
+	} {
+		err := json.Unmarshal(mustJSON(t, tc.wire), tc.target)
+		var cause *time.ParseError
+		if !errors.Is(err, ErrInvalidFormat) || !errors.As(err, &cause) {
+			t.Fatalf("Unmarshal(%v) = %v, want format error and stdlib parse cause", tc.wire, err)
+		}
+	}
+}
+
+func TestJSONInstantProfileLeavesHumanGrammarUnchanged(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{"2026-10-19T12:00Z", "2026-10-19T12:00:00,1Z", " 2026-10-19T12:00:00Z "} {
+		if _, err := ParseInstant(input); err != nil {
+			t.Errorf("human ParseInstant(%q): %v", input, err)
+		}
+	}
+	if _, err := ParseTime("09:30"); err != nil {
+		t.Errorf("human ParseTime shorthand: %v", err)
+	}
+}

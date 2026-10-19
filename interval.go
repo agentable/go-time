@@ -234,33 +234,14 @@ func (iv *Interval) UnmarshalJSON(b []byte) error {
 	if err := requireJSONString("interval", "end", wire.End); err != nil {
 		return err
 	}
-	st, err := time.Parse(time.RFC3339Nano, wire.Start)
+	start, err := parseJSONInstant(wire.Start)
 	if err != nil {
-		return newTimeErrorWithCause(
-			ErrInvalidFormat,
-			err,
-			"interval start is not valid RFC3339",
-			wire.Start,
-			"use an RFC3339 instant such as 2026-03-27T04:00:00Z",
-		)
-	}
-	et, err := time.Parse(time.RFC3339Nano, wire.End)
-	if err != nil {
-		return newTimeErrorWithCause(
-			ErrInvalidFormat,
-			err,
-			"interval end is not valid RFC3339",
-			wire.End,
-			"use an RFC3339 instant such as 2026-03-27T05:00:00Z",
-		)
-	}
-	if err := requireJSONPrecision(wire.Start); err != nil {
 		return err
 	}
-	if err := requireJSONPrecision(wire.End); err != nil {
+	end, err := parseJSONInstant(wire.End)
+	if err != nil {
 		return err
 	}
-	start, end := InstantFromTime(st), InstantFromTime(et)
 	if err := start.validateWireDomain(); err != nil {
 		return err
 	}

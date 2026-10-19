@@ -73,6 +73,14 @@ sub-millisecond precision. Marshal rejects an instant whose UTC year cannot be
 represented by the matching RFC3339 decoder.
 Instant decode accepts RFC 3339 numeric offsets because they identify the same
 absolute value; marshal normalizes every accepted instant to UTC with `Z`.
+The JSON instant profile is `YYYY-MM-DDTHH:MM:SS[.fraction](Z|±HH:MM)`:
+uppercase `T`/`Z`, fixed-width components, and one to nine decimal-point
+fraction digits when present. Offset hours are `00..23` and minutes are
+`00..59`. Whitespace, a single-digit hour, comma fractions, missing seconds,
+and compact offsets are invalid wire syntax, even when a human parser accepts
+them. Calendar and clock validity are checked separately; leap seconds are
+not representable. Invalid wire syntax returns `ErrInvalidFormat` without
+changing the receiver. Accepted fractional trailing zeros are normalized away.
 Decode rejects offsets whose UTC normalization leaves years `0000..9999`
 with `ErrOverflow`. Interval endpoints obey the same UTC wire domain, so
 a successfully decoded endpoint can be encoded again.
@@ -90,6 +98,10 @@ JSON:
 Key API: `NewDateTime`, `DateTimeFromTime`, `Date`, `Clock`, `Std`, `Zone`, `Instant`, `In`, `Add(Duration)`, `AddPeriod(Period)`, `Sub(DateTime)`, `Compare`.
 
 `NewDateTime` is the convenience path for `NewLocalDateTime(d, t).Resolve(z).Only()`. DST gaps return `ErrNonexistentTime`; DST duplicates return `ErrDuplicateTime`. Use `DateTimeFromTime` when the caller already has a stdlib `time.Time` with the intended offset.
+
+`instant` uses the same JSON instant profile but additionally requires the
+canonical UTC spelling, including trimmed fractional zeros. Offset-bearing or
+otherwise noncanonical input returns `ErrInvalidFormat` before zone projection.
 
 `instant` owns the absolute time and `zone` owns the projection identity.
 Unmarshal establishes the instant directly, then projects it through the named
