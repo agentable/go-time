@@ -188,7 +188,11 @@ zeros rather than preserving input precision provenance.
 
 ### Duration
 
-An exact elapsed span represented as `type Duration time.Duration`.
+An exact elapsed span represented as `type Duration time.Duration`: signed
+int64 nanoseconds. It is independent from Date and Time; 25 hours does not wrap
+to a clock time. `InSeconds`, `InMinutes`, and `InHours` return floating-point
+projections, not exact decimal storage values. Sub-nanosecond values and spans
+outside the signed int64 nanosecond range cannot be represented losslessly.
 
 Constants mirror stdlib through `Hour`; there is intentionally no `Day` constant.
 

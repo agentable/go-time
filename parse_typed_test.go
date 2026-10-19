@@ -7,6 +7,92 @@ import (
 	"golang.org/x/text/language"
 )
 
+func TestTypedParsersRejectTruncatedPrecision(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		input string
+		opts  []Option
+		parse func(string, ...Option) (bool, error)
+	}{
+		{"time", "12:30:45.1234567891", nil, func(s string, opts ...Option) (bool, error) { v, err := ParseTime(s, opts...); return v.IsZero(), err }},
+		{"zero suffix", "12:30:45.1234567890", nil, func(s string, opts ...Option) (bool, error) { v, err := ParseTime(s, opts...); return v.IsZero(), err }},
+		{"instant", "2026-10-19T12:30:45.1234567891Z", nil, func(s string, opts ...Option) (bool, error) {
+			v, err := ParseInstant(s, opts...)
+			return v.IsZero(), err
+		}},
+		{"local", "2026-10-19T12:30:45.1234567891", nil, func(s string, opts ...Option) (bool, error) {
+			v, err := ParseLocalDateTime(s, opts...)
+			return v.Date.IsZero() && v.Time.IsZero(), err
+		}},
+		{"zoned", "2026-10-19T12:30:45.1234567891", []Option{WithZone(UTC)}, func(s string, opts ...Option) (bool, error) {
+			v, err := ParseDateTime(s, opts...)
+			return v.IsZero(), err
+		}},
+		{"interval start", "2026-10-19T12:30:45.1234567891Z/2026-10-20T12:00:00Z", nil, func(s string, opts ...Option) (bool, error) {
+			v, err := ParseInterval(s, opts...)
+			return v.IsZero(), err
+		}},
+		{"interval end", "2026-10-19T12:00:00Z/2026-10-20T12:30:45.1234567891Z", nil, func(s string, opts ...Option) (bool, error) {
+			v, err := ParseInterval(s, opts...)
+			return v.IsZero(), err
+		}},
+		{"interval duration", "2026-10-19T12:30:45.1234567891Z/PT1H", nil, func(s string, opts ...Option) (bool, error) {
+			v, err := ParseInterval(s, opts...)
+			return v.IsZero(), err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r := Parse(tt.input, tt.opts...)
+			if r.Status != StatusResolved || !hasWarning(r.Warnings, WarnTruncatedPrecision) {
+				t.Fatalf("diagnostic Parse = %s, %v", r.Status, r.Warnings)
+			}
+			zero, err := tt.parse(tt.input, tt.opts...)
+			if !zero || !errors.Is(err, ErrInvalidFormat) {
+				t.Fatalf("typed parse: zero = %v, error = %v; want zero and ErrInvalidFormat", zero, err)
+			}
+			te, ok := errors.AsType[*TimeError](err)
+			if !ok || te.Input != tt.input || te.Hint == "" {
+				t.Fatalf("missing actionable input context: %v", err)
+			}
+		})
+	}
+}
+
+func TestTypedPrecisionChecksPreserveOtherParseSemantics(t *testing.T) {
+	t.Parallel()
+	zone := MustLoadZone("America/New_York")
+	for _, tt := range []struct {
+		name  string
+		parse func() error
+		want  error
+	}{
+		{"wrong kind", func() error { _, err := ParseDate("12:30:45.1234567891"); return err }, ErrIncompatibleTypes},
+		{"duplicate time", func() error { _, err := ParseDateTime("2026-11-01T01:30:45.1234567891", WithZone(zone)); return err }, ErrDuplicateTime},
+		{"invalid time", func() error { _, err := ParseTime("25:30:45.1234567891"); return err }, ErrInvalidTime},
+		{"duration", func() error { _, err := ParseDuration("PT0.1234567891S"); return err }, ErrInvalidDuration},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if err := tt.parse(); !errors.Is(err, tt.want) {
+				t.Fatalf("error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+	if clock, err := ParseTime("09:30"); err != nil || clock.String() != "09:30:00" {
+		t.Fatalf("short clock = %s, %v", clock, err)
+	}
+	input := "2026-10-19T12:30:45.123456789"
+	if r := Parse(input, WithZone(UTC)); !hasWarning(r.Warnings, WarnAssumedZone) {
+		t.Fatal("expected diagnostic assumed-zone warning")
+	}
+	if _, err := ParseDateTime(input, WithZone(UTC)); err != nil {
+		t.Fatalf("assumed-zone warning rejected: %v", err)
+	}
+}
+
 func TestParseInstant_Resolves(t *testing.T) {
 	i, err := ParseInstant("2026-03-27T13:00:00+09:00")
 	if err != nil {

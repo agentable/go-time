@@ -37,6 +37,41 @@ must pass an explicit IANA `Zone` into go-time.
 
 go-time owns parsing, typed value objects, arithmetic, timezone rules, stable JSON, structured errors, warnings, and stdlib bridges.
 
+## Field Values
+
+Field owns its raw JSON grammar, formats, presence, defaults, and list semantics.
+Validate there before constructing native values for computation:
+
+| Field meaning | Native value when computation is needed |
+|---|---|
+| Calendar date | `Date`, without an invented midnight or zone |
+| Clock time | `Time`, without a duration interpretation |
+| Absolute date-time | `Instant`; consumers may subsequently select a Zone |
+| Nonnegative number of seconds | `Duration` only if exact integer nanoseconds fit int64 |
+
+The human parser, this library's closed `kind` JSON objects, and Field strings
+or numeric seconds have different accepted domains. For example, `ParseTime`
+accepts `09:30`, while Field requires seconds; Field accepts `12:30:00.100`,
+while this library's Time JSON requires canonical `12:30:00.1`. Use
+`encoding/json/v2` and `encoding/json/jsontext` at JSON boundaries.
+
+go-field may use the standard library for its protocol validator. It need not
+import go-time merely to store strings. Consumers do not duplicate Field
+validation or reinterpret its format by calling diagnostic `Parse`.
+
+A valid Field duration can have sub-nanosecond precision or exceed the native
+Duration range. Check exact seconds-to-nanoseconds conversion only when handing
+it to a timer; failed conversion does not invalidate the original Field value.
+Do not first convert seconds to float64 and multiply by 1e9. Exporting a native
+duration also requires checking the target number domain; `InSeconds()` may
+approximate it. A negative Duration cannot be written to a nonnegative Field.
+
+An Instant in year 2500 does not require a UnixNano projection. UTC wire-year
+bounds and epoch scalar bounds are independent. Midnight, zero duration, and
+the Go zero Instant can be provided values; `IsZero` is not a presence check.
+`multiple` means independent values, not an Interval. Period has no implicit
+Field mapping and is never approximated as a fixed number of seconds.
+
 ## Ambiguity Protocol
 
 ```go
@@ -91,5 +126,6 @@ Messaging, logging, and audit systems may use go-time for timestamp parsing and 
 - Do not add event, reminder, alarm, cron, RRULE, scheduler, workflow, or messaging concepts to go-time.
 - Do not add business calendars, holidays, workday rules, or availability policy to go-time.
 - Do not add formatter or locale-display policy to go-time.
-- Consumer code should not reimplement time parsing when go-time can parse the input.
+- Consumers reuse go-time for its accepted input domain; separate protocol
+  validators retain their stricter lexical and semantic contracts.
 - Consumer code should not add mutable global defaults for zone or language on top of go-time.

@@ -90,6 +90,21 @@ Typed parsers return `(value, error)` and are the default choice when the input 
 
 Each parser rejects a different resolved kind. For example, `ParseInstant("2026-11-05")` returns an error that matches `ErrIncompatibleTypes`.
 
+For matching clock, datetime, instant, and interval input, typed parsers return
+`ErrInvalidFormat` when fractional seconds exceed nine digits, including an
+all-zero suffix. They do not silently discard precision:
+
+```go
+_, err := gotime.ParseTime("12:30:45.1234567891")
+if errors.Is(err, gotime.ErrInvalidFormat) {
+	// Choose the intended precision, or use Parse to inspect the warning.
+}
+```
+
+`Parse` retains the truncated value with `WarnTruncatedPrecision` for explicit
+consumer decisions. Other warnings, such as an assumed zone, do not make a
+typed parse fail. Short human input such as `09:30` remains accepted.
+
 ### Parse natural language deterministically
 
 Relative date and datetime phrases need three caller-owned inputs: a language, a reference instant, and the timezone whose calendar defines the phrase. Pin the reference in tests; use `gotime.Now()` at the product boundary when runtime behavior should follow the current clock.
@@ -485,6 +500,24 @@ Epoch projections return `ErrOverflow` when the selected `int64` precision
 cannot represent the instant. Keep the `Instant` or use `Std()` when a scalar
 projection is not required. `UnixSeconds` follows the representable range of
 stdlib `time.Unix`; not every `int64` second value denotes a valid runtime time.
+
+### Integrate Field values
+
+Date, Time, and Instant express different facts; Duration is signed int64
+nanoseconds, and Period is calendar movement. Keep these types separate within
+this library. A 25-hour Duration stays 25 hours, without clock wrapping.
+
+Validate Field JSON with its own validator first. Its Date formats map to Date,
+Time, or Instant only when native computation is needed; its nonnegative numeric
+seconds map to Duration only when conversion to int64 nanoseconds is lossless.
+Sub-nanosecond and very large seconds can remain valid Field values without a
+native Duration representation. `InSeconds()` is a floating-point projection,
+not an exact storage conversion.
+
+Human input, library JSON, and Field wire values have separate grammars.
+`ParseTime("09:30")` accepts shorthand that Field rejects; this library's JSON
+uses a `kind` object, while Field uses a string. `IsZero()` cannot identify a
+missing Field value. See [integration boundaries](SPECS/80-integration.md#field-values).
 
 ## Serialize Values
 

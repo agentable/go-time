@@ -5,7 +5,7 @@ package gotime
 // Parse and then translates the ParseResult into a Go-idiomatic
 // (value, error) pair:
 //
-//   - StatusResolved + matching Kind → (value, nil)
+//   - StatusResolved + matching Kind → (value, nil), unless precision was truncated
 //   - StatusResolved + wrong Kind    → (zero, *TimeError wrapping ErrIncompatibleTypes)
 //   - StatusAmbiguous                → (zero, *TimeError wrapping the precise ambiguity cause)
 //   - StatusInvalid                  → (zero, r.Error)
@@ -90,12 +90,22 @@ func ParseInterval(input string, opts ...Option) (Interval, error) {
 }
 
 // parseResultError maps a ParseResult to a typed (value, error) error half.
-// Returns nil if r is Resolved with the requested Kind; otherwise returns a
-// *TimeError appropriate to the failure mode.
+// Returns nil if r is Resolved with the requested Kind and no truncated
+// precision; otherwise returns a *TimeError appropriate to the failure mode.
 func parseResultError(r ParseResult, want Kind) error {
 	switch r.Status {
 	case StatusResolved:
 		if r.Kind == want {
+			for _, warning := range r.Warnings {
+				if warning.Code == WarnTruncatedPrecision {
+					return newTimeError(
+						ErrInvalidFormat,
+						"fractional seconds exceed nanosecond precision",
+						r.Input,
+						"use at most nine fractional second digits, or call Parse to inspect the truncated value",
+					)
+				}
+			}
 			return nil
 		}
 		return newTimeError(

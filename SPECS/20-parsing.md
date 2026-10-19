@@ -212,10 +212,16 @@ When `WithZone` resolves a formal floating datetime, `ParseResult.Warnings`
 includes `WarnAssumedZone`. Without `WithZone`, the same formal input resolves
 to `KindLocalDateTime` and carries no zone assumption. Relative natural
 date/datetime input instead returns `ErrInvalidZone` when the option is absent.
-For clock and datetime input, fractional seconds beyond nanosecond precision
-produce `WarnTruncatedPrecision` and truncate to nanoseconds. Duration components
+In diagnostic `Parse`, fractional seconds beyond nanosecond precision in
+clock and datetime input produce `WarnTruncatedPrecision` and truncate to nanoseconds. Duration components
 with more than nine fractional digits instead return `ErrInvalidDuration`;
 values beyond the signed nanosecond range return `ErrOverflow`.
+Typed parsers reject a resolved, matching-kind result carrying
+`WarnTruncatedPrecision` with a zero value and a `*TimeError` wrapping
+`ErrInvalidFormat`. More than nine digits trigger rejection even when the
+truncated suffix is all zeroes. Invalid status, ambiguity, and kind mismatch
+retain precedence over this precision check. Other warnings remain non-fatal;
+callers needing diagnostic values use `Parse` explicitly.
 Slash-date candidates use `WarnInferredCalendar` to explain month-first vs
 day-first interpretation.
 
@@ -236,9 +242,9 @@ normalizes or selects these states before the shared resolver sees them.
 
 Typed parsers preserve the ambiguity cause when translating `StatusAmbiguous` into an error. Slash-date ambiguity returns a `*TimeError` wrapping `ErrAmbiguousDate`. DST fall-back ambiguity returns a `*TimeError` wrapping `ErrDuplicateTime`, including when the duplicate local time appears inside an interval endpoint.
 
-The semantic cause is package-owned state, not inferred from warnings.
-Warnings remain diagnostics and may be removed without changing typed error
-identity. Typed parsers narrow the same shared parse result; they are not a
+The ambiguity cause is package-owned state, not inferred from warnings.
+Removing ambiguity warnings does not change the corresponding typed error
+identity. Precision-loss rejection is the separate resolved-result rule above. Typed parsers narrow the same shared parse result; they are not a
 second parser engine.
 
 `HasZone` reports whether the original input explicitly included a timezone or offset. It is the caller's hook for detecting floating time.
@@ -338,8 +344,10 @@ this classification does not expand the grammar.
 
 Time-only parsing accepts `HH:MM:SS.fraction` (decimal point or comma), with
 fractions only after explicit seconds. It reads canonical `Time.String()`
-values exactly; excess human-input precision truncates with
-`WarnTruncatedPrecision`. The wire grammar remains strict.
+values exactly. Diagnostic `Parse` truncates excess precision with
+`WarnTruncatedPrecision`; typed `ParseTime` rejects that result. The wire grammar
+remains strict. Typed parsers still accept human shorthand such as `09:30`;
+they are not validators for another protocol's lexical domain.
 
 Duration parsing and JSON decoding accept the full signed nanosecond range,
 including both decomposed and single-seconds spellings of MinInt64. Component

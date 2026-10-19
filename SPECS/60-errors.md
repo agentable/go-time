@@ -114,7 +114,10 @@ Apply an application-owned redaction policy before logging `te.Message`,
 - Interval parsing keeps a recognized endpoint's semantic sentinel and code;
   its `TimeError.Input` is rewritten to the complete interval while the
   endpoint hint and unwrap chain remain inspectable.
-- Warning metadata never determines sentinel identity.
+- Ambiguity warning metadata never determines ambiguity sentinel identity.
+- A resolved, matching-kind result with `WarnTruncatedPrecision` is rejected by
+  typed parsers with `ErrInvalidFormat`, a zero value, and an actionable hint.
+  Other warnings remain diagnostic.
 
 Empty input in `Parse` returns `ErrEmptyInput` with `CodeEmptyInput`.
 
