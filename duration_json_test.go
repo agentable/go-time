@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"testing"
 
 	"encoding/json/v2"
@@ -17,7 +16,7 @@ func TestDurationMarshalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"duration","iso":"PT1H30M"}`
+	want := `"PT1H30M"`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -29,7 +28,7 @@ func TestDurationMarshalJSON_Zero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"duration","iso":"PT0S"}`
+	want := `"PT0S"`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -41,24 +40,24 @@ func TestDurationMarshalJSON_Negative(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	if !strings.Contains(string(b), `"iso":"-PT30M"`) {
-		t.Errorf("missing iso field: %s", b)
+	if string(b) != `"-PT30M"` {
+		t.Errorf("duration JSON: %s", b)
 	}
 }
 
 func TestDurationUnmarshalJSON(t *testing.T) {
 	var d Duration
-	if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"PT1H30M"}`), &d); err != nil {
+	if err := json.Unmarshal([]byte(`"PT1H30M"`), &d); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
-	if d.InHours() != 1.5 {
-		t.Errorf("got %v hours, want 1.5", d.InHours())
+	if d.Hours() != 1.5 {
+		t.Errorf("got %v hours, want 1.5", d.Hours())
 	}
 }
 
 func TestDurationUnmarshalJSON_Zero(t *testing.T) {
 	var d Duration
-	if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"PT0S"}`), &d); err != nil {
+	if err := json.Unmarshal([]byte(`"PT0S"`), &d); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	if !d.IsZero() {
@@ -68,11 +67,11 @@ func TestDurationUnmarshalJSON_Zero(t *testing.T) {
 
 func TestDurationUnmarshalJSON_Negative(t *testing.T) {
 	var d Duration
-	if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"-PT30M"}`), &d); err != nil {
+	if err := json.Unmarshal([]byte(`"-PT30M"`), &d); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
-	if d.InMinutes() != -30 {
-		t.Errorf("got %v minutes, want -30", d.InMinutes())
+	if d.Minutes() != -30 {
+		t.Errorf("got %v minutes, want -30", d.Minutes())
 	}
 }
 
@@ -114,7 +113,7 @@ func TestDurationJSONRoundTrip(t *testing.T) {
 
 func TestDurationUnmarshalJSON_Invalid(t *testing.T) {
 	var d Duration
-	err := json.Unmarshal([]byte(`{"kind":"duration","iso":"not-iso"}`), &d)
+	err := json.Unmarshal([]byte(`"not-iso"`), &d)
 	if err == nil {
 		t.Fatal("Unmarshal(invalid duration) error = nil, want error")
 	}
@@ -138,7 +137,7 @@ func TestDurationUnmarshalJSON_InvalidComponents(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var d Duration
-			err := json.Unmarshal([]byte(fmt.Sprintf(`{"kind":"duration","iso":%q}`, tc.iso)), &d)
+			err := json.Unmarshal([]byte(fmt.Sprintf(`%q`, tc.iso)), &d)
 			if err == nil {
 				t.Fatalf("Unmarshal(%q) error = nil, want error", tc.iso)
 			}
@@ -163,7 +162,7 @@ func TestDurationSignedISOParsing(t *testing.T) {
 			t.Errorf("%s: %v %v", iso, d, err)
 		}
 		var decoded Duration
-		if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"`+iso+`"}`), &decoded); err != nil || decoded != Duration(-1<<63) {
+		if err := json.Unmarshal([]byte(`"`+iso+`"`), &decoded); err != nil || decoded != Duration(-1<<63) {
 			t.Errorf("wire %s: %v %v", iso, decoded, err)
 		}
 	}
@@ -172,7 +171,7 @@ func TestDurationSignedISOParsing(t *testing.T) {
 			t.Errorf("%s: %v", iso, err)
 		}
 		var d Duration
-		if err := json.Unmarshal([]byte(`{"kind":"duration","iso":"`+iso+`"}`), &d); err == nil {
+		if err := json.Unmarshal([]byte(`"`+iso+`"`), &d); err == nil {
 			t.Errorf("wire overflow accepted: %s", iso)
 		}
 	}

@@ -20,7 +20,7 @@ There are two entry paths:
 | Compact datetime | `20260327T130000`, `20260327T130000+0900`, `20260327T040000Z` | `KindLocalDateTime` without offset, `KindInstant` with offset |
 | ISO date | `2026-03-27` | `KindDate` |
 | Compact, ordinal, week date | `20260327`, `2026-086`, `2026-W13-5` | `KindDate` |
-| Year-month | `2026-03` | `KindDate` |
+| Incomplete year-month or ISO week | `2026-03`, `2026-W13` | `StatusInvalid`, with a hint requesting the missing day |
 | Slash date | `04/05/2026` | `KindDate` or ambiguous |
 | 24h / 12h time | `15:00`, `08:30:45`, `3:30 PM` | `KindTime` |
 | ISO time duration | `PT1H30M`, `PT45S` | `KindDuration` |
@@ -142,10 +142,12 @@ candidates. Fields omitted by the selected status do not affect the wire shape.
 
 `ParseResult` JSON is a one-way diagnostic tagged output, not a persistence or
 runtime-state recovery format. Depending on `Status`, it serializes the stable
-diagnostic fields `status`, `input`, `warnings`, `value_kind`, `value`, `zone`,
+diagnostic fields `status`, `input`, `warnings`, `kind`, `value`, `zone`,
 `candidates`, and `error`. The in-process `Reference`, `HasZone`, typed accessor
 storage, option presence, and package-owned ambiguity cause are intentionally
-not serialized.
+not serialized. The single `kind` identifies the concrete value for resolved
+or ambiguous results and is omitted for invalid results. Concrete values do not
+repeat that discriminator inside `value`.
 
 `ParseResult.UnmarshalJSON` explicitly rejects JSON, including null, with
 `ErrInvalidFormat` and leaves its receiver unchanged. Decoding the emitted object
@@ -221,7 +223,11 @@ Typed parsers reject a resolved, matching-kind result carrying
 `ErrInvalidFormat`. More than nine digits trigger rejection even when the
 truncated suffix is all zeroes. Invalid status, ambiguity, and kind mismatch
 retain precedence over this precision check. Other warnings remain non-fatal;
-callers needing diagnostic values use `Parse` explicitly.
+callers needing diagnostic values use `Parse` explicitly. A resolved diagnostic
+means one interpretation, not permission to submit a lossy value. Consumers must
+review warnings; automatic submission uses the typed parser. Incomplete year-month
+or ISO-week input is recognized but rejected with a hint instead of inventing
+the first day of the month or Monday.
 Slash-date candidates use `WarnInferredCalendar` to explain month-first vs
 day-first interpretation.
 
@@ -276,7 +282,7 @@ kind remains `ErrIncompatibleTypes`.
 
 ## Processing Order
 
-1. Trim input.
+1. Preserve original input, including surrounding whitespace; trim only the parsing work text. Results, errors and nested candidates retain the complete original input.
 2. Empty input returns `StatusInvalid` with `ErrEmptyInput`.
 3. Try datetime.
 4. Try interval, duration, or period.

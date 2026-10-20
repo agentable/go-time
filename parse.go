@@ -205,20 +205,19 @@ func (r ParseResult) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	wire := parseResultWire{
-		Kind:     "parse_result",
 		Status:   r.Status,
 		Input:    r.Input,
 		Warnings: r.Warnings,
 	}
 	switch r.Status {
 	case StatusResolved:
-		wire.ValueKind = r.Kind
+		wire.Kind = r.Kind
 		wire.Value = parseResultValue(r)
 		if !r.Zone.IsZero() {
 			wire.Zone = r.Zone.ID()
 		}
 	case StatusAmbiguous:
-		wire.ValueKind = r.Kind
+		wire.Kind = r.Kind
 		wire.Candidates = r.Candidates
 	case StatusInvalid:
 		wire.Error = r.Error
@@ -291,11 +290,10 @@ func knownParseResultKind(kind Kind) bool {
 }
 
 type parseResultWire struct {
-	Kind       string        `json:"kind"`
+	Kind       Kind          `json:"kind,omitzero"`
 	Status     Status        `json:"status"`
 	Input      string        `json:"input,omitzero"`
 	Warnings   []Warning     `json:"warnings,omitzero"`
-	ValueKind  Kind          `json:"value_kind,omitzero"`
 	Value      any           `json:"value,omitzero"`
 	Zone       string        `json:"zone,omitzero"`
 	Candidates []ParseResult `json:"candidates,omitzero"`

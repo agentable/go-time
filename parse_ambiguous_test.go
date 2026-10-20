@@ -288,3 +288,24 @@ func TestParse_Invalid_HintNeverEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestParsePreservesOriginalWhitespace(t *testing.T) {
+	for _, input := range []string{"  2026-10-20  ", " \t ", "  invalid  ", "  04/05/2026  ", "  2026-10-20/2026-10-21  "} {
+		t.Run(input, func(t *testing.T) {
+			r := Parse(input)
+			var check func(ParseResult)
+			check = func(got ParseResult) {
+				if got.Input != input {
+					t.Errorf("Input = %q, want original %q", got.Input, input)
+				}
+				if got.Error != nil && got.Error.Input != input {
+					t.Errorf("Error.Input = %q, want original %q", got.Error.Input, input)
+				}
+				for _, candidate := range got.Candidates {
+					check(candidate)
+				}
+			}
+			check(r)
+		})
+	}
+}

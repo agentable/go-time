@@ -195,8 +195,8 @@ func TestInstant_AddSub(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sub after Add((1 * Hour)) error = %v", err)
 	}
-	if d.InHours() != 1.0 {
-		t.Errorf("Sub after Add((1 * Hour)) = %v hours, want 1.0", d.InHours())
+	if d.Hours() != 1.0 {
+		t.Errorf("Sub after Add((1 * Hour)) = %v hours, want 1.0", d.Hours())
 	}
 
 	back, err := i.Sub(i2)

@@ -17,7 +17,7 @@ func TestZoneRejectsLocalIdentity(t *testing.T) {
 	}
 	z := MustLoadZone("Asia/Tokyo")
 	original := z
-	err := json.Unmarshal([]byte(`{"kind":"zone","id":"Local"}`), &z)
+	err := json.Unmarshal([]byte(`"Local"`), &z)
 	if !errors.Is(err, ErrInvalidZone) || !z.Equal(original) {
 		t.Errorf("zone decode: %v %v", z, err)
 	}
@@ -27,7 +27,7 @@ func TestZoneRejectsLocalIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := dt
-	err = json.Unmarshal([]byte(`{"kind":"datetime","instant":"2026-01-01T00:00:00Z","zone":"Local"}`), &dt)
+	err = json.Unmarshal([]byte(`{"instant":"2026-01-01T00:00:00Z","zone":"Local"}`), &dt)
 	if !errors.Is(err, ErrInvalidZone) || !dt.Equal(before) || !dt.Zone().Equal(before.Zone()) {
 		t.Errorf("datetime decode: %v %v", dt, err)
 	}

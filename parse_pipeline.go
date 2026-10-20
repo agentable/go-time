@@ -42,7 +42,9 @@ var (
 	reSlashDate = regexp.MustCompile(`^(\d{1,2})/(\d{1,2})/(\d{4})$`)
 )
 
-func parseWithConfig(input string, cfg *config) ParseResult {
+func parseWithConfig(input string, cfg *config) (result ParseResult) {
+	original := input
+	defer func() { result.setInput(original) }()
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return invalidResult(input, ErrEmptyInput, "input is empty",
@@ -109,4 +111,15 @@ func parseTimeStage(input string, cfg *config) (ParseResult, bool) {
 		return parseTime12(input, m, cfg), true
 	}
 	return ParseResult{}, false
+}
+
+// setInput preserves the complete caller input throughout diagnostic candidates.
+func (r *ParseResult) setInput(input string) {
+	r.Input = input
+	if r.Error != nil {
+		r.Error.Input = input
+	}
+	for i := range r.Candidates {
+		r.Candidates[i].setInput(input)
+	}
 }

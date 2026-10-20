@@ -15,7 +15,7 @@ func TestDateMarshalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"date","value":"2026-03-27"}`
+	want := `"2026-03-27"`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -23,7 +23,7 @@ func TestDateMarshalJSON(t *testing.T) {
 
 func TestDateUnmarshalJSON(t *testing.T) {
 	var d Date
-	if err := json.Unmarshal([]byte(`{"kind":"date","value":"2026-03-27"}`), &d); err != nil {
+	if err := json.Unmarshal([]byte(`"2026-03-27"`), &d); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	want := mustDate(2026, 3, 27)
@@ -69,7 +69,7 @@ func TestDateMarshalJSON_RejectsInvalidValue(t *testing.T) {
 
 func TestDateUnmarshalJSON_InvalidValue(t *testing.T) {
 	var d Date
-	err := json.Unmarshal([]byte(`{"kind":"date","value":"not-a-date"}`), &d)
+	err := json.Unmarshal([]byte(`"not-a-date"`), &d)
 	if err == nil {
 		t.Error("expected error for invalid date value, got nil")
 	}

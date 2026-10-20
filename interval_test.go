@@ -65,7 +65,7 @@ func TestNewIntervalStartingAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewIntervalStartingAt() error = %v", err)
 	}
-	if got := mustIntervalLength(t, iv).InHours(); got != 9.0 {
+	if got := mustIntervalLength(t, iv).Hours(); got != 9.0 {
 		t.Errorf("Length() = %v hours, want 9.0", got)
 	}
 }
@@ -99,7 +99,7 @@ func TestNewIntervalEndingAt_NegativeLength(t *testing.T) {
 
 func TestInterval_Length(t *testing.T) {
 	iv := mustInterval(t, ivStart, ivEnd)
-	if got := mustIntervalLength(t, iv).InHours(); got != 9.0 {
+	if got := mustIntervalLength(t, iv).Hours(); got != 9.0 {
 		t.Errorf("Length() = %v hours, want 9.0", got)
 	}
 }

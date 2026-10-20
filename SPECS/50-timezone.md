@@ -83,10 +83,10 @@ the zero value; parse option presence is tracked separately.
 `Zone.MarshalJSON` is deterministic:
 
 ```json
-{"kind":"zone","id":"Asia/Tokyo"}
+"Asia/Tokyo"
 ```
 
-It never emits offset, abbreviation, DST flags, or any field that would require a reference instant. A zero `Zone` marshals as `{"kind":"zone","id":"UTC"}` to match its total UTC projection behavior. Fixed UTC offsets are not zone identities; `ResolveZone("+08:00")` and `ResolveZone("UTC+8")` return `ErrInvalidZone`, and marshaling an internally malformed fixed-offset `Zone` returns `ErrInvalidZone` instead of emitting `{"kind":"zone","id":"+08:00"}`.
+It never emits offset, abbreviation, DST flags, or any field that would require a reference instant. A zero `Zone` marshals as `"UTC"` to match its total UTC projection behavior. Fixed UTC offsets are not zone identities; `ResolveZone("+08:00")` and `ResolveZone("UTC+8")` return `ErrInvalidZone`, and marshaling an internally malformed fixed-offset `Zone` returns `ErrInvalidZone` instead of emitting `"+08:00"`.
 
 Encoding an already-loaded Zone or DateTime uses its held rules and does not
 reload the zone from the environment. Replacing or deleting rule files cannot
@@ -111,7 +111,7 @@ RFC 3339 values with numeric offsets parse to `Instant`. The offset is syntax fo
 - **Decision**: Zones persisted through the built-in JSON format are IANA identifiers only. Numeric offsets identify instants in timestamp syntax, not reusable zone identities.
 - **Why**: A zone carries historical and future transition rules. A numeric offset alone does not identify historical or future rule provenance. Explicit TZif may define a named rule set with a constant offset.
 - **Rejected**: Persisting `+08:00` as `Zone`, guessing a zone from an offset, and accepting abbreviations as identity.
-- **Contract Impact**: Offset-bearing RFC 3339 input resolves to `Instant`; `Zone` JSON remains `{"kind":"zone","id":"..."}`.
+- **Contract Impact**: Offset-bearing RFC 3339 input resolves to `Instant`; `Zone` JSON remains `"..."`.
 
 ### Point-in-Time Display Facts Stay in the Stdlib
 
@@ -243,7 +243,7 @@ this package.
 
 ## Acceptance Criteria
 
-- Named Zone JSON contains only `kind` and `id`; explicit-data Zone and DateTime encoding rejects rule loss.
+- Named Zone JSON is its IANA ID string; explicit-data Zone and DateTime encoding rejects rule loss.
 - Explicit TZif loading is isolated, bounded, and preserves fold/gap and future footer behavior; same-name different-rule snapshots do not compare equal.
 - Point-in-time abbreviation and numeric offset projection uses stdlib
   `time.Time.Zone`; no parallel DTO or string offset API exists.

@@ -123,7 +123,7 @@ func (dt DateTime) String() string {
 	return dt.t.Format(time.RFC3339Nano)
 }
 
-// MarshalJSON encodes dt as {"kind":"datetime","instant":"<RFC3339Nano UTC>","zone":"<IANA id>"}.
+// MarshalJSON encodes dt as {"instant":"<RFC3339Nano UTC>","zone":"<IANA id>"}.
 func (dt DateTime) MarshalJSON() ([]byte, error) {
 	z := normalizeZone(dt.zone)
 	if err := z.checkJSON(); err != nil {
@@ -147,28 +147,22 @@ func (dt DateTime) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(struct {
-		Kind    string `json:"kind"`
 		Instant string `json:"instant"`
 		Zone    string `json:"zone"`
 	}{
-		Kind:    "datetime",
 		Instant: instant,
 		Zone:    zoneID,
 	})
 }
 
-// UnmarshalJSON decodes dt from {"kind":"datetime","instant":"<RFC3339Nano UTC>","zone":"<IANA id>"}
+// UnmarshalJSON decodes dt from {"instant":"<RFC3339Nano UTC>","zone":"<IANA id>"}
 // and replaces dt. Callers must not read or write the same receiver concurrently.
 func (dt *DateTime) UnmarshalJSON(b []byte) error {
 	var wire struct {
-		Kind    string `json:"kind"`
 		Instant string `json:"instant"`
 		Zone    string `json:"zone"`
 	}
 	if err := unmarshalJSONWire(b, &wire); err != nil {
-		return err
-	}
-	if err := requireJSONKind("datetime", wire.Kind, "datetime"); err != nil {
 		return err
 	}
 	if err := requireJSONString("datetime", "instant", wire.Instant); err != nil {

@@ -46,14 +46,14 @@ func (d Duration) Nanoseconds() int64 { return int64(d) }
 // Milliseconds returns d in whole milliseconds.
 func (d Duration) Milliseconds() int64 { return int64(d) / int64(time.Millisecond) }
 
-// InSeconds returns d in seconds as a float64.
-func (d Duration) InSeconds() float64 { return float64(d) / float64(time.Second) }
+// Seconds returns d in seconds as a float64.
+func (d Duration) Seconds() float64 { return d.Std().Seconds() }
 
-// InMinutes returns d in minutes as a float64.
-func (d Duration) InMinutes() float64 { return float64(d) / float64(time.Minute) }
+// Minutes returns d in minutes as a float64.
+func (d Duration) Minutes() float64 { return d.Std().Minutes() }
 
-// InHours returns d in hours as a float64.
-func (d Duration) InHours() float64 { return float64(d) / float64(time.Hour) }
+// Hours returns d in hours as a float64.
+func (d Duration) Hours() float64 { return d.Std().Hours() }
 
 // IsZero reports whether d is zero.
 func (d Duration) IsZero() bool { return d == 0 }
@@ -197,39 +197,30 @@ func (d Duration) Decompose() DurationComponents {
 	}
 }
 
-// MarshalJSON encodes d as {"kind":"duration","iso":"<ISO8601>"}.
+// MarshalJSON encodes the duration as a JSON string.
 // The ISO 8601 string is the single source of truth; callers that need
 // structured slots can run d.Decompose() at the call site.
 func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Kind string `json:"kind"`
-		ISO  string `json:"iso"`
-	}{Kind: "duration", ISO: d.ISO8601()})
+	return json.Marshal(d.ISO8601())
 }
 
-// UnmarshalJSON decodes d from {"kind":"duration","iso":"<ISO8601>",...}
+// UnmarshalJSON decodes the duration from a JSON string
 // and replaces d. Callers must not read or write the same receiver concurrently.
 func (d *Duration) UnmarshalJSON(b []byte) error {
-	var wire struct {
-		Kind string `json:"kind"`
-		ISO  string `json:"iso"`
-	}
-	if err := unmarshalJSONWire(b, &wire); err != nil {
+	var value string
+	if err := unmarshalJSONWire(b, &value); err != nil {
 		return err
 	}
-	if err := requireJSONKind("duration", wire.Kind, "duration"); err != nil {
+	if err := requireJSONString("duration", "", value); err != nil {
 		return err
 	}
-	if err := requireJSONString("duration", "iso", wire.ISO); err != nil {
-		return err
-	}
-	parsed, err := parseISO8601Duration(wire.ISO)
+	parsed, err := parseISO8601Duration(value)
 	if err != nil {
 		return newTimeErrorWithCause(
 			ErrInvalidDuration,
 			err,
 			"duration iso is not a valid exact duration",
-			wire.ISO,
+			value,
 			"use an ISO 8601 clock duration such as PT1H30M",
 		)
 	}

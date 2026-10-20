@@ -14,7 +14,7 @@ func TestTimeMarshalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"time","value":"13:30:45"}`
+	want := `"13:30:45"`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -26,7 +26,7 @@ func TestTimeMarshalJSON_WithNanoseconds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	const want = `{"kind":"time","value":"13:30:45.123456789"}`
+	const want = `"13:30:45.123456789"`
 	if string(b) != want {
 		t.Errorf("Marshal() = %s, want %s", b, want)
 	}
@@ -38,7 +38,7 @@ func TestTimeMarshalJSON_MillisecondPrecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	const want = `{"kind":"time","value":"13:30:45.5"}`
+	const want = `"13:30:45.5"`
 	if string(b) != want {
 		t.Errorf("Marshal() = %s, want %s", b, want)
 	}
@@ -50,7 +50,7 @@ func TestTimeMarshalJSON_MicrosecondPrecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	const want = `{"kind":"time","value":"13:30:45.0005"}`
+	const want = `"13:30:45.0005"`
 	if string(b) != want {
 		t.Errorf("Marshal() = %s, want %s", b, want)
 	}
@@ -58,7 +58,7 @@ func TestTimeMarshalJSON_MicrosecondPrecision(t *testing.T) {
 
 func TestTimeUnmarshalJSON(t *testing.T) {
 	var tm Time
-	if err := json.Unmarshal([]byte(`{"kind":"time","value":"13:30:45"}`), &tm); err != nil {
+	if err := json.Unmarshal([]byte(`"13:30:45"`), &tm); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	if tm.Hour() != 13 || tm.Minute() != 30 || tm.Second() != 45 {
@@ -115,10 +115,30 @@ func TestTimeMarshalJSON_RejectsInvalidValue(t *testing.T) {
 	}
 }
 
-func TestTimeUnmarshalJSON_RejectsNonCanonicalValue(t *testing.T) {
+func TestTimeUnmarshalJSON_NormalizesTrailingZeros(t *testing.T) {
 	var tm Time
-	err := json.Unmarshal([]byte(`{"kind":"time","value":"13:30:45.500000000"}`), &tm)
-	if !errors.Is(err, ErrInvalidFormat) {
-		t.Fatalf("Unmarshal(non-canonical Time) error = %v, want ErrInvalidFormat", err)
+	if err := json.Unmarshal([]byte(`"13:30:45.500000000"`), &tm); err != nil {
+		t.Fatal(err)
+	}
+	if tm.String() != "13:30:45.5" {
+		t.Fatalf("normalized time = %s", tm)
+	}
+}
+
+func TestClockJSONRejectsHumanSyntax(t *testing.T) {
+	for _, input := range []string{"1:30:00", "12:30", "12:30:00,1", "12:30:00.1234567890", "12:30:00Z"} {
+		t.Run(input, func(t *testing.T) {
+			for _, tc := range []struct {
+				wire   string
+				target any
+			}{
+				{`"` + input + `"`, new(Time)},
+				{`"2026-10-20T` + input + `"`, new(LocalDateTime)},
+			} {
+				if err := json.Unmarshal([]byte(tc.wire), tc.target); err == nil {
+					t.Fatalf("accepted wire %s", tc.wire)
+				}
+			}
+		})
 	}
 }

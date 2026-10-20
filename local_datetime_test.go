@@ -240,7 +240,7 @@ func TestLocalDateTimeJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalJSON() error = %v, want nil", err)
 	}
-	const want = `{"kind":"local_datetime","value":"2026-03-27T09:30:00"}`
+	const want = `"2026-03-27T09:30:00"`
 	if string(b) != want {
 		t.Fatalf("MarshalJSON() = %s, want %s", b, want)
 	}
@@ -268,7 +268,7 @@ func TestLocalDateTimeJSONRoundTripFraction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalJSON() error = %v, want nil", err)
 	}
-	const want = `{"kind":"local_datetime","value":"2026-03-27T09:30:00.12345"}`
+	const want = `"2026-03-27T09:30:00.12345"`
 	if string(b) != want {
 		t.Fatalf("MarshalJSON() = %s, want %s", b, want)
 	}

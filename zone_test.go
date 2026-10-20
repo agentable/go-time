@@ -67,7 +67,7 @@ func TestZeroZoneSemanticsDoNotDependOnExportedUTC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalJSON(Zone{}) error = %v", err)
 	}
-	if got, want := string(encoded), `{"kind":"zone","id":"UTC"}`; got != want {
+	if got, want := string(encoded), `"UTC"`; got != want {
 		t.Errorf("MarshalJSON(Zone{}) = %s, want %s", got, want)
 	}
 

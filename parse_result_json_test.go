@@ -49,7 +49,7 @@ func TestParseResultMarshalResolved(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"下周五下午三点","value_kind":"datetime","value":{"kind":"datetime","instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"},"zone":"Asia/Tokyo"}`
+	want := `{"kind":"datetime","status":"resolved","input":"下周五下午三点","value":{"instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"},"zone":"Asia/Tokyo"}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -71,7 +71,7 @@ func TestParseResultMarshalInvalid(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"invalid","input":"04/05/2026","error":{"code":"AMBIGUOUS_DATE","message":"Input date is ambiguous","input":"04/05/2026","hint":"Use locale to disambiguate"}}`
+	want := `{"status":"invalid","input":"04/05/2026","error":{"code":"AMBIGUOUS_DATE","message":"Input date is ambiguous","input":"04/05/2026","hint":"Use locale to disambiguate"}}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -111,7 +111,7 @@ func TestParseResultMarshalAmbiguous(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"ambiguous","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"date order ambiguous"}],"value_kind":"date","candidates":[{"kind":"parse_result","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"month-first interpretation"}],"value_kind":"date","value":{"kind":"date","value":"2026-04-05"}},{"kind":"parse_result","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"day-first interpretation"}],"value_kind":"date","value":{"kind":"date","value":"2026-05-04"}}]}`
+	want := `{"kind":"date","status":"ambiguous","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"date order ambiguous"}],"candidates":[{"kind":"date","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"month-first interpretation"}],"value":"2026-04-05"},{"kind":"date","status":"resolved","input":"04/05/2026","warnings":[{"code":"inferred_calendar","message":"day-first interpretation"}],"value":"2026-05-04"}]}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -178,7 +178,7 @@ func TestParseResultMarshalResolvedDate(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"2026-03-27","value_kind":"date","value":{"kind":"date","value":"2026-03-27"}}`
+	want := `{"kind":"date","status":"resolved","input":"2026-03-27","value":"2026-03-27"}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -198,7 +198,7 @@ func TestParseResultMarshalResolvedLocalDateTime(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"2026-03-27T13:00:00","value_kind":"local_datetime","value":{"kind":"local_datetime","value":"2026-03-27T13:00:00"}}`
+	want := `{"kind":"local_datetime","status":"resolved","input":"2026-03-27T13:00:00","value":"2026-03-27T13:00:00"}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -218,7 +218,7 @@ func TestParseResultMarshalResolvedDuration(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"PT2H","value_kind":"duration","value":{"kind":"duration","iso":"PT2H"}}`
+	want := `{"kind":"duration","status":"resolved","input":"PT2H","value":"PT2H"}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -238,7 +238,7 @@ func TestParseResultMarshalResolvedPeriod(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"P+1Y-2M+3D","value_kind":"period","value":{"kind":"period","value":"P+1Y-2M+3D"}}`
+	want := `{"kind":"period","status":"resolved","input":"P+1Y-2M+3D","value":"P+1Y-2M+3D"}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -258,7 +258,7 @@ func TestParseResultMarshalResolvedInstant(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"1970-01-01T00:00:00Z","value_kind":"instant","value":{"kind":"instant","iso":"1970-01-01T00:00:00Z"}}`
+	want := `{"kind":"instant","status":"resolved","input":"1970-01-01T00:00:00Z","value":"1970-01-01T00:00:00Z"}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -278,7 +278,7 @@ func TestParseResultMarshalResolvedTime(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"13:30:45","value_kind":"time","value":{"kind":"time","value":"13:30:45"}}`
+	want := `{"kind":"time","status":"resolved","input":"13:30:45","value":"13:30:45"}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -303,8 +303,25 @@ func TestParseResultMarshalResolvedInterval(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"1970-01-01T00:00:00Z/1970-01-01T01:00:00Z","value_kind":"interval","value":{"kind":"interval","start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}}`
+	want := `{"kind":"interval","status":"resolved","input":"1970-01-01T00:00:00Z/1970-01-01T01:00:00Z","value":{"start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
+	}
+}
+
+func TestParseResultJSONHasOneDiscriminator(t *testing.T) {
+	data, err := json.Marshal(Parse("2026-10-20"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire["status"] != "resolved" || wire["kind"] != "date" || wire["value"] != "2026-10-20" {
+		t.Fatalf("diagnostic JSON = %s", data)
+	}
+	if _, ok := wire["value_kind"]; ok {
+		t.Fatalf("redundant discriminator: %s", data)
 	}
 }

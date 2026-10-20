@@ -22,7 +22,7 @@ A Go time semantics library that turns standard formats and controlled human exp
 go get github.com/agentable/go-time
 ```
 
-Requires **Go 1.27.0 or newer**.
+Requires **Go 1.27.2 or newer**.
 
 ## Quick Start
 
@@ -103,7 +103,11 @@ if errors.Is(err, gotime.ErrInvalidFormat) {
 
 `Parse` retains the truncated value with `WarnTruncatedPrecision` for explicit
 consumer decisions. Other warnings, such as an assumed zone, do not make a
-typed parse fail. Short human input such as `09:30` remains accepted.
+typed parse fail. Short human input such as `09:30` remains accepted. A resolved
+diagnostic is a preview, not a commit decision; inspect warnings before using it.
+Incomplete `2026-03` or `2026-W13` returns a hint requesting the missing day,
+instead of silently choosing the first day. Results and errors preserve the
+original input, including surrounding whitespace.
 
 ### Parse natural language deterministically
 
@@ -267,8 +271,7 @@ if err != nil {
 _ = restored
 ```
 
-Period JSON uses `{"kind":"period","value":"P+1Y-2M+3D"}`. The old `iso`
-member is rejected. Exact Duration machine text still uses `ISO8601()`.
+Period JSON is the string `"P+1Y-2M+3D"`. Exact Duration machine text still uses `ISO8601()`.
 
 Typed constants cover exact units from `Nanosecond` through `Hour`. Calendar periods use `Period` fields or constructors such as `Years`, `Months`, and `Days`:
 
@@ -525,19 +528,37 @@ this library. A 25-hour Duration stays 25 hours, without clock wrapping.
 
 Validate Field JSON with its own validator first. Its Date formats map to Date,
 Time, or Instant only when native computation is needed; its nonnegative numeric
-seconds map to Duration only when conversion to int64 nanoseconds is lossless.
+seconds map to Duration only after range and unit checks preserve the normalized
+Field value. Field seconds use finite binary64, so input digits may be rounded.
 Sub-nanosecond and very large seconds can remain valid Field values without a
-native Duration representation. `InSeconds()` is a floating-point projection,
+native Duration representation. `Seconds()` is a floating-point projection,
 not an exact storage conversion.
 
 Human input, library JSON, and Field wire values have separate grammars.
-`ParseTime("09:30")` accepts shorthand that Field rejects; this library's JSON
-uses a `kind` object, while Field uses a string. `IsZero()` cannot identify a
+`ParseTime("09:30")` accepts shorthand that Field rejects; Date, Time and Instant
+JSON use direct strings. `IsZero()` cannot identify a
 missing Field value. See [integration boundaries](SPECS/80-integration.md#field-values).
 
 ## Serialize Values
 
-Marshal value objects and parse results with Go 1.27.0 `encoding/json/v2`.
+Marshal value objects and parse results with Go 1.27.2 `encoding/json/v2`.
+Known concrete types carry their values directly:
+
+```go
+due, err := gotime.ParseDate("2026-10-20")
+if err != nil {
+    return err
+}
+payload, err := json.Marshal(struct {
+    Due gotime.Date `json:"due"`
+}{Due: due})
+if err != nil {
+    return err
+}
+fmt.Println(string(payload)) // {"due":"2026-10-20"}
+```
+
+DateTime retains both the instant and its zone:
 
 ```go
 payload, err := json.Marshal(deadline)
@@ -545,7 +566,7 @@ if err != nil {
 	return err
 }
 fmt.Println(string(payload))
-// {"kind":"datetime","instant":"2026-11-05T14:30:00Z","zone":"America/New_York"}
+// {"instant":"2026-11-05T14:30:00Z","zone":"America/New_York"}
 
 var restored gotime.DateTime
 if err := json.Unmarshal(payload, &restored); err != nil {

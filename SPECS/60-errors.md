@@ -141,7 +141,7 @@ cause inspection must retain the original in-process error; cross-wire callers
 may classify the stable `code` according to their own protocol policy.
 
 Concrete value decoders classify wrong field types, unknown members, missing
-required fields, and wrong `kind` as `ErrInvalidFormat` with a `*TimeError` and
+required fields, and wrong JSON types as `ErrInvalidFormat` with a `*TimeError` and
 an actionable hint. When jsonv2 supplies an underlying structural cause, it
 remains reachable through `errors.As` but is excluded from `TimeError.Error()`.
 Malformed top-level JSON never reaches a concrete type decoder; jsonv2 returns

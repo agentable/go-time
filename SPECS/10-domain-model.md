@@ -11,10 +11,11 @@ The most important split is `Duration` vs `Period`: exact elapsed time and calen
 
 ## Contract Decisions
 
-### Closed Value JSON
+### Direct Value JSON
 
-- **Decision**: Value-object JSON is a closed contract. Decoders reject unknown
-  fields, missing required fields, wrong `kind`, values outside the owning
+- **Decision**: Concrete values encode as JSON strings; DateTime and Interval retain
+  closed objects for their independent facts. Decoders reject unknown
+  object fields, missing required fields, wrong JSON types, values outside the owning
   type's accepted grammar, and invalid identities. Accepted alternate spellings
   are type-specific and marshal back to the canonical package form.
 - **Why**: Persisted time payloads must fail at the boundary when they carry two competing facts. Silent acceptance makes old or malformed data look authoritative.
@@ -61,12 +62,12 @@ Use it for storage, logs, ordering, and cross-system transfer.
 JSON:
 
 ```json
-{"kind":"instant","iso":"2026-03-27T04:00:00Z"}
+"2026-03-27T04:00:00Z"
 ```
 
 Key API: `InstantFromTime`, `UnixSeconds`, `UnixMillis`, `UnixNanos`, `Std`, `UnixNano`, `UnixMilli`, `In`, `Add(Duration)`, `Sub(Instant)`, `Compare`.
 
-`iso` is the only instant wire fact. `UnixNano()` and `UnixMilli()` return
+The string is the only instant wire fact. `UnixNano()` and `UnixMilli()` return
 `(int64, error)` and match `ErrOverflow` when the selected scalar precision
 cannot represent the instant; millisecond projection deliberately discards
 sub-millisecond precision. Marshal rejects an instant whose UTC year cannot be
@@ -92,7 +93,7 @@ A calendar date and clock time resolved in a specific `Zone`.
 JSON:
 
 ```json
-{"kind":"datetime","instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"}
+{"instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"}
 ```
 
 Key API: `NewDateTime`, `DateTimeFromTime`, `Date`, `Clock`, `Std`, `Zone`, `Instant`, `In`, `Add(Duration)`, `AddPeriod(Period)`, `Sub(DateTime)`, `Compare`.
@@ -124,7 +125,7 @@ A calendar date and clock time without timezone or offset.
 JSON:
 
 ```json
-{"kind":"local_datetime","value":"2026-03-27T13:00:00"}
+"2026-03-27T13:00:00"
 ```
 
 Key API: `NewLocalDateTime`, `Resolve`, `String`.
@@ -156,7 +157,7 @@ A calendar date without time or timezone.
 JSON:
 
 ```json
-{"kind":"date","value":"2026-03-27"}
+"2026-03-27"
 ```
 
 Key API: `NewDate`, `DateFromTime`, `Year`, `Month`, `Day`, `Weekday`, `ISOWeek`, `YearDay`, `DaysInMonth`, `IsLeapYear`, `Add(Period)`, `DaysUntil(Date)`, `Compare`.
@@ -182,27 +183,29 @@ A clock time without date or timezone.
 JSON:
 
 ```json
-{"kind":"time","value":"15:00:00"}
+"15:00:00"
 ```
 
 Sub-second values use the canonical trimmed decimal representation:
 
 ```json
-{"kind":"time","value":"15:00:00.123"}
+"15:00:00.123"
 ```
 
-Key API: `NewTime`, `NewTimeNanos`, `TimeFromTime`, `Hour`, `Minute`, `Second`, `Nanosecond`.
+Key API: `NewTime`, `NewTimeNanos`, `TimeFromTime`, `Hour`, `Minute`, `Second`, `Nanosecond`, `Compare`.
 
 `NewTime` and `NewTimeNanos` return errors for out-of-range clock components. They never normalize values such as 24:00:00 or nanosecond 1,000,000,000.
 
-`value` is the only clock-time wire fact. Decode rejects non-canonical trailing
-zeros rather than preserving input precision provenance.
+The string is the only clock-time wire fact. Decode accepts fractional trailing
+zeros within nine digits and normalizes them away. Single-digit hours, missing
+seconds, comma fractions and offsets are not wire syntax. LocalDateTime uses
+the same strict clock grammar after its date and literal T.
 
 ### Duration
 
 An exact elapsed span represented as `type Duration time.Duration`: signed
 int64 nanoseconds. It is independent from Date and Time; 25 hours does not wrap
-to a clock time. `InSeconds`, `InMinutes`, and `InHours` return floating-point
+to a clock time. `Seconds`, `Minutes`, and `Hours` return floating-point
 projections, not exact decimal storage values. Sub-nanosecond values and spans
 outside the signed int64 nanosecond range cannot be represented losslessly.
 
@@ -216,10 +219,14 @@ Constants mirror stdlib through `Hour`; there is intentionally no `Day` constant
 JSON:
 
 ```json
-{"kind":"duration","iso":"PT1H30M"}
+"PT1H30M"
 ```
 
-Key API: `Std`, `Nanoseconds`, `Milliseconds`, `InSeconds`, `InMinutes`, `InHours`, `Abs`, `String`, `ISO8601`, `Decompose`.
+Key API: `Std`, `Nanoseconds`, `Milliseconds`, `Seconds`, `Minutes`, `Hours`, `Abs`, `String`, `ISO8601`, `Decompose`.
+
+`Seconds`, `Minutes` and `Hours` use the standard-library split-integer projection
+algorithm. `Abs` follows the standard-library saturation at the minimum int64
+value: the result is maximum int64, one nanosecond below the mathematical magnitude.
 
 `Duration.String()` matches `time.Duration.String()` byte-for-byte. `Duration.Decompose()` exposes clock slots only: hours, minutes, seconds, milliseconds, microseconds, nanoseconds.
 
@@ -238,7 +245,7 @@ gotime.Days(7)
 JSON:
 
 ```json
-{"kind":"period","value":"P1Y3M7D"}
+"P1Y3M7D"
 ```
 
 Key API: exported `Years`, `Months`, `Days` fields, `NewPeriod`, `Years`, `Months`, `Days` constructors, `Negate`, `Abs`, `Add`, `Sub`, `String`.
@@ -257,7 +264,7 @@ A half-open UTC interval `[start, end)` bounded by two `Instant` values.
 JSON:
 
 ```json
-{"kind":"interval","start":"2026-03-27T00:00:00Z","end":"2026-03-27T09:00:00Z"}
+{"start":"2026-03-27T00:00:00Z","end":"2026-03-27T09:00:00Z"}
 ```
 
 Key API: `NewInterval`, `NewIntervalStartingAt`, `NewIntervalEndingAt`, `Start`, `End`, `Length`, `StdRange`, `Contains`, `Overlaps`, `Adjacent`, `Intersect`, `Union`, `Shift`, `Expand`.
@@ -271,7 +278,7 @@ A timezone identity backed by `time.Location`.
 JSON:
 
 ```json
-{"kind":"zone","id":"Asia/Tokyo"}
+"Asia/Tokyo"
 ```
 
 Key API: `LoadZone`, `LoadZoneFromTZData`, `MustLoadZone`, `ResolveZone`, `Zones`, `ID`, `Location`.
@@ -306,7 +313,7 @@ be operationally meaningful, marshalable, both, or neither.
 | `Duration(0)` | Valid zero elapsed time. | Marshals as `PT0S`. | No error solely because the value is zero. |
 | `Period{}` | Valid no-op calendar offset. | Marshals as `P0D`. | No error solely because the value is zero. |
 | `Interval{}` | Valid zero-length interval at the zero instant; `IsZero` is true. | Marshals with equal canonical year-0001 UTC endpoints. | No error solely because the interval is zero-length. |
-| `Zone{}` | UTC value semantics; `IsZero` reports representation, not an invalid zone. | Marshals as `{"kind":"zone","id":"UTC"}`. | No error solely because the representation is zero. |
+| `Zone{}` | UTC value semantics; `IsZero` reports representation, not an invalid zone. | Marshals as `"UTC"`. | No error solely because the representation is zero. |
 | `LocalResolution{}` | Unresolved public state with no candidate. | It has no value-object JSON contract. | `Only` returns zero `DateTime` and `ErrInvalidTime`. |
 
 ## Relationships
@@ -330,9 +337,9 @@ JSON shapes are part of the long-term contract.
 - Fields are closed. Adding a field is a deliberate wire-format change, not an accidental extension point.
 - Existing field names and meanings must not change.
 - Each payload has one semantic source of truth.
-- `Duration` and `Period` JSON use `iso`; derived components stay outside the wire payload.
+- `Duration` JSON uses its ISO string and `Period` uses its package-defined text string; derived components stay outside the wire payload.
 - Marshal output must not depend on `time.Now()`, process locale, mutable globals, or ambient zone state.
-- Unmarshal rejects wrong `kind`, missing required fields, unknown fields,
+- Unmarshal rejects wrong JSON types, missing required fields, unknown fields,
   values outside the concrete type's grammar, and invalid identities.
 - Clock-bearing wire values reject more than nine fractional second digits,
   including trailing zeros, with `ErrInvalidFormat`; decoding never silently
@@ -342,7 +349,7 @@ JSON shapes are part of the long-term contract.
   accepted and normalized to UTC `Z`; successful marshal/unmarshal/marshal is
   byte-stable from the package-generated form onward.
 - Structurally valid JSON that reaches a concrete value decoder reports wrong
-  field types, unknown fields, missing fields, and wrong `kind` through
+  field types, unknown fields, missing fields, and wrong JSON types through
   `ErrInvalidFormat` and `*TimeError`, retaining any jsonv2 cause. Malformed
   top-level JSON is rejected by jsonv2 before type dispatch and remains a
   `*jsontext.SyntacticError`.
@@ -354,13 +361,13 @@ JSON shapes are part of the long-term contract.
 
 ## Acceptance Criteria
 
-- JSON tests reject unknown fields, missing required fields, wrong `kind`,
+- JSON tests reject unknown fields, missing required fields, wrong JSON types,
   values outside each concrete grammar, and invalid identities.
 - Offset-bearing RFC 3339 `Instant` and `Interval` inputs decode to the correct
   absolute values and re-encode with UTC `Z`.
 - `Marshal -> Unmarshal -> Marshal` remains byte-stable for accepted value payloads.
 - Date construction rejects years outside `0000..9999` and invalid calendar components.
-- Zone JSON remains `{"kind":"zone","id":"..."}` and never carries offset, abbreviation, or DST display fields.
+- Zone JSON remains `"..."` and never carries offset, abbreviation, or DST display fields.
 
 ## Forbidden
 

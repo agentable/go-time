@@ -92,7 +92,7 @@ func (z Zone) Equal(other Zone) bool {
 // IsZero reports whether z is the Go zero value.
 func (z Zone) IsZero() bool { return z.id == "" && z.rules == nil }
 
-// MarshalJSON encodes z as {"kind":"zone","id":"<IANA id>"}.
+// MarshalJSON encodes the zone as a JSON string.
 // The output is deterministic and never depends on time.Now().
 func (z Zone) MarshalJSON() ([]byte, error) {
 	z = normalizeZone(z)
@@ -107,13 +107,7 @@ func (z Zone) MarshalJSON() ([]byte, error) {
 			"represent numeric offsets as instant syntax, not as zone identity",
 		)
 	}
-	return json.Marshal(struct {
-		Kind string `json:"kind"`
-		ID   string `json:"id"`
-	}{
-		Kind: "zone",
-		ID:   z.ID(),
-	})
+	return json.Marshal(z.ID())
 }
 
 func (z Zone) checkJSON() error {
@@ -128,23 +122,17 @@ func isFixedOffsetID(id string) bool {
 	return err == nil
 }
 
-// UnmarshalJSON decodes z from {"kind":"zone","id":"<IANA id>",...} and
-// replaces z. Callers must not read or write the same receiver concurrently.
+// UnmarshalJSON decodes the zone from a JSON string
+// and replaces z. Callers must not read or write the same receiver concurrently.
 func (z *Zone) UnmarshalJSON(b []byte) error {
-	var wire struct {
-		Kind string `json:"kind"`
-		ID   string `json:"id"`
-	}
-	if err := unmarshalJSONWire(b, &wire); err != nil {
+	var value string
+	if err := unmarshalJSONWire(b, &value); err != nil {
 		return err
 	}
-	if err := requireJSONKind("zone", wire.Kind, "zone"); err != nil {
+	if err := requireJSONString("zone", "", value); err != nil {
 		return err
 	}
-	if err := requireJSONString("zone", "id", wire.ID); err != nil {
-		return err
-	}
-	loaded, err := LoadZone(wire.ID)
+	loaded, err := LoadZone(value)
 	if err != nil {
 		return err
 	}

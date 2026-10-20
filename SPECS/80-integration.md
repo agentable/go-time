@@ -47,30 +47,54 @@ Validate there before constructing native values for computation:
 | Calendar date | `Date`, without an invented midnight or zone |
 | Clock time | `Time`, without a duration interpretation |
 | Absolute date-time | `Instant`; consumers may subsequently select a Zone |
-| Nonnegative number of seconds | `Duration` only if exact integer nanoseconds fit int64 |
+| Nonnegative binary64 seconds | `Duration` only after checked nanosecond conversion preserves the normalized seconds |
 
-The human parser, this library's closed `kind` JSON objects, and Field strings
-or numeric seconds have different accepted domains. For example, `ParseTime`
-accepts `09:30`, while Field requires seconds; Field accepts `12:30:00.100`,
-while this library's Time JSON requires canonical `12:30:00.1`. Use
-`encoding/json/v2` and `encoding/json/jsontext` at JSON boundaries.
+The human parser and strict wire decoder have different accepted grammars.
+`ParseTime` accepts `09:30`; Time JSON and Field require seconds. Both accept
+`12:30:00.100` and normalize it to `12:30:00.1`. Concrete Date, Time and Instant
+JSON are strings, without a redundant kind object. Use `encoding/json/v2` and
+`encoding/json/jsontext` at JSON boundaries.
 
 go-field may use the standard library for its protocol validator. It need not
-import go-time merely to store strings. Consumers do not duplicate Field
-validation or reinterpret its format by calling diagnostic `Parse`.
+import go-time merely to store strings. Consumers do not reinterpret Field
+validation through diagnostic Parse.
 
-A valid Field duration can have sub-nanosecond precision or exceed the native
-Duration range. Check exact seconds-to-nanoseconds conversion only when handing
-it to a timer; failed conversion does not invalidate the original Field value.
-Do not first convert seconds to float64 and multiply by 1e9. Exporting a native
-duration also requires checking the target number domain; `InSeconds()` may
-approximate it. A negative Duration cannot be written to a nonnegative Field.
+Field Duration uses nonnegative finite binary64 seconds, not exact nanoseconds.
+Its ordinary-number normalization may round decimal input or underflow to zero.
+Only convert to native Duration for computation: check the integer-nanosecond
+range and verify that projecting back preserves the normalized Field seconds.
+Sub-nanosecond or very large seconds can remain valid Field values while being
+unsupported by the timer. Explicit product quantization must not pretend to be
+an exact conversion. Native Duration exported as Field seconds may undergo the
+ordinary binary64 rounding; Seconds() does not promise exact nanosecond recovery.
+A negative Duration cannot be written to a nonnegative Field. Exact native
+persistence uses this library's ISO Duration string, not a second Field encoding.
 
 An Instant in year 2500 does not require a UnixNano projection. UTC wire-year
 bounds and epoch scalar bounds are independent. Midnight, zero duration, and
 the Go zero Instant can be provided values; `IsZero` is not a presence check.
 `multiple` means independent values, not an Interval. Period has no implicit
 Field mapping and is never approximated as a fixed number of seconds.
+
+## Product Precision Boundaries
+
+The protocol keeps years 0000..9999 and up to nine fractional digits. TypeScript
+consumers preserve authoritative ISO strings; JavaScript Date is a millisecond
+projection and cannot preserve microsecond or nanosecond writes.
+
+A PostgreSQL product using native date/time/timestamptz supports only its verified
+subset. Reject nonzero seventh-through-ninth fractional digits before a write;
+never let the database silently round. Year zero maps to 1 BC only when the driver
+mapping has been verified; otherwise reject that subdomain explicitly. Query
+thresholds need the same care: translate comparisons exactly or reject unsupported
+high-precision operands, rather than silently rounding gt/ge/lt/le/eq boundaries.
+These are consumer requirements, not implemented database support in go-time.
+
+SQLite may store explicitly encoded text or checked internal microsecond integers.
+Its date functions do not establish nanosecond fidelity. Full-nanosecond products
+can use fixed-nine-digit UTC text with bytewise indexed ordering. Trimmed wire
+strings are not chronological sort keys: `…00Z` and `…00.1Z` sort incorrectly.
+Do not add a Field precision/profile attribute or a go-time storage framework.
 
 ## Ambiguity Protocol
 
@@ -81,11 +105,11 @@ case gotime.StatusResolved:
     switch result.Kind {
     case gotime.KindDateTime:
         if dt, ok := result.DateTime(); ok {
-            commitDateTime(dt)
+            previewDateTime(dt)
         }
     case gotime.KindDate:
         if d, ok := result.Date(); ok {
-            commitDate(d)
+            previewDate(d)
         }
     }
 case gotime.StatusAmbiguous:

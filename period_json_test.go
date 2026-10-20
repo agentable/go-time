@@ -17,7 +17,7 @@ func TestPeriodMarshalJSON_Months(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"period","value":"P3M"}`
+	want := `"P3M"`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -69,7 +69,7 @@ func TestPeriod_UnmarshalJSONWeeks(t *testing.T) {
 	t.Parallel()
 
 	var got Period
-	if err := json.Unmarshal([]byte(`{"kind":"period","value":"-P2W"}`), &got); err != nil {
+	if err := json.Unmarshal([]byte(`"-P2W"`), &got); err != nil {
 		t.Fatalf("json.Unmarshal: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestPeriod_UnmarshalJSONInvalidText(t *testing.T) {
 			t.Parallel()
 
 			var got Period
-			input := []byte(fmt.Sprintf(`{"kind":"period","value":%q}`, iso))
+			input := []byte(fmt.Sprintf(`%q`, iso))
 			err := json.Unmarshal(input, &got)
 			if !errors.Is(err, ErrInvalidPeriod) {
 				t.Fatalf("json.Unmarshal(%q) error = %v, want ErrInvalidPeriod", iso, err)

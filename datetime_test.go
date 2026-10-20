@@ -222,8 +222,8 @@ func TestDateTime_Add_Sub(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Add(2*Hour).Sub() error = %v", err)
 	}
-	if got.InHours() != 2.0 {
-		t.Errorf("Add(2*Hour).Sub() = %v hours, want 2.0", got.InHours())
+	if got.Hours() != 2.0 {
+		t.Errorf("Add(2*Hour).Sub() = %v hours, want 2.0", got.Hours())
 	}
 }
 
@@ -276,8 +276,8 @@ func TestDateTime_Sub_Negative(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Add(-30*Minute).Sub() error = %v", err)
 	}
-	if got.InMinutes() != -30.0 {
-		t.Errorf("Add(-30*Minute).Sub() = %v minutes, want -30.0", got.InMinutes())
+	if got.Minutes() != -30.0 {
+		t.Errorf("Add(-30*Minute).Sub() = %v minutes, want -30.0", got.Minutes())
 	}
 }
 

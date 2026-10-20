@@ -29,7 +29,7 @@ func (ldt LocalDateTime) String() string {
 	return ldt.Date.String() + "T" + ldt.Time.String()
 }
 
-// MarshalJSON encodes ldt as {"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS"}.
+// MarshalJSON encodes the local date-time as a JSON string.
 func (ldt LocalDateTime) MarshalJSON() ([]byte, error) {
 	if msg := validateDateComponents(ldt.Date.year, int(ldt.Date.month), ldt.Date.day); msg != "" {
 		return nil, newTimeError(
@@ -47,37 +47,25 @@ func (ldt LocalDateTime) MarshalJSON() ([]byte, error) {
 			"marshal a LocalDateTime containing a Time constructed with NewTime or NewTimeNanos",
 		)
 	}
-	return json.Marshal(struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	}{
-		Kind:  "local_datetime",
-		Value: ldt.String(),
-	})
+	return json.Marshal(ldt.String())
 }
 
-// UnmarshalJSON decodes ldt from {"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS[.fraction]"}
+// UnmarshalJSON decodes the local date-time from a JSON string
 // and replaces ldt. Callers must not read or write the same receiver concurrently.
 func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
-	var wire struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	}
-	if err := unmarshalJSONWire(b, &wire); err != nil {
+	var value string
+	if err := unmarshalJSONWire(b, &value); err != nil {
 		return err
 	}
-	if err := requireJSONKind("local_datetime", wire.Kind, "local_datetime"); err != nil {
+	if err := requireJSONString("local_datetime", "", value); err != nil {
 		return err
 	}
-	if err := requireJSONString("local_datetime", "value", wire.Value); err != nil {
-		return err
-	}
-	parsed, err := time.Parse("2006-01-02T15:04:05", wire.Value)
+	parsed, err := time.Parse("2006-01-02T15:04:05", value)
 	if err != nil {
 		sentinel := ErrInvalidFormat
 		message := "local datetime value is not valid"
 		hint := "use a local datetime such as 2026-03-27T13:30:45"
-		if dateText, timeText, ok := strings.Cut(wire.Value, "T"); ok {
+		if dateText, timeText, ok := strings.Cut(value, "T"); ok {
 			if _, dateErr := time.Parse("2006-01-02", dateText); dateErr != nil {
 				sentinel = ErrInvalidDate
 				message = "local datetime contains an invalid calendar date"
@@ -88,9 +76,10 @@ func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 				hint = "use a clock time such as 13:30:45 or 13:30:45.123"
 			}
 		}
-		return newTimeErrorWithCause(sentinel, err, message, wire.Value, hint)
+		return newTimeErrorWithCause(sentinel, err, message, value, hint)
 	}
-	if err := requireJSONPrecision(wire.Value); err != nil {
+	_, clock, _ := strings.Cut(value, "T")
+	if err := requireJSONClock(clock); err != nil {
 		return err
 	}
 	date, err := DateFromTime(parsed)

@@ -159,8 +159,8 @@ func TestParse_Interval_StartDuration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Length() error = %v", err)
 	}
-	if length.InHours() != 12 {
-		t.Errorf("length = %v hours, want 12", length.InHours())
+	if length.Hours() != 12 {
+		t.Errorf("length = %v hours, want 12", length.Hours())
 	}
 }
 
@@ -174,8 +174,8 @@ func TestParse_Interval_DurationEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Length() error = %v", err)
 	}
-	if length.InHours() != 12 {
-		t.Errorf("length = %v hours, want 12", length.InHours())
+	if length.Hours() != 12 {
+		t.Errorf("length = %v hours, want 12", length.Hours())
 	}
 }
 

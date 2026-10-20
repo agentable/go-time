@@ -23,14 +23,9 @@ func tryParseDate(input string, cfg *config) (ParseResult, bool) {
 		}
 		return resolvedDateResult(input, dateFromComponents(year, time.Month(mon), day), cfg), true
 	}
-	if m := reYearMonth.FindStringSubmatch(input); m != nil {
-		year, mon := atoi(m[1]), atoi(m[2])
-		if mon < 1 || mon > 12 {
-			return invalidResult(input, ErrInvalidDate,
-				fmt.Sprintf("invalid month %d", mon),
-				"Month must be between 1 and 12"), true
-		}
-		return resolvedDateResult(input, dateFromComponents(year, time.Month(mon), 1), cfg), true
+	if reYearMonth.MatchString(input) {
+		return invalidResult(input, ErrInvalidDate, "year and month do not specify a calendar day",
+			"Provide a complete date, e.g. 2026-03-27"), true
 	}
 	if m := reOrdinalDate.FindStringSubmatch(input); m != nil {
 		year, doy := atoi(m[1]), atoi(m[2])
@@ -55,10 +50,11 @@ func tryParseDate(input string, cfg *config) (ParseResult, bool) {
 	}
 	if m := reWeekDate.FindStringSubmatch(input); m != nil {
 		year, week := atoi(m[1]), atoi(m[2])
-		dayOfWeek := 1
-		if m[3] != "" {
-			dayOfWeek = atoi(m[3])
+		if m[3] == "" {
+			return invalidResult(input, ErrInvalidDate, "ISO week does not specify a weekday",
+				"Provide an ISO week date with weekday, e.g. 2026-W13-5"), true
 		}
+		dayOfWeek := atoi(m[3])
 		if week < 1 || week > 53 {
 			return invalidResult(input, ErrInvalidDate,
 				fmt.Sprintf("invalid ISO week %d", week),

@@ -143,3 +143,19 @@ func TestTime_StringLeadingZeros(t *testing.T) {
 		t.Errorf("String() = %q, want %q", ct.String(), "09:05:03")
 	}
 }
+
+func TestTimeCompare(t *testing.T) {
+	clock := mustTimeNanos(12, 30, 0, 1)
+	for _, tc := range []struct {
+		other Time
+		want  int
+	}{
+		{mustTime(12, 30, 0), 1},
+		{clock, 0},
+		{mustTimeNanos(12, 30, 0, 2), -1},
+	} {
+		if got := clock.Compare(tc.other); got != tc.want {
+			t.Errorf("Compare(%s) = %d, want %d", tc.other, got, tc.want)
+		}
+	}
+}

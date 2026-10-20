@@ -19,7 +19,7 @@ func TestDateTimeMarshalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"datetime","instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"}`
+	want := `{"instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"}`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -27,7 +27,7 @@ func TestDateTimeMarshalJSON(t *testing.T) {
 
 func TestDateTimeUnmarshalJSON(t *testing.T) {
 	var dt DateTime
-	input := `{"kind":"datetime","instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"}`
+	input := `{"instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"}`
 	if err := json.Unmarshal([]byte(input), &dt); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestDateTimeMarshalJSON_ZeroZoneProjectionsUseUTC(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Marshal error: %v", err)
 			}
-			want := `{"kind":"datetime","instant":"1970-01-01T00:00:00Z","zone":"UTC"}`
+			want := `{"instant":"1970-01-01T00:00:00Z","zone":"UTC"}`
 			if string(b) != want {
 				t.Fatalf("Marshal() = %s, want %s", b, want)
 			}
@@ -110,7 +110,7 @@ func TestDateTimeMarshalJSON_ZeroZoneProjectionsUseUTC(t *testing.T) {
 
 func TestDateTimeUnmarshalJSON_NoZone(t *testing.T) {
 	var dt DateTime
-	input := `{"kind":"datetime","instant":"2026-03-27T04:00:00Z"}`
+	input := `{"instant":"2026-03-27T04:00:00Z"}`
 	err := json.Unmarshal([]byte(input), &dt)
 	if !errors.Is(err, ErrInvalidFormat) {
 		t.Fatalf("Unmarshal error = %v, want ErrInvalidFormat", err)
@@ -119,7 +119,7 @@ func TestDateTimeUnmarshalJSON_NoZone(t *testing.T) {
 
 func TestDateTimeUnmarshalJSON_ProjectsStoredInstantInZone(t *testing.T) {
 	var dt DateTime
-	input := `{"kind":"datetime","instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"}`
+	input := `{"instant":"2026-03-27T04:00:00Z","zone":"Asia/Tokyo"}`
 	if err := json.Unmarshal([]byte(input), &dt); err != nil {
 		t.Fatalf("Unmarshal error = %v", err)
 	}
@@ -134,8 +134,8 @@ func TestDateTimeUnmarshalJSON_RejectsInvalidInstantOrZone(t *testing.T) {
 		input string
 		want  error
 	}{
-		{name: "invalid instant", input: `{"kind":"datetime","instant":"not-a-time","zone":"UTC"}`, want: ErrInvalidFormat},
-		{name: "invalid zone", input: `{"kind":"datetime","instant":"2026-03-27T04:00:00Z","zone":"Mars/Olympus"}`, want: ErrInvalidZone},
+		{name: "invalid instant", input: `{"instant":"not-a-time","zone":"UTC"}`, want: ErrInvalidFormat},
+		{name: "invalid zone", input: `{"instant":"2026-03-27T04:00:00Z","zone":"Mars/Olympus"}`, want: ErrInvalidZone},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

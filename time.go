@@ -1,6 +1,7 @@
 package gotime
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 	"time"
@@ -93,7 +94,7 @@ func (t Time) String() string {
 	return fmt.Sprintf("%02d:%02d:%02d.%s", t.hour, t.minute, t.second, frac)
 }
 
-// MarshalJSON encodes t as {"kind":"time","value":"HH:MM:SS[.fraction]"}.
+// MarshalJSON encodes the time as a JSON string.
 func (t Time) MarshalJSON() ([]byte, error) {
 	if msg := validateTimeComponents(t.hour, t.minute, t.second, t.nanosecond); msg != "" {
 		return nil, newTimeError(
@@ -103,47 +104,33 @@ func (t Time) MarshalJSON() ([]byte, error) {
 			"marshal a Time constructed with NewTime or NewTimeNanos",
 		)
 	}
-	return json.Marshal(struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	}{Kind: "time", Value: t.String()})
+	return json.Marshal(t.String())
 }
 
-// UnmarshalJSON decodes t from {"kind":"time","value":"HH:MM:SS[.nnnnnnnnn]"}
+// UnmarshalJSON decodes the time from a JSON string
 // and replaces t. Callers must not read or write the same receiver concurrently.
 func (t *Time) UnmarshalJSON(b []byte) error {
-	var wire struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	}
-	if err := unmarshalJSONWire(b, &wire); err != nil {
+	var value string
+	if err := unmarshalJSONWire(b, &value); err != nil {
 		return err
 	}
-	if err := requireJSONKind("time", wire.Kind, "time"); err != nil {
+	if err := requireJSONString("time", "", value); err != nil {
 		return err
 	}
-	if err := requireJSONString("time", "value", wire.Value); err != nil {
-		return err
-	}
-	parsed, err := time.Parse("15:04:05", wire.Value)
+	parsed, err := time.Parse("15:04:05", value)
 	if err != nil {
 		return newTimeErrorWithCause(
 			ErrInvalidTime,
 			err,
 			"time value is not a valid clock time",
-			wire.Value,
+			value,
 			"use a clock time such as 13:30:45 or 13:30:45.123",
 		)
 	}
-	parsedTime := TimeFromTime(parsed)
-	if canonical := parsedTime.String(); wire.Value != canonical {
-		return newTimeError(
-			ErrInvalidFormat,
-			"time value is not canonical",
-			wire.Value,
-			fmt.Sprintf("use %q for this time value", canonical),
-		)
+	if err := requireJSONClock(value); err != nil {
+		return err
 	}
+	parsedTime := TimeFromTime(parsed)
 	*t = parsedTime
 	return nil
 }
@@ -162,3 +149,6 @@ func validateTimeComponents(hour, minute, second, nanosecond int) string {
 		return ""
 	}
 }
+
+// Compare returns -1 if t is before other, 0 if equal, and 1 if after.
+func (t Time) Compare(other Time) int { return cmp.Compare(t.toNano(), other.toNano()) }

@@ -135,16 +135,13 @@ func (i Instant) String() string {
 	return i.t.Format(time.RFC3339Nano)
 }
 
-// MarshalJSON encodes i as {"kind":"instant","iso":"<RFC3339Nano UTC>"}.
+// MarshalJSON encodes the instant as a JSON string.
 func (i Instant) MarshalJSON() ([]byte, error) {
 	iso, err := i.wireISO()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(struct {
-		Kind string `json:"kind"`
-		ISO  string `json:"iso"`
-	}{Kind: "instant", ISO: iso})
+	return json.Marshal(iso)
 }
 
 func (i Instant) validateWireDomain() error {
@@ -177,23 +174,17 @@ func (i Instant) wireISO() (string, error) {
 	return iso, nil
 }
 
-// UnmarshalJSON decodes i from {"kind":"instant","iso":"<RFC3339Nano>",...}
+// UnmarshalJSON decodes the instant from a JSON string
 // and replaces i. Callers must not read or write the same receiver concurrently.
 func (i *Instant) UnmarshalJSON(b []byte) error {
-	var wire struct {
-		Kind string `json:"kind"`
-		ISO  string `json:"iso"`
-	}
-	if err := unmarshalJSONWire(b, &wire); err != nil {
+	var value string
+	if err := unmarshalJSONWire(b, &value); err != nil {
 		return err
 	}
-	if err := requireJSONKind("instant", wire.Kind, "instant"); err != nil {
+	if err := requireJSONString("instant", "", value); err != nil {
 		return err
 	}
-	if err := requireJSONString("instant", "iso", wire.ISO); err != nil {
-		return err
-	}
-	parsed, err := parseJSONInstant(wire.ISO)
+	parsed, err := parseJSONInstant(value)
 	if err != nil {
 		return err
 	}

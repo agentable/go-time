@@ -15,7 +15,7 @@ func TestInstantMarshalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"instant","iso":"1970-01-01T00:00:00Z"}`
+	want := `"1970-01-01T00:00:00Z"`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -23,7 +23,7 @@ func TestInstantMarshalJSON(t *testing.T) {
 
 func TestInstantUnmarshalJSON(t *testing.T) {
 	var i Instant
-	if err := json.Unmarshal([]byte(`{"kind":"instant","iso":"1970-01-01T00:00:00Z"}`), &i); err != nil {
+	if err := json.Unmarshal([]byte(`"1970-01-01T00:00:00Z"`), &i); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	got, err := i.UnixNano()
@@ -39,7 +39,7 @@ func TestInstantUnmarshalJSON_NormalizesOffsetInput(t *testing.T) {
 	t.Parallel()
 
 	var instant Instant
-	input := []byte(`{"kind":"instant","iso":"1970-01-01T09:00:00+09:00"}`)
+	input := []byte(`"1970-01-01T09:00:00+09:00"`)
 	if err := json.Unmarshal(input, &instant); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
@@ -50,7 +50,7 @@ func TestInstantUnmarshalJSON_NormalizesOffsetInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
-	want := `{"kind":"instant","iso":"1970-01-01T00:00:00Z"}`
+	want := `"1970-01-01T00:00:00Z"`
 	if string(got) != want {
 		t.Fatalf("Marshal() = %s, want %s", got, want)
 	}
@@ -92,7 +92,7 @@ func TestInstantMarshalJSON_RejectsUnparseableYear(t *testing.T) {
 
 func TestInstantUnmarshalJSON_Invalid(t *testing.T) {
 	var i Instant
-	err := json.Unmarshal([]byte(`{"kind":"instant","iso":"not-a-time"}`), &i)
+	err := json.Unmarshal([]byte(`"not-a-time"`), &i)
 	if err == nil {
 		t.Error("expected error for invalid instant, got nil")
 	}

@@ -190,7 +190,7 @@ func (iv Interval) String() string {
 	return fmt.Sprintf("%s/%s", iv.start.String(), iv.end.String())
 }
 
-// MarshalJSON encodes iv as {"kind":"interval","start":"<RFC3339Nano>","end":"<RFC3339Nano>"}.
+// MarshalJSON encodes iv as {"start":"<RFC3339Nano>","end":"<RFC3339Nano>"}.
 func (iv Interval) MarshalJSON() ([]byte, error) {
 	if _, err := NewInterval(iv.start, iv.end); err != nil {
 		return nil, err
@@ -204,28 +204,22 @@ func (iv Interval) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(struct {
-		Kind  string `json:"kind"`
 		Start string `json:"start"`
 		End   string `json:"end"`
 	}{
-		Kind:  "interval",
 		Start: start,
 		End:   end,
 	})
 }
 
-// UnmarshalJSON decodes iv from {"kind":"interval","start":"<RFC3339Nano>","end":"<RFC3339Nano>"}
+// UnmarshalJSON decodes iv from {"start":"<RFC3339Nano>","end":"<RFC3339Nano>"}
 // and replaces iv. Callers must not read or write the same receiver concurrently.
 func (iv *Interval) UnmarshalJSON(b []byte) error {
 	var wire struct {
-		Kind  string `json:"kind"`
 		Start string `json:"start"`
 		End   string `json:"end"`
 	}
 	if err := unmarshalJSONWire(b, &wire); err != nil {
-		return err
-	}
-	if err := requireJSONKind("interval", wire.Kind, "interval"); err != nil {
 		return err
 	}
 	if err := requireJSONString("interval", "start", wire.Start); err != nil {

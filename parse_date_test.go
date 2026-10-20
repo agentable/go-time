@@ -15,7 +15,7 @@ func TestParse_Date_ISO(t *testing.T) {
 	}{
 		{"2026-03-27", 2026, time.March, 27, false},
 		{"20260327", 2026, time.March, 27, false},
-		{"2026-03", 2026, time.March, 1, false},
+		{"2026-03", 0, 0, 0, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
@@ -168,5 +168,19 @@ func TestParse_Input_Preserved(t *testing.T) {
 	r := Parse(input)
 	if r.Input != input {
 		t.Errorf("Input = %q, want %q", r.Input, input)
+	}
+}
+
+func TestParseDateRejectsIncompleteCalendar(t *testing.T) {
+	for _, input := range []string{"2026-03", "2026-W13"} {
+		t.Run(input, func(t *testing.T) {
+			r := Parse(input)
+			if r.Status != StatusInvalid || r.Error == nil || r.Error.Hint == "" {
+				t.Fatalf("incomplete date must prompt for missing components: %+v", r)
+			}
+			if _, err := ParseDate(input); err == nil {
+				t.Fatal("typed parser silently invented a day")
+			}
+		})
 	}
 }

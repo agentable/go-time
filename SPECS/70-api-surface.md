@@ -150,6 +150,19 @@ exactly one candidate. Zero, unknown, and contradictory states return a zero
 `DateTime` with a typed error rather than panicking; `LocalResolution{}` and
 `LocalResolved` candidate-count contradictions match `ErrInvalidTime`.
 
+## Unit Projections And Clock Comparison
+
+```go
+func (d Duration) Seconds() float64
+func (d Duration) Minutes() float64
+func (d Duration) Hours() float64
+func (t Time) Compare(other Time) int
+```
+
+Duration projections use the standard-library algorithm. They are direct methods,
+not exact-decimal export operations. Time.Compare returns -1, 0 or 1 by local
+clock order; it does not turn a clock into an instant or grant Query sorting.
+
 ## Duration Constants
 
 ```go
@@ -329,23 +342,23 @@ Concrete value objects have strict bidirectional JSON contracts:
 
 Stable value JSON:
 
-- `Instant`: `{"kind":"instant","iso":"..."}`
-- `DateTime`: `{"kind":"datetime","instant":"...Z","zone":"..."}`
-- `LocalDateTime`: `{"kind":"local_datetime","value":"YYYY-MM-DDTHH:MM:SS[.fraction]"}`
-- `Date`: `{"kind":"date","value":"YYYY-MM-DD"}`
-- `Time`: `{"kind":"time","value":"HH:MM:SS[.fraction]"}`
-- `Duration`: `{"kind":"duration","iso":"..."}`
-- `Period`: `{"kind":"period","value":"..."}`
-- `Interval`: `{"kind":"interval","start":"...","end":"..."}`
-- `Zone`: `{"kind":"zone","id":"..."}`
+- `Instant`: `"..."`
+- `DateTime`: `{"instant":"...Z","zone":"..."}`
+- `LocalDateTime`: `"YYYY-MM-DDTHH:MM:SS[.fraction]"`
+- `Date`: `"YYYY-MM-DD"`
+- `Time`: `"HH:MM:SS[.fraction]"`
+- `Duration`: `"..."`
+- `Period`: `"..."`
+- `Interval`: `{"start":"...","end":"..."}`
+- `Zone`: `"..."`
 
 Decoding is structurally strict for value-object JSON: unknown fields, missing
-required fields, and wrong `kind` are errors. Value syntax is type-specific;
+required fields, and wrong JSON types are errors. Value syntax is type-specific;
 values outside the owning grammar and invalid identities are errors. Accepted
 RFC 3339 offsets in `Instant` and `Interval` endpoints normalize to UTC `Z` on
 marshal.
 
-`Duration` ISO strings use canonical decimal seconds for sub-second precision; scientific notation is outside the wire domain. A zero `Zone` encodes with `id:"UTC"` to match its total UTC projection behavior.
+`Duration` ISO strings use canonical decimal seconds for sub-second precision; scientific notation is outside the wire domain. A zero `Zone` encodes as `"UTC"` to match its total UTC projection behavior.
 
 `ParseResult` and `TimeError` instead provide one-way diagnostic JSON output.
 `ParseResult` explicitly rejects decoding and omits runtime-only parse metadata,

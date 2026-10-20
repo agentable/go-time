@@ -246,7 +246,7 @@ func (d Date) String() string {
 	return fmt.Sprintf("%04d-%02d-%02d", d.year, int(d.month), d.day)
 }
 
-// MarshalJSON encodes d as {"kind":"date","value":"YYYY-MM-DD"}.
+// MarshalJSON encodes the date as a JSON string.
 func (d Date) MarshalJSON() ([]byte, error) {
 	if msg := validateDateComponents(d.year, int(d.month), d.day); msg != "" {
 		return nil, newTimeError(
@@ -256,35 +256,26 @@ func (d Date) MarshalJSON() ([]byte, error) {
 			"marshal a Date constructed with NewDate",
 		)
 	}
-	return json.Marshal(struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	}{Kind: "date", Value: d.String()})
+	return json.Marshal(d.String())
 }
 
-// UnmarshalJSON decodes d from {"kind":"date","value":"YYYY-MM-DD"} and
-// replaces d. Callers must not read or write the same receiver concurrently.
+// UnmarshalJSON decodes the date from a JSON string
+// and replaces d. Callers must not read or write the same receiver concurrently.
 func (d *Date) UnmarshalJSON(b []byte) error {
-	var wire struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	}
-	if err := unmarshalJSONWire(b, &wire); err != nil {
+	var value string
+	if err := unmarshalJSONWire(b, &value); err != nil {
 		return err
 	}
-	if err := requireJSONKind("date", wire.Kind, "date"); err != nil {
+	if err := requireJSONString("date", "", value); err != nil {
 		return err
 	}
-	if err := requireJSONString("date", "value", wire.Value); err != nil {
-		return err
-	}
-	t, err := time.Parse("2006-01-02", wire.Value)
+	t, err := time.Parse("2006-01-02", value)
 	if err != nil {
 		return newTimeErrorWithCause(
 			ErrInvalidDate,
 			err,
 			"date value is not a valid calendar date",
-			wire.Value,
+			value,
 			"use a real calendar date such as 2026-03-27",
 		)
 	}

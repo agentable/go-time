@@ -16,35 +16,19 @@ func unmarshalJSONWire(b []byte, out any) error {
 			err,
 			"JSON does not match the required wire structure",
 			"",
-			"provide a JSON object with only the documented fields and matching JSON value types",
+			"provide the documented JSON string or closed object with matching value types",
 		)
 	}
 	return nil
 }
 
-func requireJSONKind(typeName, got, want string) error {
-	if got == want {
-		return nil
-	}
-	if got == "" {
-		return newTimeError(
-			ErrInvalidFormat,
-			fmt.Sprintf("%s kind is required", typeName),
-			"",
-			fmt.Sprintf("encode %s JSON with kind %q", typeName, want),
-		)
-	}
-	return newTimeError(
-		ErrInvalidFormat,
-		fmt.Sprintf("%s kind must be %q", typeName, want),
-		got,
-		fmt.Sprintf("encode %s JSON with kind %q", typeName, want),
-	)
-}
-
 func requireJSONString(typeName, field, value string) error {
 	if value != "" {
 		return nil
+	}
+	if field == "" {
+		return newTimeError(ErrInvalidFormat, typeName+" requires a non-empty string", "",
+			"provide the documented value as a non-empty JSON string")
 	}
 	return newTimeError(
 		ErrInvalidFormat,
@@ -101,4 +85,14 @@ func parseJSONInstant(value string) (Instant, error) {
 		return Instant{}, err
 	}
 	return InstantFromTime(t), nil
+}
+
+var jsonClockPattern = regexp.MustCompile(`^[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?$`)
+
+func requireJSONClock(value string) error {
+	if jsonClockPattern.MatchString(value) {
+		return nil
+	}
+	return newTimeError(ErrInvalidFormat, "clock does not match the JSON wire grammar", value,
+		"use HH:MM:SS with at most nine decimal-point fraction digits and no offset")
 }

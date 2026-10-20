@@ -147,7 +147,6 @@ func Example_jsonMarshal() {
 
 	// Output:
 	// {
-	//   "kind": "datetime",
 	//   "instant": "2026-03-27T04:00:00Z",
 	//   "zone": "Asia/Tokyo"
 	// }

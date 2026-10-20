@@ -202,7 +202,10 @@ Operational corollaries:
 - Relative natural dates/datetimes require both `WithReference` and `WithZone`; formal floating datetimes may omit `WithZone` and remain `LocalDateTime`.
 - `internal/natural` receives an already-projected civil reference and returns civil components plus closed internal error categories only; it does not own ambiguity or zone resolution. `LocalDateTime.Resolve` at the gotime boundary is the sole owner of natural datetime zone resolution.
 - Explicit document rules enter through `LoadZoneFromTZData`; they do not register global names. `Zone.Equal` compares label, source kind and exact rule snapshot. Custom Zone/DateTime JSON returns `ErrInvalidZone` rather than losing the rules.
-- `Zone.MarshalJSON` for named zones outputs only `{"kind":"zone","id":"..."}` and normalizes zero `Zone` to `UTC`. Encode Zone and DateTime from their held values; never reload timezone rules or call `time.Now()` during marshal. Time-dependent offset and abbreviation projection belongs to stdlib `time.Time.Zone`.
+- `Zone.MarshalJSON` for named zones outputs only `"..."` and normalizes zero `Zone` to `UTC`. Encode Zone and DateTime from their held values; never reload timezone rules or call `time.Now()` during marshal. Time-dependent offset and abbreviation projection belongs to stdlib `time.Time.Zone`.
+- Parsing preserves original input, including surrounding whitespace, in results, errors and candidates. Incomplete year-month/ISO-week input prompts for a complete date; never default the missing day.
+- Concrete JSON values are strings except DateTime `{instant,zone}` and Interval `{start,end}`. Diagnostic ParseResult uses only one `kind` discriminator; it is not a persistence or commit API.
+- `Duration.Seconds/Minutes/Hours` directly use standard-library projections; `Abs` retains its documented minimum-int64 saturation. `Time.Compare` follows Go time ordering.
 - `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
 - `ParseResult` has no public `Value() any` escape hatch — dispatch unknown input with `Status`, `Kind`, and comma-ok accessors.
 - `ParseResult.HasZone` indicates whether the input explicitly included timezone/offset information — use this to detect floating times
@@ -210,7 +213,7 @@ Operational corollaries:
 - `Code*` is `ErrorCode` (string metadata); `Err*` is a sentinel `error`. Never mix prefixes.
 - `MustLoadZone` is the only public `Must*`. Never add `MustParse`, `MustNewInterval`, etc.
 - `Parse("P{date-only}")` (e.g. `P1Y`, `P5D`, `P2W`) routes to `KindPeriod`. `Parse("PT{time-only}")` routes to `KindDuration`. `Parse("P{date}T{time}")` returns `StatusInvalid` + `CodeInvalidFormat` — no single type can carry both halves.
-- Duration / Period JSON contain **only** `{"kind":..., "iso":...}`. No `components` / `years` / `months` / `days` fields on the wire. Run `Duration.Decompose()` or read `Period` struct fields at the call site.
+- Duration / Period JSON are strings: Duration uses ISO8601(), Period uses String(). No `components` / `years` / `months` / `days` fields on the wire. Run `Duration.Decompose()` or read `Period` struct fields at the call site.
 - Concrete value JSON decoders map structural failures to `ErrInvalidFormat` and semantic failures to the precise value sentinel, always with a `*TimeError` hint when dispatch reaches the decoder. Preserve underlying causes in the unwrap chain.
 - `Duration.ISO8601()` uses canonical decimal seconds for sub-second precision; scientific notation is not accepted on the wire.
 - Parse ambiguity (slash-date with no locale, DST fall-back) returns `StatusAmbiguous` with `Candidates`. The caller decides — there is no `WithStrategy` knob.
@@ -241,7 +244,7 @@ Operational corollaries:
 - No `gotime.Day` Duration constant — calendar day is `Days(n)` (Period), 24h is `24 * Hour` (Duration); the name collision is a footgun
 - No `Min` / `Max` / `Clamp` methods — selection composes with `slices.MinFunc(xs, gotime.Instant.Compare)` etc.
 - No `StartOf*` / `EndOf*` family — half-open intervals don't need them; explicit construction is 3 lines and avoids the "does EndOfDay include the last nanosecond?" trap
-- No `Duration.InDays()` — Days is a Period concept; if a caller wants 24-hour groups it can do `d.InHours() / 24`
+- No `Duration.InDays()` — Days is a Period concept; if a caller wants 24-hour groups it can do `d.Hours() / 24`
 - No JSON wire field that is also derivable from another field in the same payload — every value object's JSON has exactly one source of truth (`iso` for Duration/Period, etc.)
 - No global mutable defaults (default zone, default language)
 - No documentation masquerading as code — specs are the SSOT; code executes rules, not redescribes them
@@ -324,8 +327,8 @@ This repository publishes one Go library module:
 Internal generators are repository tooling within this module; reference and
 skill submodules are study/workflow inputs, not separately published modules.
 The complete release gate is `GOWORK=off task verify`. Validate the exact
-candidate commit from an isolated checkout, push it to `main`, then create and
-push its annotated version tag. Never move a published tag. Verify the remote
+candidate in the canonical checkout; do not create temporary checkouts. Create
+an annotated patch tag and push main plus that explicit tag atomically. Never move a published tag. Verify the remote
 peeled tag and direct Go module resolution against the released commit.
 
 ## Pre-commit Hooks

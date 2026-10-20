@@ -33,8 +33,8 @@ func TestDuration_ConstArithmetic(t *testing.T) {
 		t.Errorf("5*Minute = %v, want 5m", d.Std())
 	}
 	d2 := 2 * Hour
-	if d2.InHours() != 2.0 {
-		t.Errorf("2*Hour.InHours() = %v, want 2.0", d2.InHours())
+	if d2.Hours() != 2.0 {
+		t.Errorf("2*Hour.Hours() = %v, want 2.0", d2.Hours())
 	}
 }
 
@@ -68,8 +68,8 @@ func TestDuration_UnitConversions(t *testing.T) {
 			if got := tc.d.Milliseconds(); got != tc.milliseconds {
 				t.Errorf("Milliseconds() = %d, want %d", got, tc.milliseconds)
 			}
-			if got := tc.d.InSeconds(); math.Abs(got-tc.seconds) > 1e-12 {
-				t.Errorf("InSeconds() = %v, want %v", got, tc.seconds)
+			if got := tc.d.Seconds(); math.Abs(got-tc.seconds) > 1e-12 {
+				t.Errorf("Seconds() = %v, want %v", got, tc.seconds)
 			}
 		})
 	}
@@ -235,5 +235,13 @@ func TestDuration_Std_RoundTrip(t *testing.T) {
 	back := Duration(std)
 	if back != d {
 		t.Errorf("round trip mismatch: %v vs %v", back, d)
+	}
+}
+
+func TestDuration_UnitProjectionMatchesStdlib(t *testing.T) {
+	for _, d := range []Duration{9007199999999999, -9007199999999999, 1, -1, Duration(math.MaxInt64), Duration(math.MinInt64)} {
+		if d.Seconds() != d.Std().Seconds() || d.Minutes() != d.Std().Minutes() || d.Hours() != d.Std().Hours() {
+			t.Errorf("unit projection differs from stdlib for %d nanoseconds", d.Nanoseconds())
+		}
 	}
 }

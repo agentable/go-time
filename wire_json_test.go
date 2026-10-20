@@ -65,27 +65,38 @@ func TestJSONUnmarshalStructuralErrors(t *testing.T) {
 			t.Parallel()
 
 			valid := maps.Clone(tc.fields)
-			valid["kind"] = tc.kind
-
-			wrongType := maps.Clone(tc.fields)
-			wrongType["kind"] = false
-
 			unknown := maps.Clone(valid)
 			unknown["unexpected"] = true
+			legacy := maps.Clone(valid)
+			legacy["kind"] = tc.kind
 
-			wrongKind := maps.Clone(tc.fields)
-			wrongKind["kind"] = "wrong"
+			var wrongType any = false
+			var missing any = ""
+			if tc.kind == "datetime" || tc.kind == "interval" {
+				wrong := maps.Clone(valid)
+				incomplete := maps.Clone(valid)
+				for field := range valid {
+					wrong[field] = false
+					delete(incomplete, field)
+					break
+				}
+				wrongType = wrong
+				missing = incomplete
+			}
 
 			cases := []struct {
 				name      string
 				input     []byte
 				causeType string
 			}{
+				{name: "null", input: []byte(`null`)},
+				{name: "boolean", input: []byte(`false`), causeType: "semantic"},
+				{name: "array", input: []byte(`[]`), causeType: "semantic"},
 				{name: "malformed", input: []byte(`{"kind":`), causeType: "syntax"},
 				{name: "wrong field type", input: mustJSON(t, wrongType), causeType: "semantic"},
 				{name: "unknown member", input: mustJSON(t, unknown), causeType: "semantic"},
-				{name: "missing required field", input: mustJSON(t, map[string]any{"kind": tc.kind})},
-				{name: "wrong kind", input: mustJSON(t, wrongKind)},
+				{name: "missing required field", input: mustJSON(t, missing)},
+				{name: "legacy object", input: mustJSON(t, legacy)},
 			}
 			for _, failure := range cases {
 				t.Run(failure.name, func(t *testing.T) {
@@ -114,61 +125,61 @@ func TestJSONUnmarshalSemanticErrors(t *testing.T) {
 	}{
 		newJSONSemanticCase(
 			"date",
-			`{"kind":"date","value":"2026-02-30"}`,
+			`"2026-02-30"`,
 			ErrInvalidDate,
 			date,
 		),
 		newJSONSemanticCase(
 			"time",
-			`{"kind":"time","value":"25:00:00"}`,
+			`"25:00:00"`,
 			ErrInvalidTime,
 			clock,
 		),
 		newJSONSemanticCase(
 			"local datetime date",
-			`{"kind":"local_datetime","value":"2026-02-30T13:30:45"}`,
+			`"2026-02-30T13:30:45"`,
 			ErrInvalidDate,
 			NewLocalDateTime(date, clock),
 		),
 		newJSONSemanticCase(
 			"local datetime time",
-			`{"kind":"local_datetime","value":"2026-03-27T25:30:45"}`,
+			`"2026-03-27T25:30:45"`,
 			ErrInvalidTime,
 			NewLocalDateTime(date, clock),
 		),
 		newJSONSemanticCase(
 			"instant",
-			`{"kind":"instant","iso":"not-an-instant"}`,
+			`"not-an-instant"`,
 			ErrInvalidFormat,
 			UnixNanos(1),
 		),
 		newJSONSemanticCase(
 			"datetime",
-			`{"kind":"datetime","instant":"not-an-instant","zone":"UTC"}`,
+			`{"instant":"not-an-instant","zone":"UTC"}`,
 			ErrInvalidFormat,
 			mustDateTime(date, clock, UTC),
 		),
 		newJSONSemanticCase(
 			"duration",
-			`{"kind":"duration","iso":"P1D"}`,
+			`"P1D"`,
 			ErrInvalidDuration,
 			90*Minute,
 		),
 		newJSONSemanticCase(
 			"period",
-			`{"kind":"period","value":"PT1H"}`,
+			`"PT1H"`,
 			ErrInvalidPeriod,
 			Period{Years: 1},
 		),
 		newJSONSemanticCase(
 			"interval",
-			`{"kind":"interval","start":"not-an-instant","end":"1970-01-01T00:00:01Z"}`,
+			`{"start":"not-an-instant","end":"1970-01-01T00:00:01Z"}`,
 			ErrInvalidFormat,
 			mustInterval(t, UnixNanos(0), UnixNanos(1)),
 		),
 		newJSONSemanticCase(
 			"zone",
-			`{"kind":"zone","id":"Mars/Olympus"}`,
+			`"Mars/Olympus"`,
 			ErrInvalidZone,
 			MustLoadZone("Asia/Tokyo"),
 		),
@@ -210,20 +221,16 @@ func TestJSONZoneErrorsKeepStructuredInputOutOfText(t *testing.T) {
 		target any
 	}{
 		{
-			name: "zone",
-			value: struct {
-				Kind string `json:"kind"`
-				ID   string `json:"id"`
-			}{Kind: "zone", ID: sensitiveZone},
+			name:   "zone",
+			value:  sensitiveZone,
 			target: new(Zone),
 		},
 		{
 			name: "datetime",
 			value: struct {
-				Kind    string `json:"kind"`
 				Instant string `json:"instant"`
 				Zone    string `json:"zone"`
-			}{Kind: "datetime", Instant: "2026-03-27T04:00:00Z", Zone: sensitiveZone},
+			}{Instant: "2026-03-27T04:00:00Z", Zone: sensitiveZone},
 			target: new(DateTime),
 		},
 	}
@@ -368,12 +375,17 @@ func TestJSONClockPrecision(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, fraction := range []string{"", ".1", ".123456789", ".1234567890", ".1234567891"} {
 				fields := maps.Clone(tc.fields)
-				fields["kind"] = tc.kind
 				for key, value := range tc.fields {
 					fields[key] = strings.ReplaceAll(value.(string), "%s", fraction)
 				}
+				var input any = fields
+				if len(fields) == 1 {
+					for _, value := range fields {
+						input = value
+					}
+				}
 				before := mustJSON(t, tc.target)
-				err := json.Unmarshal(mustJSON(t, fields), tc.target)
+				err := json.Unmarshal(mustJSON(t, input), tc.target)
 				if len(fraction) > 10 {
 					assertJSONStructuralError(t, err, "")
 					if after := mustJSON(t, tc.target); !bytes.Equal(after, before) {
@@ -405,7 +417,7 @@ func TestIntervalJSONRejectsPrecisionCollapse(t *testing.T) {
 	} {
 		original := mustInterval(t, UnixNanos(0), UnixNanos(1))
 		got := original
-		input := map[string]string{"kind": "interval", "start": "2026-03-27T13:30:45" + endpoints[0] + "Z", "end": "2026-03-27T13:30:45" + endpoints[1] + "Z"}
+		input := map[string]string{"start": "2026-03-27T13:30:45" + endpoints[0] + "Z", "end": "2026-03-27T13:30:45" + endpoints[1] + "Z"}
 		assertJSONStructuralError(t, json.Unmarshal(mustJSON(t, input), &got), "")
 		if got != original {
 			t.Fatal("failed precision decode changed interval")
@@ -430,13 +442,13 @@ func TestJSONUTCWireDomain(t *testing.T) {
 			instant := UnixNanos(1)
 			interval := mustInterval(t, UnixNanos(0), UnixNanos(1))
 			for _, c := range []struct {
-				value  map[string]string
+				value  any
 				target any
 			}{
-				{map[string]string{"kind": "instant", "iso": tc.iso}, &instant},
-				{map[string]string{"kind": "interval", "start": tc.iso, "end": tc.iso}, &interval},
-				{map[string]string{"kind": "interval", "start": "0000-01-01T00:00:00Z", "end": tc.iso}, &interval},
-				{map[string]string{"kind": "interval", "start": tc.iso, "end": "9999-12-31T23:59:59Z"}, &interval},
+				{tc.iso, &instant},
+				{map[string]string{"start": tc.iso, "end": tc.iso}, &interval},
+				{map[string]string{"start": "0000-01-01T00:00:00Z", "end": tc.iso}, &interval},
+				{map[string]string{"start": tc.iso, "end": "9999-12-31T23:59:59Z"}, &interval},
 			} {
 				before := mustJSON(t, c.target)
 				err := json.Unmarshal(mustJSON(t, c.value), c.target)
@@ -488,13 +500,13 @@ func TestJSONInstantProfile(t *testing.T) {
 			datetime := mustDateTime(mustDate(2026, time.March, 27), mustTime(13, 30, 45), UTC)
 			for _, tc := range []struct {
 				name   string
-				wire   map[string]string
+				wire   any
 				target any
 			}{
-				{"instant", map[string]string{"kind": "instant", "iso": input}, &instant},
-				{"interval start", map[string]string{"kind": "interval", "start": input, "end": "9999-12-31T23:59:59Z"}, &interval},
-				{"interval end", map[string]string{"kind": "interval", "start": "0000-01-01T00:00:00Z", "end": input}, &interval},
-				{"datetime", map[string]string{"kind": "datetime", "instant": input, "zone": "UTC"}, &datetime},
+				{"instant", input, &instant},
+				{"interval start", map[string]string{"start": input, "end": "9999-12-31T23:59:59Z"}, &interval},
+				{"interval end", map[string]string{"start": "0000-01-01T00:00:00Z", "end": input}, &interval},
+				{"datetime", map[string]string{"instant": input, "zone": "UTC"}, &datetime},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					before := mustJSON(t, tc.target)
@@ -526,14 +538,14 @@ func TestJSONInstantNormalization(t *testing.T) {
 	} {
 		t.Run(tc.input, func(t *testing.T) {
 			var instant Instant
-			if err := json.Unmarshal(mustJSON(t, map[string]string{"kind": "instant", "iso": tc.input}), &instant); err != nil {
+			if err := json.Unmarshal(mustJSON(t, tc.input), &instant); err != nil {
 				t.Fatal(err)
 			}
 			if got := instant.String(); got != tc.want {
 				t.Fatalf("instant = %s, want %s", got, tc.want)
 			}
 			var interval Interval
-			if err := json.Unmarshal(mustJSON(t, map[string]string{"kind": "interval", "start": tc.input, "end": tc.input}), &interval); err != nil {
+			if err := json.Unmarshal(mustJSON(t, map[string]string{"start": tc.input, "end": tc.input}), &interval); err != nil {
 				t.Fatal(err)
 			}
 			if !interval.Start().Equal(instant) || !interval.End().Equal(instant) {
@@ -550,7 +562,7 @@ func TestJSONInstantNormalization(t *testing.T) {
 			}
 			datetime := mustDateTime(mustDate(2026, time.March, 27), mustTime(13, 30, 45), UTC)
 			before := mustJSON(t, datetime)
-			err := json.Unmarshal(mustJSON(t, map[string]string{"kind": "datetime", "instant": tc.input, "zone": "UTC"}), &datetime)
+			err := json.Unmarshal(mustJSON(t, map[string]string{"instant": tc.input, "zone": "UTC"}), &datetime)
 			if tc.input != tc.want {
 				if !errors.Is(err, ErrInvalidFormat) {
 					t.Fatalf("noncanonical DateTime input error = %v", err)
@@ -569,13 +581,13 @@ func TestJSONInstantCalendarErrorKeepsCause(t *testing.T) {
 	t.Parallel()
 	const invalid = "2026-02-30T12:00:00Z"
 	for _, tc := range []struct {
-		wire   map[string]string
+		wire   any
 		target any
 	}{
-		{map[string]string{"kind": "instant", "iso": invalid}, new(Instant)},
-		{map[string]string{"kind": "interval", "start": invalid, "end": "2026-03-01T00:00:00Z"}, new(Interval)},
-		{map[string]string{"kind": "interval", "start": "2026-01-01T00:00:00Z", "end": invalid}, new(Interval)},
-		{map[string]string{"kind": "datetime", "instant": invalid, "zone": "UTC"}, new(DateTime)},
+		{invalid, new(Instant)},
+		{map[string]string{"start": invalid, "end": "2026-03-01T00:00:00Z"}, new(Interval)},
+		{map[string]string{"start": "2026-01-01T00:00:00Z", "end": invalid}, new(Interval)},
+		{map[string]string{"instant": invalid, "zone": "UTC"}, new(DateTime)},
 	} {
 		err := json.Unmarshal(mustJSON(t, tc.wire), tc.target)
 		var cause *time.ParseError
@@ -594,5 +606,47 @@ func TestJSONInstantProfileLeavesHumanGrammarUnchanged(t *testing.T) {
 	}
 	if _, err := ParseTime("09:30"); err != nil {
 		t.Errorf("human ParseTime shorthand: %v", err)
+	}
+}
+
+func TestConcreteValuesUseDirectJSON(t *testing.T) {
+	d := mustDate(2026, time.October, 20)
+	clock := mustTimeNanos(12, 30, 0, 100_000_000)
+	instant := InstantFromTime(time.Date(2026, time.October, 20, 12, 30, 0, 0, time.UTC))
+	for _, tc := range []struct {
+		name   string
+		value  any
+		target any
+		wire   string
+	}{
+		{"date", d, new(Date), `"2026-10-20"`},
+		{"time", clock, new(Time), `"12:30:00.1"`},
+		{"instant", instant, new(Instant), `"2026-10-20T12:30:00Z"`},
+		{"local", NewLocalDateTime(d, clock), new(LocalDateTime), `"2026-10-20T12:30:00.1"`},
+		{"duration", 1400 * Millisecond, new(Duration), `"PT1.4S"`},
+		{"period", Period{Months: 1}, new(Period), `"P1M"`},
+		{"zone", UTC, new(Zone), `"UTC"`},
+		{"datetime", mustDateTime(d, mustTime(12, 30, 0), UTC), new(DateTime), `{"instant":"2026-10-20T12:30:00Z","zone":"UTC"}`},
+		{"interval", mustInterval(t, instant, instant), new(Interval), `{"start":"2026-10-20T12:30:00Z","end":"2026-10-20T12:30:00Z"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(tc.value)
+			if err != nil || string(data) != tc.wire {
+				t.Fatalf("Marshal = %s, %v; want %s", data, err, tc.wire)
+			}
+			if err := json.Unmarshal([]byte(tc.wire), tc.target); err != nil {
+				t.Fatalf("Unmarshal = %v", err)
+			}
+			again, err := json.Marshal(tc.target)
+			if err != nil || string(again) != tc.wire {
+				t.Fatalf("round trip = %s, %v; want %s", again, err, tc.wire)
+			}
+		})
+	}
+	data, err := json.Marshal(struct {
+		Due Date `json:"due"`
+	}{Due: d})
+	if err != nil || string(data) != `{"due":"2026-10-20"}` {
+		t.Fatalf("record = %s, %v", data, err)
 	}
 }

@@ -62,9 +62,9 @@ func TestParse_Duration(t *testing.T) {
 				t.Fatalf("kind = %v, want KindDuration", r.Kind)
 			}
 			d, _ := r.Duration()
-			got := d.InMinutes()
+			got := d.Minutes()
 			if got != tt.wantMin {
-				t.Errorf("InMinutes() = %v, want %v", got, tt.wantMin)
+				t.Errorf("Minutes() = %v, want %v", got, tt.wantMin)
 			}
 		})
 	}

@@ -18,7 +18,7 @@ func TestIntervalMarshalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"interval","start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}`
+	want := `{"start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -56,7 +56,7 @@ func TestInterval_UnmarshalJSON_RoundTrip(t *testing.T) {
 
 func TestIntervalUnmarshalJSON(t *testing.T) {
 	var iv Interval
-	input := `{"kind":"interval","start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}`
+	input := `{"start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}`
 	if err := json.Unmarshal([]byte(input), &iv); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestIntervalUnmarshalJSON_NormalizesOffsetInput(t *testing.T) {
 	t.Parallel()
 
 	var interval Interval
-	input := []byte(`{"kind":"interval","start":"1970-01-01T09:00:00+09:00","end":"1970-01-01T10:00:00+09:00"}`)
+	input := []byte(`{"start":"1970-01-01T09:00:00+09:00","end":"1970-01-01T10:00:00+09:00"}`)
 	if err := json.Unmarshal(input, &interval); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
@@ -91,7 +91,7 @@ func TestIntervalUnmarshalJSON_NormalizesOffsetInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
-	want := `{"kind":"interval","start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}`
+	want := `{"start":"1970-01-01T00:00:00Z","end":"1970-01-01T01:00:00Z"}`
 	if string(got) != want {
 		t.Fatalf("Marshal() = %s, want %s", got, want)
 	}
@@ -158,7 +158,7 @@ func TestIntervalMarshalJSON_RejectsInvalidPrivateValues(t *testing.T) {
 
 func TestIntervalUnmarshalJSON_Invalid(t *testing.T) {
 	var iv Interval
-	err := json.Unmarshal([]byte(`{"kind":"interval"}`), &iv)
+	err := json.Unmarshal([]byte(`{}`), &iv)
 	if err == nil {
 		t.Error("expected error for missing start/end, got nil")
 	}
@@ -171,9 +171,9 @@ func TestIntervalUnmarshalJSON_RejectsInvalidFields(t *testing.T) {
 		name string
 		json string
 	}{
-		{name: "invalid start", json: `{"kind":"interval","start":"not-a-time","end":"1970-01-01T01:00:00Z"}`},
-		{name: "invalid end", json: `{"kind":"interval","start":"1970-01-01T00:00:00Z","end":"not-a-time"}`},
-		{name: "end before start", json: `{"kind":"interval","start":"1970-01-01T01:00:00Z","end":"1970-01-01T00:00:00Z"}`},
+		{name: "invalid start", json: `{"start":"not-a-time","end":"1970-01-01T01:00:00Z"}`},
+		{name: "invalid end", json: `{"start":"1970-01-01T00:00:00Z","end":"not-a-time"}`},
+		{name: "end before start", json: `{"start":"1970-01-01T01:00:00Z","end":"1970-01-01T00:00:00Z"}`},
 	}
 
 	for _, tc := range cases {
@@ -193,7 +193,7 @@ func TestIntervalUnmarshalJSON_WrapsEndBeforeStartSentinel(t *testing.T) {
 	t.Parallel()
 
 	var iv Interval
-	err := json.Unmarshal([]byte(`{"kind":"interval","start":"1970-01-01T01:00:00Z","end":"1970-01-01T00:00:00Z"}`), &iv)
+	err := json.Unmarshal([]byte(`{"start":"1970-01-01T01:00:00Z","end":"1970-01-01T00:00:00Z"}`), &iv)
 	if !errors.Is(err, ErrIntervalReversed) {
 		t.Fatalf("Unmarshal() error = %v, want ErrIntervalReversed", err)
 	}

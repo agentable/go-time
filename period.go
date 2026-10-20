@@ -156,42 +156,30 @@ func (p Period) String() string {
 	return b.String()
 }
 
-// MarshalJSON encodes p as {"kind":"period","value":"<period text>"}.
+// MarshalJSON encodes the period as a JSON string.
 // The period text is the single source of truth; callers that need
 // structured slots can read p.Years / p.Months / p.Days directly.
 func (p Period) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	}{
-		Kind:  "period",
-		Value: p.String(),
-	})
+	return json.Marshal(p.String())
 }
 
-// UnmarshalJSON decodes p from {"kind":"period","value":"<period text>",...}
+// UnmarshalJSON decodes the period from a JSON string
 // and replaces p. Callers must not read or write the same receiver concurrently.
 func (p *Period) UnmarshalJSON(b []byte) error {
-	var wire struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	}
-	if err := unmarshalJSONWire(b, &wire); err != nil {
+	var value string
+	if err := unmarshalJSONWire(b, &value); err != nil {
 		return err
 	}
-	if err := requireJSONKind("period", wire.Kind, "period"); err != nil {
+	if err := requireJSONString("period", "", value); err != nil {
 		return err
 	}
-	if err := requireJSONString("period", "value", wire.Value); err != nil {
-		return err
-	}
-	parsed, err := parsePeriodText(wire.Value)
+	parsed, err := parsePeriodText(value)
 	if err != nil {
 		return newTimeErrorWithCause(
 			ErrInvalidPeriod,
 			err,
 			"period value is not valid period text",
-			wire.Value,
+			value,
 			"use period text such as P1Y2M3D or P+1Y-2M+3D",
 		)
 	}
