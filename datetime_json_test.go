@@ -80,7 +80,7 @@ func TestDateTimeMarshalJSON_FixedOffsetRejectsZoneWire(t *testing.T) {
 func TestDateTimeMarshalJSON_ZeroZoneProjectionsUseUTC(t *testing.T) {
 	t.Parallel()
 
-	base := UnixSeconds(0)
+	base := mustUnixSeconds(t, 0)
 	tests := []struct {
 		name string
 		dt   DateTime

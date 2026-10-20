@@ -53,12 +53,6 @@ func Days(n int32) Period { return Period{Days: n} }
 // IsZero reports whether p has no calendar offset.
 func (p Period) IsZero() bool { return p.Years == 0 && p.Months == 0 && p.Days == 0 }
 
-// IsNegative reports whether any field of p is negative.
-// A Period with mixed signs is not normalized — use Negate to flip all fields.
-func (p Period) IsNegative() bool {
-	return p.Years < 0 || p.Months < 0 || p.Days < 0
-}
-
 // Negate returns -p (all fields flipped), or ErrOverflow when a component is math.MinInt32.
 func (p Period) Negate() (Period, error) {
 	if p.Years == math.MinInt32 || p.Months == math.MinInt32 || p.Days == math.MinInt32 {

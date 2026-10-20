@@ -27,7 +27,19 @@ func InstantFromTime(t time.Time) Instant {
 }
 
 // UnixSeconds creates an Instant from a Unix timestamp in seconds.
-func UnixSeconds(s int64) Instant { return Instant{t: time.Unix(s, 0).UTC()} }
+// It returns ErrOverflow when s is outside time.Time's runtime range.
+func UnixSeconds(s int64) (Instant, error) {
+	value := time.Unix(s, 0).UTC()
+	epoch := time.Unix(0, 0).UTC()
+	// time.Unix can wrap its internal seconds while Unix still round-trips s.
+	// Check timeline ordering instead of imposing the narrower JSON year domain.
+	if (s > 0 && !value.After(epoch)) || (s < 0 && !value.Before(epoch)) {
+		return Instant{}, newTimeError(ErrOverflow,
+			"Unix seconds exceed the time.Time range", fmt.Sprint(s),
+			"use a Unix timestamp within the time.Time runtime range")
+	}
+	return Instant{t: value}, nil
+}
 
 // UnixMillis creates an Instant from a Unix timestamp in milliseconds.
 func UnixMillis(ms int64) Instant { return Instant{t: time.UnixMilli(ms).UTC()} }

@@ -53,7 +53,7 @@ func TestUnixMillis(t *testing.T) {
 func TestUnixSeconds(t *testing.T) {
 	t.Parallel()
 
-	i := UnixSeconds(1234)
+	i := mustUnixSeconds(t, 1234)
 	want := time.Unix(1234, 0).UTC()
 	if got := i.Std(); !got.Equal(want) {
 		t.Errorf("Std() = %v, want %v", got, want)
@@ -350,17 +350,17 @@ func TestInstant_String(t *testing.T) {
 
 func TestInstantCheckedAddBoundaries(t *testing.T) {
 	t.Parallel()
-	upper := UnixSeconds(9223371974719179007)
+	upper := mustUnixSeconds(t, 9223371974719179007)
 	lower := InstantFromTime(time.Unix(9223371974719179008, 0))
 	for _, tc := range []struct {
 		start    Instant
 		delta    Duration
 		overflow bool
 	}{
-		{UnixSeconds(0), Duration(math.MinInt64), false}, {UnixSeconds(0), Duration(math.MaxInt64), false},
+		{mustUnixSeconds(t, 0), Duration(math.MinInt64), false}, {mustUnixSeconds(t, 0), Duration(math.MaxInt64), false},
 		{upper, Nanosecond, false}, {upper, -Nanosecond, false}, {upper, Second, true}, {upper, Duration(math.MaxInt64), true}, {upper, Duration(math.MinInt64), false},
 		{lower, -Nanosecond, true}, {lower, -Second, true}, {lower, Second, false}, {lower, Duration(math.MinInt64), true}, {lower, Duration(math.MaxInt64), false}, {lower, 0, false},
-		{UnixSeconds(0), -Second, false}, {UnixSeconds(0), Nanosecond, false}, {InstantFromTime(time.Now()), 0, false},
+		{mustUnixSeconds(t, 0), -Second, false}, {mustUnixSeconds(t, 0), Nanosecond, false}, {InstantFromTime(time.Now()), 0, false},
 	} {
 		got, err := tc.start.Add(tc.delta)
 		if tc.overflow {
@@ -386,6 +386,48 @@ func TestInstantCheckedAddBoundaries(t *testing.T) {
 		}
 		if middle.Sub(tc.start.Std()) != half.Std() || got.Std().Sub(middle) != (tc.delta-half).Std() {
 			t.Errorf("inexact add %d", tc.delta)
+		}
+	}
+}
+
+func mustUnixSeconds(t *testing.T, seconds int64) Instant {
+	t.Helper()
+	instant, err := UnixSeconds(seconds)
+	if err != nil {
+		t.Fatalf("UnixSeconds(%d): %v", seconds, err)
+	}
+	return instant
+}
+
+func TestUnixSeconds_RuntimeBoundaries(t *testing.T) {
+	t.Parallel()
+	const maximum = int64(9223371974719179007)
+	epoch := time.Unix(0, 0).UTC()
+	var previous Instant
+	for index, seconds := range []int64{math.MinInt64, -1, 0, 1, maximum - 1, maximum} {
+		instant, err := UnixSeconds(seconds)
+		if err != nil {
+			t.Fatalf("UnixSeconds(%d): %v", seconds, err)
+		}
+		if got := instant.Std().Unix(); got != seconds {
+			t.Errorf("Unix() = %d, want %d", got, seconds)
+		}
+		if (seconds < 0 && !instant.Std().Before(epoch)) || (seconds > 0 && !instant.Std().After(epoch)) || (seconds == 0 && !instant.Std().Equal(epoch)) {
+			t.Errorf("UnixSeconds(%d) is on the wrong side of epoch", seconds)
+		}
+		if index > 0 && !instant.After(previous) {
+			t.Errorf("UnixSeconds(%d) does not follow its predecessor", seconds)
+		}
+		previous = instant
+	}
+	for _, seconds := range []int64{maximum + 1, math.MaxInt64} {
+		instant, err := UnixSeconds(seconds)
+		if !errors.Is(err, ErrOverflow) || !instant.IsZero() {
+			t.Errorf("UnixSeconds(%d) = %v, %v; want zero and ErrOverflow", seconds, instant, err)
+		}
+		var detail *TimeError
+		if !errors.As(err, &detail) || detail.Hint == "" {
+			t.Errorf("UnixSeconds(%d) error must include a TimeError hint", seconds)
 		}
 	}
 }

@@ -128,7 +128,7 @@ func TestIntervalMarshalJSON_RejectsInvalidPrivateValues(t *testing.T) {
 	}{
 		{
 			name: "reversed",
-			iv:   Interval{start: UnixSeconds(1), end: UnixSeconds(0)},
+			iv:   Interval{start: mustUnixSeconds(t, 1), end: mustUnixSeconds(t, 0)},
 			want: ErrIntervalReversed,
 		},
 		{

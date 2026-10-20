@@ -69,7 +69,7 @@ func DateTimeFromTime(t time.Time, z Zone) (DateTime, error)
 func DateFromTime(t time.Time) (Date, error)
 func TimeFromTime(t time.Time) Time
 
-func UnixSeconds(s int64) Instant
+func UnixSeconds(s int64) (Instant, error)
 func UnixMillis(ms int64) Instant
 func UnixNanos(ns int64) Instant
 
@@ -91,10 +91,11 @@ errors. They never normalize invalid dates, invalid clock times, DST gaps,
 duplicate local times, or years outside `0000..9999`. Use `DateTimeFromTime`
 when the caller already has a stdlib `time.Time` with the intended offset.
 
-Epoch constructors follow their stdlib counterparts. In particular, not every
-`int64` second count corresponds to a representable `time.Time`; `UnixSeconds`
-does not promise a wider domain than `time.Unix`. Millisecond and nanosecond
-constructors retain their stdlib input semantics. Epoch projection is
+`UnixSeconds` checks the runtime `time.Time` range and returns a zero `Instant`
+with `ErrOverflow` when the input cannot denote its corresponding instant.
+This runtime domain is wider than the JSON year domain `0000..9999`.
+Millisecond and nanosecond constructors are total over their `int64` inputs
+and retain their stdlib input semantics. Epoch projection is
 checked separately: `UnixNano` and `UnixMilli` match `ErrOverflow` when the
 selected scalar cannot represent the instant. `UnixMilli` preserves stdlib
 millisecond truncation for representable values.

@@ -15,7 +15,7 @@ The package therefore owns only stable primitives:
 - `Zone`
 - parse diagnostics
 
-Everything user-facing goes through a bridge.
+Callers render values using the bridges or public civil components.
 
 ## Bridges
 
@@ -26,9 +26,14 @@ func (iv Interval) StdRange() (start, end time.Time)
 func (d  Duration) Std() time.Duration
 ```
 
-`Date` and `Time` are unresolved civil values, so they do not have total stdlib
-bridges. Combine them as `LocalDateTime`, call `Resolve(Zone)`, and bridge only a
-chosen `DateTime` candidate through `DateTime.Std()`.
+`Date` and `Time` are complete civil values without a timeline position. For
+pure display, read `Date.Year/Month/Day` or `Time.Hour/Minute/Second/Nanosecond`
+and render those components directly. Display requires no timezone resolution;
+a valid date remains displayable even when a region skipped that local day.
+
+They do not have total stdlib bridges. Only when the application needs an
+instant should it combine them as `LocalDateTime`, call `Resolve(Zone)`, and
+bridge a chosen `DateTime` candidate through `DateTime.Std()`.
 
 `Duration` also exposes clock slots:
 
@@ -61,7 +66,7 @@ Parsing may accept `language.Tag` through `WithInputLocale`. This is a parsing h
 
 ## Allowed
 
-- Return `time.Time`, `time.Duration`, `DurationComponents`, and exported `Period` fields.
+- Return `time.Time`, `time.Duration`, `DurationComponents`, public civil components, and exported `Period` fields.
 - Accept `golang.org/x/text/language.Tag` as an input parsing hint.
 - Let callers use stdlib `time.Format`, external formatting packages, logs, templates, or any other renderer outside this module.
 

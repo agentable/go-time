@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -159,27 +160,18 @@ func TestPeriod_Abs(t *testing.T) {
 	}
 }
 
-func TestPeriod_IsNegative(t *testing.T) {
+func TestPeriod_MixedSignsCalendarDirection(t *testing.T) {
 	t.Parallel()
-
-	tests := []struct {
-		name string
-		p    Period
-		want bool
-	}{
-		{name: "zero", p: Period{}, want: false},
-		{name: "all positive", p: Period{Years: 1, Months: 2, Days: 3}, want: false},
-		{name: "negative year", p: Period{Years: -1}, want: true},
-		{name: "mixed signs", p: Period{Years: 1, Months: -2, Days: 3}, want: true},
+	start, err := NewDate(2026, time.January, 1)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := tc.p.IsNegative(); got != tc.want {
-				t.Errorf("IsNegative() = %v, want %v", got, tc.want)
-			}
-		})
+	end, err := start.Add(Period{Months: 1, Days: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if end.String() != "2026-01-31" || end.Compare(start) <= 0 {
+		t.Fatalf("mixed-sign period moved %v to %v, want 2026-01-31", start, end)
 	}
 }
 

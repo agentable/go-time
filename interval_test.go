@@ -377,11 +377,11 @@ func TestInterval_StdRange(t *testing.T) {
 
 func TestIntervalEmptyRelations(t *testing.T) {
 	t.Parallel()
-	outer := mustInterval(t, UnixSeconds(0), UnixSeconds(10))
+	outer := mustInterval(t, mustUnixSeconds(t, 0), mustUnixSeconds(t, 10))
 	for _, anchor := range []int64{-1, 0, 5, 10, 11} {
-		empty := mustInterval(t, UnixSeconds(anchor), UnixSeconds(anchor))
+		empty := mustInterval(t, mustUnixSeconds(t, anchor), mustUnixSeconds(t, anchor))
 		for _, point := range []int64{anchor - 1, anchor, anchor + 1} {
-			if empty.Contains(UnixSeconds(point)) {
+			if empty.Contains(mustUnixSeconds(t, point)) {
 				t.Fatal("empty interval contains a moment")
 			}
 		}
@@ -406,12 +406,12 @@ func TestIntervalEmptyRelations(t *testing.T) {
 		if err != nil || same != empty {
 			t.Errorf("same empty union = %v, %v", same, err)
 		}
-		other := mustInterval(t, UnixSeconds(anchor+1), UnixSeconds(anchor+1))
+		other := mustInterval(t, mustUnixSeconds(t, anchor+1), mustUnixSeconds(t, anchor+1))
 		if _, err := empty.Union(other); !errors.Is(err, ErrIntervalsDisjoint) {
 			t.Errorf("distinct empty union error = %v", err)
 		}
 	}
-	intervals := []Interval{outer, mustInterval(t, UnixSeconds(5), UnixSeconds(5)), mustInterval(t, UnixSeconds(5), UnixSeconds(15)), mustInterval(t, UnixSeconds(10), UnixSeconds(20)), mustInterval(t, UnixSeconds(11), UnixSeconds(20))}
+	intervals := []Interval{outer, mustInterval(t, mustUnixSeconds(t, 5), mustUnixSeconds(t, 5)), mustInterval(t, mustUnixSeconds(t, 5), mustUnixSeconds(t, 15)), mustInterval(t, mustUnixSeconds(t, 10), mustUnixSeconds(t, 20)), mustInterval(t, mustUnixSeconds(t, 11), mustUnixSeconds(t, 20))}
 	for _, a := range intervals {
 		for _, b := range intervals {
 			intersection, ok := a.Intersect(b)
@@ -425,7 +425,7 @@ func TestIntervalEmptyRelations(t *testing.T) {
 
 func TestIntervalRejectsSaturatedArithmetic(t *testing.T) {
 	t.Parallel()
-	upper := UnixSeconds(9223371974719179007)
+	upper := mustUnixSeconds(t, 9223371974719179007)
 	lower := InstantFromTime(time.Unix(9223371974719179008, 0))
 	for _, makeInterval := range []func() (Interval, error){
 		func() (Interval, error) { return NewIntervalStartingAt(upper, Second) },
@@ -454,8 +454,8 @@ func TestIntervalRejectsSaturatedArithmetic(t *testing.T) {
 
 func TestIntervalCheckedShiftPreservesEndpoints(t *testing.T) {
 	t.Parallel()
-	start := UnixSeconds(0)
-	end := UnixSeconds(10000000000)
+	start := mustUnixSeconds(t, 0)
+	end := mustUnixSeconds(t, 10000000000)
 	iv := mustInterval(t, start, end)
 	for _, delta := range []Duration{-1 << 63, 1<<63 - 1, -Nanosecond, 0, Nanosecond} {
 		got, err := iv.Shift(delta)
@@ -466,7 +466,7 @@ func TestIntervalCheckedShiftPreservesEndpoints(t *testing.T) {
 			t.Errorf("shift %d changed span", delta)
 		}
 	}
-	edge := UnixSeconds(9223371974719179007)
+	edge := mustUnixSeconds(t, 9223371974719179007)
 	empty := mustInterval(t, edge, edge)
 	if got, err := empty.Shift(Second); !errors.Is(err, ErrOverflow) || got != (Interval{}) {
 		t.Errorf("saturated shift: %v %v", got, err)

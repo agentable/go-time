@@ -251,6 +251,10 @@ JSON:
 Key API: exported `Years`, `Months`, `Days` fields, `NewPeriod`, `Years`, `Months`, `Days` constructors, `Negate`, `Abs`, `Add`, `Sub`, `String`.
 
 Month/year arithmetic clamps to the end of the target month. `Period` has no `Decompose`; callers read the exported fields directly.
+A mixed-sign period has no context-free overall direction. Inspect its fields
+for component signs; to determine movement, apply it to a particular `Date`
+and compare the result. There is no `Period.IsNegative` or overall `Sign`.
+`Negate` and `Abs` operate componentwise, not as calendar-order projections.
 Component arithmetic is checked: `Add`, `Sub`, `Negate`, and `Abs` return
 `ErrOverflow` when the exact result does not fit `int32`.
 `Period.String()` is the canonical package-defined text and is lossless for the full component

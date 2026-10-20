@@ -207,7 +207,7 @@ func TestPublicSentinels_HaveBehaviorProducer(t *testing.T) {
 	newYork := MustLoadZone("America/New_York")
 	mustInterval := func(start, end int64) Interval {
 		t.Helper()
-		iv, err := NewInterval(UnixSeconds(start), UnixSeconds(end))
+		iv, err := NewInterval(mustUnixSeconds(t, start), mustUnixSeconds(t, end))
 		if err != nil {
 			t.Fatalf("NewInterval(%d, %d): %v", start, end, err)
 		}
@@ -248,7 +248,7 @@ func TestPublicSentinels_HaveBehaviorProducer(t *testing.T) {
 		ErrInvalidDuration: {
 			name: "negative interval length",
 			err: func() error {
-				_, err := NewIntervalStartingAt(UnixSeconds(0), -Second)
+				_, err := NewIntervalStartingAt(mustUnixSeconds(t, 0), -Second)
 				return err
 			},
 		},
@@ -289,7 +289,7 @@ func TestPublicSentinels_HaveBehaviorProducer(t *testing.T) {
 		ErrIntervalReversed: {
 			name: "reversed interval constructor",
 			err: func() error {
-				_, err := NewInterval(UnixSeconds(2), UnixSeconds(1))
+				_, err := NewInterval(mustUnixSeconds(t, 2), mustUnixSeconds(t, 1))
 				return err
 			},
 		},

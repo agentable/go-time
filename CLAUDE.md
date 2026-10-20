@@ -165,7 +165,7 @@ Operational corollaries:
 - **KISS** — One `Parse()` handles all inputs. No formatters in this package — display is the caller's problem.
 - **DRY** — Each concern lives in exactly one package. Display locale data lives elsewhere; controlled input phrase grammars stay small and parser-owned until an adapter boundary is proven.
 - **YAGNI** — Not a calendar, scheduler, cron, recurrence, or formatting library. Permanently out of scope.
-- **Simplicity as art** — `gotime.Now()` → `Instant` (zero config). `gotime.TodayIn(z)` → `Date` (zone is mandatory — a calendar date with no zone is undefined).
+- **Simplicity as art** — `gotime.Now()` → `Instant` (zero config). `gotime.TodayIn(z)` → `Date` (zone is mandatory to derive today from the current instant).
 - **Never:** accidental complexity, feature gravity, abstraction theater, configurability cope, importing formatters.
 
 ## Coding Rules
@@ -183,13 +183,14 @@ Operational corollaries:
 - Every error must include an actionable Hint — tell the user how to fix it
 - **Calendar math is `AddPeriod(Period)`; exact math is `Add(Duration)`** — `dt.Add(gotime.Months(1))` must fail at compile time. The type system is load-bearing here.
 - `Duration` is `type Duration time.Duration` — `Nanosecond` through `Hour` are typed constants supporting `5 * gotime.Minute` arithmetic. No `Day` constant (24h is `24 * Hour`; calendar day is `Days(n)` on Period). No `Hours(n)` / `Days(n float64)` constructors.
+- `Period` has no overall sign; inspect component signs directly or compare the result of applying it to a specific date. Do not add `IsNegative` or `Sign`.
 - `Period` fields (`Years`, `Months`, `Days`) are exported — literal initialization is the canonical form. Constructors `Years(n)` / `Months(n)` / `Days(n)` are sugar.
 - `Period.Add`, `Sub`, `Negate`, and `Abs` are checked and return `ErrOverflow`; calendar component arithmetic must never wrap.
 - `Period.String()` is package-defined canonical period text and must round-trip every valid mixed-sign value. A leading `-P` applies only to unsigned components; never accept a second component sign under a leading sign.
 - `Period` month/year add applies end-of-month clamping (Jan 31 + Months(1) = Feb 28/29). Never overflow.
 - `Instant.Sub`, `DateTime.Sub`, and `Interval.Length` return `(Duration, error)` and match `ErrOverflow` instead of exposing `time.Time.Sub` saturation.
 - `Instant.Add` and `Interval.Shift` return a value plus `error`; reject runtime overflow with a zero result and `ErrOverflow`. Duration-based interval constructors and `Expand` propagate the same checked endpoint arithmetic. Do not impose the narrower JSON year domain on runtime arithmetic.
-- `UnixSeconds` follows stdlib `time.Unix` representability; do not promise all `int64` seconds are valid time values. `InstantFromTime` remains a total UTC bridge.
+- `UnixSeconds` returns `(Instant, error)` and rejects runtime `time.Time` overflow with a zero result and `ErrOverflow`; never narrow it to the JSON year domain. `InstantFromTime` remains a total UTC bridge.
 - `Instant.UnixNano` and `UnixMilli` check representability before calling the stdlib scalar projection. `Date.DaysUntil` validates both endpoints and returns `(int, error)`; calendar Y/M/D decomposition is caller policy, so there is no `PeriodUntil`.
 - Intervals are half-open `[start, end)` — `Contains` excludes end, `Overlaps` excludes touching endpoints, use `Adjacent` for boundary detection
 - `Interval.Expand(before, after)` returns `(Interval, error)` — reject negative expansion durations and preserve the same `end >= start` invariant as constructors.
@@ -240,7 +241,7 @@ Operational corollaries:
 - No `WithLocale` (ambiguous) — `WithInputLocale(language.Tag)` is the only language-aware option
 - No `WithZoneID` — fuzzy resolution belongs at the call site (`ResolveZone`), not buried in an option
 - No `WithStrategy` / `Strategy` enum — ambiguity surfaces via `ParseResult.Candidates`; callers pick
-- No `gotime.Today()` zero-arg helper — a calendar date with no zone is undefined; require `TodayIn(z)`
+- No `gotime.Today()` zero-arg helper — deriving today from now requires a zone; require `TodayIn(z)`
 - No `gotime.Day` Duration constant — calendar day is `Days(n)` (Period), 24h is `24 * Hour` (Duration); the name collision is a footgun
 - No `Min` / `Max` / `Clamp` methods — selection composes with `slices.MinFunc(xs, gotime.Instant.Compare)` etc.
 - No `StartOf*` / `EndOf*` family — half-open intervals don't need them; explicit construction is 3 lines and avoids the "does EndOfDay include the last nanosecond?" trap

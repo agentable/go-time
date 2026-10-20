@@ -497,6 +497,8 @@ go-time does not format values for display. Convert semantic values at the integ
 | `Instant` | `instant.Std()` returns UTC `time.Time` |
 | `Instant` | `instant.UnixNano()` / `instant.UnixMilli()` return a checked epoch scalar |
 | `DateTime` | `datetime.Std()` returns zoned `time.Time` |
+| `Date` | Read `Year()`, `Month()`, and `Day()` for civil display |
+| `Time` | Read `Hour()`, `Minute()`, `Second()`, and `Nanosecond()` for clock display |
 | `Duration` | `duration.Std()` returns `time.Duration` |
 | `Duration` | `duration.Decompose()` returns clock component slots |
 | `Interval` | `interval.StdRange()` returns two `time.Time` values |
@@ -517,8 +519,18 @@ fmt.Println(components.Hours, components.Minutes) // 1 30
 
 Epoch projections return `ErrOverflow` when the selected `int64` precision
 cannot represent the instant. Keep the `Instant` or use `Std()` when a scalar
-projection is not required. `UnixSeconds` follows the representable range of
-stdlib `time.Unix`; not every `int64` second value denotes a valid runtime time.
+projection is not required. `UnixSeconds(seconds)` returns `(Instant, error)`;
+handle `ErrOverflow` for seconds outside the runtime `time.Time` range.
+`UnixMillis` and `UnixNanos` accept every `int64` input without an error result.
+
+A pure date label needs no timezone. For example, after parsing `2011-12-30`,
+render its `Year()`, `Month()`, and `Day()` directly, even though that local day
+was skipped in Pacific/Apia. Resolve a date and clock in a zone only when the
+application needs an instant.
+
+A `Period` can contain mixed signs. Read its public fields to inspect component
+signs; apply it to a date and compare the result to determine calendar movement.
+For example, `Period{Months: 1, Days: -1}` moves January 1 to January 31.
 
 ### Integrate Field values
 
