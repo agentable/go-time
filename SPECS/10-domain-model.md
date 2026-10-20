@@ -238,16 +238,16 @@ gotime.Days(7)
 JSON:
 
 ```json
-{"kind":"period","iso":"P1Y3M7D"}
+{"kind":"period","value":"P1Y3M7D"}
 ```
 
-Key API: exported `Years`, `Months`, `Days` fields, `NewPeriod`, `Years`, `Months`, `Days` constructors, `Negate`, `Abs`, `Add`, `Sub`, `ISO8601`, `String`.
+Key API: exported `Years`, `Months`, `Days` fields, `NewPeriod`, `Years`, `Months`, `Days` constructors, `Negate`, `Abs`, `Add`, `Sub`, `String`.
 
 Month/year arithmetic clamps to the end of the target month. `Period` has no `Decompose`; callers read the exported fields directly.
 Component arithmetic is checked: `Add`, `Sub`, `Negate`, and `Abs` return
 `ErrOverflow` when the exact result does not fit `int32`.
-`Period.String()` equals `ISO8601()` and is lossless for the full component
-domain. Mixed-sign values use explicit component signs, for example
+`Period.String()` is the canonical package-defined text and is lossless for the full component
+domain. It is not a general ISO 8601 interchange guarantee. Mixed-sign values use explicit component signs, for example
 `Period{Years: 1, Months: -2, Days: 3}` renders as `P+1Y-2M+3D`.
 
 ### Interval

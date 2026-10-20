@@ -29,7 +29,7 @@ var (
 	reOrdinalDate = regexp.MustCompile(`^(\d{4})-?(\d{3})$`)
 	// Week date: YYYY-Www-D or YYYY-Www
 	reWeekDate = regexp.MustCompile(`^(\d{4})-W(\d{2})(?:-(\d))?$`)
-	// ISO 8601 duration/period: Period date components may carry individual signs.
+	// Duration/period text: Period date components may carry individual signs.
 	// Group 1 is the optional leading sign; capture groups 2..8 are the components.
 	reDuration = regexp.MustCompile(
 		`^(-?)P(?:([+-]?\d+(?:[.,]\d+)?)Y)?(?:([+-]?\d+(?:[.,]\d+)?)M)?(?:([+-]?\d+(?:[.,]\d+)?)W)?(?:([+-]?\d+(?:[.,]\d+)?)D)?(?:T(?:(\d+(?:[.,]\d+)?)H)?(?:(\d+(?:[.,]\d+)?)M)?(?:(\d+(?:[.,]\d+)?)S)?)?$`,

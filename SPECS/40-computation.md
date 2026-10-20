@@ -174,12 +174,12 @@ intervals can be unioned only when their anchors coincide.
 (90 * gotime.Minute).String() // "1h30m0s"
 ```
 
-`Duration.ISO8601()` and `Period.ISO8601()` provide stable machine strings. Duration sub-second precision uses decimal seconds, never scientific notation. RFC 5545 rendering belongs to calendar integration code outside go-time.
+`Duration.ISO8601()` and `Period.String()` provide stable machine strings. Period text is package-defined and preserves mixed component signs. Duration sub-second precision uses decimal seconds, never scientific notation. RFC 5545 rendering belongs to calendar integration code outside go-time.
 
 ## External Protocol Text
 
-- **Decision**: `ISO8601()` is the only core machine-text helper for `Duration` and `Period`.
-- **Why**: ISO text is already the canonical wire representation. Protocol-specific duration dialects have extra validity rules that belong to integrations that own those protocols.
+- **Decision**: `Duration.ISO8601()` owns duration machine text; `Period.String()` owns canonical period text.
+- **Why**: Each type owns one canonical wire representation. Protocol-specific duration dialects have extra validity rules that belong to integrations that own those protocols.
 - **Rejected**: Public `RFC5545()` methods on core value objects, especially for calendar periods with year/month fields.
 - **Contract Impact**: Core values stay protocol-neutral. Calendar, scheduling, or interchange adapters translate from go-time values outside this module.
 

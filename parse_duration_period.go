@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// parseDuration dispatches an ISO 8601 P-prefixed string to either Duration
+// parseDuration dispatches a P-prefixed duration or period string to either Duration
 // (time-only, e.g. PT1H30M) or Period (date-only, e.g. P1Y, P1M, P2W, P5D).
 //
 // Mixed inputs (date AND time components - e.g. P1Y2DT3H) are rejected with
@@ -20,8 +20,8 @@ func parseDuration(input string, cfg *config) ParseResult {
 	m := reDuration.FindStringSubmatch(input)
 	if m == nil {
 		return invalidResult(input, ErrInvalidFormat,
-			fmt.Sprintf("invalid ISO 8601 duration/period: %q", input),
-			"Use ISO 8601 form, e.g. PT1H30M (Duration) or P1Y3M (Period)")
+			fmt.Sprintf("invalid duration/period text: %q", input),
+			"Use duration or period text, e.g. PT1H30M (Duration) or P1Y3M (Period)")
 	}
 
 	// Capture groups after the sign: 2=Y 3=M 4=W 5=D 6=H 7=M 8=S
@@ -36,17 +36,17 @@ func parseDuration(input string, cfg *config) ParseResult {
 
 	if hasDateComp && hasTimeComp {
 		return invalidResult(input, ErrInvalidFormat,
-			fmt.Sprintf("ISO 8601 input mixes date and time components: %q", input),
+			fmt.Sprintf("input mixes date and time components: %q", input),
 			"Calendar offsets (Y/M/W/D) belong to Period; clock spans (H/M/S) belong to Duration. Parse each half separately.")
 	}
 
 	if hasDateComp {
-		return parseISOPeriodMatch(input, m, cfg)
+		return parsePeriodMatch(input, m, cfg)
 	}
 	return parseISODurationMatch(input, m, cfg)
 }
 
-func parseISOPeriodMatch(input string, m []string, cfg *config) ParseResult {
+func parsePeriodMatch(input string, m []string, cfg *config) ParseResult {
 	neg := m[1] == "-"
 	if neg && hasSignedPeriodComponent(m[2:6]) {
 		return invalidResult(input, ErrInvalidPeriod,

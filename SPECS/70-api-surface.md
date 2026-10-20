@@ -321,7 +321,7 @@ Unresolved `Date` and `Time` values cross to stdlib only after
 
 ## JSON
 
-All package JSON uses only Go 1.27.0's native `encoding/json/v2` and
+All package JSON uses only Go 1.27.2's native `encoding/json/v2` and
 `encoding/json/jsontext`. No compatibility adapter or alternate JSON
 implementation is supported.
 
@@ -335,7 +335,7 @@ Stable value JSON:
 - `Date`: `{"kind":"date","value":"YYYY-MM-DD"}`
 - `Time`: `{"kind":"time","value":"HH:MM:SS[.fraction]"}`
 - `Duration`: `{"kind":"duration","iso":"..."}`
-- `Period`: `{"kind":"period","iso":"..."}`
+- `Period`: `{"kind":"period","value":"..."}`
 - `Interval`: `{"kind":"interval","start":"...","end":"..."}`
 - `Zone`: `{"kind":"zone","id":"..."}`
 
@@ -363,6 +363,7 @@ weaken the concrete value decoder contract above.
 - `Duration.InDays()`.
 - `Duration.RFC5545()`.
 - `Period.RFC5545()`.
+- `Period.ISO8601()`.
 - `Period.Decompose()`.
 - `Zone.IsDST()`.
 - `WithStrategy`, `Strategy*`, `WithLocale`, `WithZoneID`.

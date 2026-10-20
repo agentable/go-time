@@ -24,7 +24,7 @@ There are two entry paths:
 | Slash date | `04/05/2026` | `KindDate` or ambiguous |
 | 24h / 12h time | `15:00`, `08:30:45`, `3:30 PM` | `KindTime` |
 | ISO time duration | `PT1H30M`, `PT45S` | `KindDuration` |
-| ISO date period | `P1Y3M`, `P7D`, `P2W` | `KindPeriod` |
+| Calendar period text | `P1Y3M`, `P7D`, `P2W` | `KindPeriod` |
 | ISO interval | `2026-03-27T00:00:00Z/2026-03-28T00:00:00Z`, `2026-03-27T09:00:00Z/PT9H` | `KindInterval` |
 
 Formal local, compact, and offset datetimes accept civil years `0000..9999`;

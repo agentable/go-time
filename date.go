@@ -112,7 +112,7 @@ func dateAddOverflow(d Date, p Period) (Date, error) {
 	return Date{}, newTimeError(
 		ErrOverflow,
 		"date addition leaves the supported civil domain",
-		fmt.Sprintf("date=%s period=%s", d, p.ISO8601()),
+		fmt.Sprintf("date=%s period=%s", d, p.String()),
 		"use a smaller period so the resulting year remains between 0000 and 9999",
 	)
 }

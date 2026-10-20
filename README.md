@@ -254,6 +254,22 @@ fmt.Println(calendar.Std().Format("2006-01-02 15:04 MST"))
 // 2026-03-08 09:00 EDT
 ```
 
+Period text preserves signed calendar components without promising an external
+ISO duration dialect. Use `String()` and `ParsePeriod` for exact round-trips:
+
+```go
+period := gotime.Period{Years: 1, Months: -2, Days: 3}
+text := period.String() // P+1Y-2M+3D
+restored, err := gotime.ParsePeriod(text)
+if err != nil {
+    return err
+}
+_ = restored
+```
+
+Period JSON uses `{"kind":"period","value":"P+1Y-2M+3D"}`. The old `iso`
+member is rejected. Exact Duration machine text still uses `ISO8601()`.
+
 Typed constants cover exact units from `Nanosecond` through `Hour`. Calendar periods use `Period` fields or constructors such as `Years`, `Months`, and `Days`:
 
 ```go

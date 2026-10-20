@@ -17,7 +17,7 @@ func TestPeriodMarshalJSON_Months(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	want := `{"kind":"period","iso":"P3M"}`
+	want := `{"kind":"period","value":"P3M"}`
 	if string(b) != want {
 		t.Errorf("got %s, want %s", b, want)
 	}
@@ -30,6 +30,8 @@ func TestPeriod_JSONRoundTrip(t *testing.T) {
 		name string
 		orig Period
 	}{
+		{name: "zero", orig: Period{}},
+		{name: "all negative", orig: Period{Years: -1, Months: -2, Days: -3}},
 		{name: "minimum", orig: Period{Years: math.MinInt32, Months: math.MinInt32, Days: math.MinInt32}},
 		{name: "maximum", orig: Period{Years: math.MaxInt32, Months: math.MaxInt32, Days: math.MaxInt32}},
 		{name: "positive", orig: Period{Years: 1, Months: 3, Days: 14}},
@@ -67,7 +69,7 @@ func TestPeriod_UnmarshalJSONWeeks(t *testing.T) {
 	t.Parallel()
 
 	var got Period
-	if err := json.Unmarshal([]byte(`{"kind":"period","iso":"-P2W"}`), &got); err != nil {
+	if err := json.Unmarshal([]byte(`{"kind":"period","value":"-P2W"}`), &got); err != nil {
 		t.Fatalf("json.Unmarshal: %v", err)
 	}
 
@@ -77,7 +79,7 @@ func TestPeriod_UnmarshalJSONWeeks(t *testing.T) {
 	}
 }
 
-func TestPeriod_UnmarshalJSONInvalidISO(t *testing.T) {
+func TestPeriod_UnmarshalJSONInvalidText(t *testing.T) {
 	t.Parallel()
 
 	for _, iso := range []string{"P", "-P-1Y", "-P+1Y", "-P-1W+2D"} {
@@ -85,13 +87,34 @@ func TestPeriod_UnmarshalJSONInvalidISO(t *testing.T) {
 			t.Parallel()
 
 			var got Period
-			input := []byte(fmt.Sprintf(`{"kind":"period","iso":%q}`, iso))
+			input := []byte(fmt.Sprintf(`{"kind":"period","value":%q}`, iso))
 			err := json.Unmarshal(input, &got)
 			if !errors.Is(err, ErrInvalidPeriod) {
 				t.Fatalf("json.Unmarshal(%q) error = %v, want ErrInvalidPeriod", iso, err)
 			}
-			if !errors.Is(err, errInvalidISO8601Period) {
-				t.Fatalf("json.Unmarshal(%q) error = %v, want errInvalidISO8601Period", iso, err)
+			if !errors.Is(err, errInvalidPeriodText) {
+				t.Fatalf("json.Unmarshal(%q) error = %v, want errInvalidPeriodText", iso, err)
+			}
+		})
+	}
+}
+
+func TestPeriodUnmarshalRejectsLegacyAndDuplicateFields(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{
+		`{"kind":"period","iso":"P1D"}`,
+		`{"kind":"period","value":"P1D","iso":"P1D"}`,
+		`{"kind":"period","value":"P1D","value":"P2D"}`,
+	} {
+		t.Run(input, func(t *testing.T) {
+			t.Parallel()
+			original := Period{Years: 2, Months: -3, Days: 4}
+			got := original
+			if err := json.Unmarshal([]byte(input), &got); err == nil {
+				t.Fatal("Unmarshal accepted obsolete or duplicate member")
+			}
+			if got != original {
+				t.Fatalf("Unmarshal changed receiver: got %v, want %v", got, original)
 			}
 		})
 	}

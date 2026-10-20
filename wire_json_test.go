@@ -45,7 +45,7 @@ func TestJSONUnmarshalStructuralErrors(t *testing.T) {
 			mustDateTime(date, clock, UTC),
 		),
 		newJSONStructuralCase("duration", "duration", map[string]any{"iso": "PT1H"}, 90*Minute),
-		newJSONStructuralCase("period", "period", map[string]any{"iso": "P1D"}, Period{Years: 1}),
+		newJSONStructuralCase("period", "period", map[string]any{"value": "P1D"}, Period{Years: 1}),
 		newJSONStructuralCase(
 			"interval",
 			"interval",
@@ -156,7 +156,7 @@ func TestJSONUnmarshalSemanticErrors(t *testing.T) {
 		),
 		newJSONSemanticCase(
 			"period",
-			`{"kind":"period","iso":"PT1H"}`,
+			`{"kind":"period","value":"PT1H"}`,
 			ErrInvalidPeriod,
 			Period{Years: 1},
 		),

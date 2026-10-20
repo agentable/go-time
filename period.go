@@ -11,8 +11,8 @@ import (
 	"encoding/json/v2"
 )
 
-// errInvalidISO8601Period is returned when an ISO 8601 period string cannot be parsed.
-var errInvalidISO8601Period = errors.New("invalid ISO 8601 period")
+// errInvalidPeriodText is returned when period text cannot be parsed.
+var errInvalidPeriodText = errors.New("invalid period text")
 
 // Period represents a calendar offset in years, months, and days.
 // It is the calendar-aware counterpart to Duration: Period operations
@@ -96,7 +96,7 @@ func (p Period) Add(other Period) (Period, error) {
 		return Period{}, newTimeError(
 			ErrOverflow,
 			"period addition overflows int32",
-			fmt.Sprintf("left=%s right=%s", p.ISO8601(), other.ISO8601()),
+			fmt.Sprintf("left=%s right=%s", p.String(), other.String()),
 			"use smaller period components before adding",
 		)
 	}
@@ -114,16 +114,18 @@ func (p Period) Sub(other Period) (Period, error) {
 		return Period{}, newTimeError(
 			ErrOverflow,
 			"period subtraction overflows int32",
-			fmt.Sprintf("left=%s right=%s", p.ISO8601(), other.ISO8601()),
+			fmt.Sprintf("left=%s right=%s", p.String(), other.String()),
 			"use smaller period components before subtracting",
 		)
 	}
 	return result, nil
 }
 
-// ISO8601 returns the ISO 8601 representation of p, e.g. "P1Y3M7D".
-// A zero Period returns "P0D". Negative components produce a leading "-".
-func (p Period) ISO8601() string {
+// String returns the canonical period text, e.g. "P1Y3M7D".
+// Zero is "P0D"; all-negative components use a leading "-".
+// Mixed signs are retained per component, e.g. "P+1Y-2M+3D".
+// This package-defined extension round-trips through ParsePeriod.
+func (p Period) String() string {
 	if p.IsZero() {
 		return "P0D"
 	}
@@ -154,30 +156,25 @@ func (p Period) ISO8601() string {
 	return b.String()
 }
 
-// String returns the canonical ISO 8601 representation.
-func (p Period) String() string {
-	return p.ISO8601()
-}
-
-// MarshalJSON encodes p as {"kind":"period","iso":"<ISO8601>"}.
-// The ISO 8601 string is the single source of truth; callers that need
+// MarshalJSON encodes p as {"kind":"period","value":"<period text>"}.
+// The period text is the single source of truth; callers that need
 // structured slots can read p.Years / p.Months / p.Days directly.
 func (p Period) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		Kind string `json:"kind"`
-		ISO  string `json:"iso"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
 	}{
-		Kind: "period",
-		ISO:  p.ISO8601(),
+		Kind:  "period",
+		Value: p.String(),
 	})
 }
 
-// UnmarshalJSON decodes p from {"kind":"period","iso":"<ISO8601>",...}
+// UnmarshalJSON decodes p from {"kind":"period","value":"<period text>",...}
 // and replaces p. Callers must not read or write the same receiver concurrently.
 func (p *Period) UnmarshalJSON(b []byte) error {
 	var wire struct {
-		Kind string `json:"kind"`
-		ISO  string `json:"iso"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
 	}
 	if err := unmarshalJSONWire(b, &wire); err != nil {
 		return err
@@ -185,64 +182,64 @@ func (p *Period) UnmarshalJSON(b []byte) error {
 	if err := requireJSONKind("period", wire.Kind, "period"); err != nil {
 		return err
 	}
-	if err := requireJSONString("period", "iso", wire.ISO); err != nil {
+	if err := requireJSONString("period", "value", wire.Value); err != nil {
 		return err
 	}
-	parsed, err := parseISO8601Period(wire.ISO)
+	parsed, err := parsePeriodText(wire.Value)
 	if err != nil {
 		return newTimeErrorWithCause(
 			ErrInvalidPeriod,
 			err,
-			"period iso is not a valid calendar period",
-			wire.ISO,
-			"use an ISO 8601 date period such as P1Y2M3D",
+			"period value is not valid period text",
+			wire.Value,
+			"use period text such as P1Y2M3D or P+1Y-2M+3D",
 		)
 	}
 	*p = parsed
 	return nil
 }
 
-// isoPeriodRe matches ISO 8601 period strings.
+// periodTextRE matches period text with calendar components.
 // Groups: (1)sign (2)years (3)months (4)weeks (5)days
-var isoPeriodRe = regexp.MustCompile(
+var periodTextRE = regexp.MustCompile(
 	`^(-?)P(?:([+-]?\d+)Y)?(?:([+-]?\d+)M)?(?:([+-]?\d+)W)?(?:([+-]?\d+)D)?$`,
 )
 
-// parseISO8601Period parses ISO 8601 period strings (date-only portion).
-func parseISO8601Period(s string) (Period, error) {
-	m := isoPeriodRe.FindStringSubmatch(s)
+// parsePeriodText parses period text with calendar components.
+func parsePeriodText(s string) (Period, error) {
+	m := periodTextRE.FindStringSubmatch(s)
 	if m == nil {
-		return Period{}, fmt.Errorf("period %q: %w", s, errInvalidISO8601Period)
+		return Period{}, fmt.Errorf("period %q: %w", s, errInvalidPeriodText)
 	}
 	if m[2] == "" && m[3] == "" && m[4] == "" && m[5] == "" {
-		return Period{}, fmt.Errorf("period %q: %w", s, errInvalidISO8601Period)
+		return Period{}, fmt.Errorf("period %q: %w", s, errInvalidPeriodText)
 	}
 	neg := m[1] == "-"
 	if neg && hasSignedPeriodComponent(m[2:6]) {
-		return Period{}, fmt.Errorf("period %q combines a leading sign with component signs: %w", s, errInvalidISO8601Period)
+		return Period{}, fmt.Errorf("period %q combines a leading sign with component signs: %w", s, errInvalidPeriodText)
 	}
 	y, ok := parsePeriodWireComponent(m[2], neg)
 	if !ok {
-		return Period{}, fmt.Errorf("period years component %q: %w", m[2], errInvalidISO8601Period)
+		return Period{}, fmt.Errorf("period years component %q: %w", m[2], errInvalidPeriodText)
 	}
 	mo, ok := parsePeriodWireComponent(m[3], neg)
 	if !ok {
-		return Period{}, fmt.Errorf("period months component %q: %w", m[3], errInvalidISO8601Period)
+		return Period{}, fmt.Errorf("period months component %q: %w", m[3], errInvalidPeriodText)
 	}
 	w, ok := parsePeriodWireMagnitude(m[4])
 	if !ok {
-		return Period{}, fmt.Errorf("period weeks component %q: %w", m[4], errInvalidISO8601Period)
+		return Period{}, fmt.Errorf("period weeks component %q: %w", m[4], errInvalidPeriodText)
 	}
 	d, ok := parsePeriodWireMagnitude(m[5])
 	if !ok {
-		return Period{}, fmt.Errorf("period days component %q: %w", m[5], errInvalidISO8601Period)
+		return Period{}, fmt.Errorf("period days component %q: %w", m[5], errInvalidPeriodText)
 	}
 	totalDays := w*7 + d
 	if neg {
 		totalDays = -totalDays
 	}
 	if totalDays > math.MaxInt32 || totalDays < math.MinInt32 {
-		return Period{}, fmt.Errorf("period days component overflows int32: %w", errInvalidISO8601Period)
+		return Period{}, fmt.Errorf("period days component overflows int32: %w", errInvalidPeriodText)
 	}
 	return Period{Years: y, Months: mo, Days: int32(totalDays)}, nil
 }

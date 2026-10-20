@@ -183,7 +183,7 @@ func TestPeriod_IsNegative(t *testing.T) {
 	}
 }
 
-func TestPeriod_ISO8601(t *testing.T) {
+func TestPeriod_CanonicalText(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -200,8 +200,8 @@ func TestPeriod_ISO8601(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := tc.p.ISO8601(); got != tc.want {
-				t.Errorf("ISO8601() = %q, want %q", got, tc.want)
+			if got := tc.p.String(); got != tc.want {
+				t.Errorf("String() = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -225,9 +225,6 @@ func TestPeriod_String(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.p.String()
-			if want := tc.p.ISO8601(); got != want {
-				t.Errorf("String() = %q, want ISO8601() %q", got, want)
-			}
 			parsed, err := ParsePeriod(got)
 			if err != nil {
 				t.Fatalf("ParsePeriod(String()) error = %v", err)

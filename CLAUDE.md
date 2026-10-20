@@ -4,6 +4,11 @@ Time semantics foundation library for Agent OS. Converts ambiguous human time ex
 
 **Module path**: `github.com/agentable/go-time`
 
+## Release Inventory
+
+The only publishable module is the repository root, `github.com/agentable/go-time`,
+with unprefixed `vX.Y.Z` tags. There are no nested or validation-only modules.
+
 ## Commands
 
 ```bash
@@ -67,7 +72,7 @@ github.com/agentable/go-time/
 
 **Layer dependency rules:**
 
-- Layer 1 (value objects) — semantics and arithmetic use stdlib and the internal timezone boundary; wire methods use Go 1.27.0's native `encoding/json/v2` and `encoding/json/jsontext`. `zone.go` uses `internal/zone` for generated names and resolution; `LocalDateTime.Resolve` uses its runtime DST projection. A private immutable rule snapshot owns both the stdlib Location and complete offset metadata from the same TZif bytes; bundled runtime data provenance lives in `internal/zone/zoneinfo.md`.
+- Layer 1 (value objects) — semantics and arithmetic use stdlib and the internal timezone boundary; wire methods use Go 1.27.2's native `encoding/json/v2` and `encoding/json/jsontext`. `zone.go` uses `internal/zone` for generated names and resolution; `LocalDateTime.Resolve` uses its runtime DST projection. A private immutable rule snapshot owns both the stdlib Location and complete offset metadata from the same TZif bytes; bundled runtime data provenance lives in `internal/zone/zoneinfo.md`.
 - Layer 2 (`parse.go`, `internal/natural/`) — depends only on Layer 1 + stdlib + `golang.org/x/text/language`
 - Layer 3 (arithmetic methods on value objects) — depends only on Layer 1
 - User-visible API is `gotime.*` only — no internal dependencies leak
@@ -167,7 +172,7 @@ Operational corollaries:
 
 ### Must Follow
 
-- Go 1.27.0 — use modern language features where they simplify code
+- Go 1.27.2 — use modern language features where they simplify code
 - Follow [Google Go Best Practices](https://google.github.io/go-style/best-practices)
 - Follow [Google Go Style Decisions](https://google.github.io/go-style/decisions)
 - KISS/DRY/YAGNI — no premature abstractions, no unused features, no duplicated logic
@@ -180,7 +185,7 @@ Operational corollaries:
 - `Duration` is `type Duration time.Duration` — `Nanosecond` through `Hour` are typed constants supporting `5 * gotime.Minute` arithmetic. No `Day` constant (24h is `24 * Hour`; calendar day is `Days(n)` on Period). No `Hours(n)` / `Days(n float64)` constructors.
 - `Period` fields (`Years`, `Months`, `Days`) are exported — literal initialization is the canonical form. Constructors `Years(n)` / `Months(n)` / `Days(n)` are sugar.
 - `Period.Add`, `Sub`, `Negate`, and `Abs` are checked and return `ErrOverflow`; calendar component arithmetic must never wrap.
-- `Period.String()` equals `ISO8601()` and must round-trip every valid mixed-sign value. A leading `-P` applies only to unsigned components; never accept a second component sign under a leading sign.
+- `Period.String()` is package-defined canonical period text and must round-trip every valid mixed-sign value. A leading `-P` applies only to unsigned components; never accept a second component sign under a leading sign.
 - `Period` month/year add applies end-of-month clamping (Jan 31 + Months(1) = Feb 28/29). Never overflow.
 - `Instant.Sub`, `DateTime.Sub`, and `Interval.Length` return `(Duration, error)` and match `ErrOverflow` instead of exposing `time.Time.Sub` saturation.
 - `Instant.Add` and `Interval.Shift` return a value plus `error`; reject runtime overflow with a zero result and `ErrOverflow`. Duration-based interval constructors and `Expand` propagate the same checked endpoint arithmetic. Do not impose the narrower JSON year domain on runtime arithmetic.
@@ -243,7 +248,7 @@ Operational corollaries:
 - No policy-only gate scripts that merely restate README, SPECS, or agent instructions
 - No spec-mirror tests when a stronger behavior, integration, or generated-artifact test already proves the contract
 - No working around dependency bugs — if a bug or limitation is in a dependency library, do NOT bypass it. Create a report file in `reports/` (see Dependency Issue Reporting below)
-- Use only Go 1.27.0's native `encoding/json/v2` and `encoding/json/jsontext`
+- Use only Go 1.27.2's native `encoding/json/v2` and `encoding/json/jsontext`
   for JSON. Do not add compatibility adapters or alternate JSON implementations.
 - No reminder/alarm/event/cron/RRULE/business-calendar/astronomical types — permanent ban
 
@@ -270,7 +275,7 @@ See SPECS/ for detailed patterns:
 
 | Dependency | Purpose |
 |------------|---------|
-| Go 1.27.0 `encoding/json/v2` | Standard-library JSON v2 serialization |
+| Go 1.27.2 `encoding/json/v2` | Standard-library JSON v2 serialization |
 | `github.com/google/go-cmp` | Test diffs only |
 | `golang.org/x/text` | `language.Tag` for `WithInputLocale` — BCP-47 type only, no CLDR/display data |
 

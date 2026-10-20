@@ -238,7 +238,7 @@ func TestParseResultMarshalResolvedPeriod(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	got := string(b)
-	want := `{"kind":"parse_result","status":"resolved","input":"P+1Y-2M+3D","value_kind":"period","value":{"kind":"period","iso":"P+1Y-2M+3D"}}`
+	want := `{"kind":"parse_result","status":"resolved","input":"P+1Y-2M+3D","value_kind":"period","value":{"kind":"period","value":"P+1Y-2M+3D"}}`
 	if got != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
