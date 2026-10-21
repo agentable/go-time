@@ -22,7 +22,7 @@ A Go time semantics library that turns standard formats and controlled human exp
 go get github.com/agentable/go-time
 ```
 
-Requires **Go 1.27.2 or newer**.
+Requires **Go 1.27.3 or newer**.
 
 ## Quick Start
 
@@ -553,7 +553,7 @@ missing Field value. See [integration boundaries](SPECS/80-integration.md#field-
 
 ## Serialize Values
 
-Marshal value objects and parse results with Go 1.27.2 `encoding/json/v2`.
+Marshal value objects and parse results with Go 1.27.3 `encoding/json/v2`.
 Known concrete types carry their values directly:
 
 ```go
