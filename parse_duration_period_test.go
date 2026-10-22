@@ -132,6 +132,63 @@ func TestParse_Duration_Invalid(t *testing.T) {
 	}
 }
 
+func TestParsePeriodRejectsIncompleteTimeSection(t *testing.T) {
+	for _, input := range []string{"P1DT", "P1YT", "-P2WT", "P+1Y-2MT", " P1DT ", "P", "PT", "P1DT1H"} {
+		t.Run(input, func(t *testing.T) {
+			r := Parse(input)
+			if r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidFormat) {
+				t.Errorf("Parse(%q): status=%s error=%v, want Invalid and ErrInvalidFormat", input, r.Status, r.Error)
+			}
+			if r.Input != input || r.Error == nil || r.Error.Input != input || r.Error.Hint == "" {
+				t.Errorf("Parse(%q): input=%q detail=%+v, want original input and actionable error", input, r.Input, r.Error)
+			}
+			p, err := ParsePeriod(input)
+			if p != (Period{}) || !errors.Is(err, ErrInvalidFormat) {
+				t.Errorf("ParsePeriod(%q) = %v, %v; want zero and ErrInvalidFormat", input, p, err)
+			}
+			var detail *TimeError
+			if !errors.As(err, &detail) || detail.Input != input || detail.Hint == "" {
+				t.Errorf("ParsePeriod(%q): detail=%+v, want original input and actionable error", input, detail)
+			}
+		})
+	}
+}
+
+func TestParsePeriodCompleteComponents(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		want  Period
+	}{
+		{"P1D", Days(1)},
+		{"P1Y", Years(1)},
+		{"-P2W", Days(-14)},
+		{"P+1Y-2M", Period{Years: 1, Months: -2}},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			p, err := ParsePeriod(tc.input)
+			parsed, ok := Parse(tc.input).Period()
+			if err != nil || p != tc.want || !ok || parsed != tc.want {
+				t.Errorf("%q: typed=%v error=%v diagnostic=%v ok=%v, want %v", tc.input, p, err, parsed, ok, tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		input string
+		want  Duration
+	}{
+		{"PT0S", 0},
+		{"PT1H", Hour},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			d, err := ParseDuration(tc.input)
+			parsed, ok := Parse(tc.input).Duration()
+			if err != nil || d != tc.want || !ok || parsed != tc.want {
+				t.Errorf("%q: typed=%v error=%v diagnostic=%v ok=%v, want %v", tc.input, d, err, parsed, ok, tc.want)
+			}
+		})
+	}
+}
+
 func TestParse_Duration_RejectsExponentSeconds(t *testing.T) {
 	for _, input := range []string{"PT1e3S", "PT1E-9S"} {
 		t.Run(input, func(t *testing.T) {

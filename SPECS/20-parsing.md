@@ -34,6 +34,8 @@ Fractions follow explicit seconds only; fractional hours or minutes are not
 supported. Explicit offsets use `Z`, `±HH:MM`, or `±HHMM`; `±HH` is rejected.
 
 `P{date-only}` routes to `Period`. `PT{time-only}` routes to `Duration`. Mixed date/time duration forms such as `P1DT2H` are invalid because no single go-time type can carry both calendar and sub-day exact semantics.
+A `T` separator requires at least one clock component. Incomplete forms such
+as `P1DT` return `ErrInvalidFormat`; `PT0S` remains a valid zero duration.
 Date-only Period components may carry individual signs so every valid Period
 has a lossless public text round trip, for example `P+1Y-2M+3D`.
 A leading period sign applies to unsigned component magnitudes only. Inputs

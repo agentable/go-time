@@ -34,6 +34,12 @@ func parseDuration(input string, cfg *config) ParseResult {
 			"Specify at least one component, e.g. PT0S (Duration) or P0D (Period)")
 	}
 
+	if strings.ContainsRune(input, 'T') && !hasTimeComp {
+		return invalidResult(input, ErrInvalidFormat,
+			"time separator has no clock components",
+			"Remove the empty T from the calendar period, or use a clock duration such as PT0S")
+	}
+
 	if hasDateComp && hasTimeComp {
 		return invalidResult(input, ErrInvalidFormat,
 			fmt.Sprintf("input mixes date and time components: %q", input),
