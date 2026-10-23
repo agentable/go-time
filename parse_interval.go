@@ -24,14 +24,14 @@ func parseInterval(input string, cfg *config) ParseResult {
 	}
 	var sr, er ParseResult
 	if startIsDur {
-		sr, _ = parseIntervalDuration(input, left)
+		sr = parseIntervalDuration(input, left)
 	} else {
-		sr, _ = parseIntervalBoundary(input, left, "start", cfg)
+		sr = parseIntervalBoundary(input, left, "start", cfg)
 	}
 	if endIsDur {
-		er, _ = parseIntervalDuration(input, right)
+		er = parseIntervalDuration(input, right)
 	} else {
-		er, _ = parseIntervalBoundary(input, right, "end", cfg)
+		er = parseIntervalBoundary(input, right, "end", cfg)
 	}
 	if sr.Status == StatusInvalid {
 		return sr
@@ -105,7 +105,7 @@ func intervalFromParts(start, end ParseResult) (Interval, error) {
 	return NewInterval(startInstant, endInstant)
 }
 
-func parseIntervalBoundary(input, part, label string, cfg *config) (ParseResult, bool) {
+func parseIntervalBoundary(input, part, label string, cfg *config) ParseResult {
 	if r, ok := parseDateTimeStage(part, cfg); ok {
 		return validateIntervalPart(input, label, r)
 	}
@@ -117,44 +117,44 @@ func parseIntervalBoundary(input, part, label string, cfg *config) (ParseResult,
 	}
 	return invalidResult(input, ErrInvalidFormat,
 		fmt.Sprintf("invalid interval %s: parse failed", label),
-		"Use ISO 8601 interval format"), false
+		"Use ISO 8601 interval format")
 }
 
-func parseIntervalDuration(input, part string) (ParseResult, bool) {
+func parseIntervalDuration(input, part string) ParseResult {
 	var cfg config
 	return validateIntervalPart(input, "duration", parseDuration(part, &cfg))
 }
 
-func validateIntervalPart(input, label string, r ParseResult) (ParseResult, bool) {
+func validateIntervalPart(input, label string, r ParseResult) ParseResult {
 	switch r.Status {
 	case StatusResolved:
 		if label == "duration" {
 			if r.Kind == KindDuration {
 				if r.duration.IsNegative() {
-					return invalidResult(input, ErrInvalidDuration, "interval length must not be negative", "use a non-negative exact duration"), false
+					return invalidResult(input, ErrInvalidDuration, "interval length must not be negative", "use a non-negative exact duration")
 				}
-				return r, true
+				return r
 			}
 			return invalidResult(input, ErrIncompatibleTypes,
 				fmt.Sprintf("interval %s must be a duration, got %s", label, r.Kind),
-				"Use a PT-prefixed exact duration such as PT1H30M"), false
+				"Use a PT-prefixed exact duration such as PT1H30M")
 		}
 		if r.Kind == KindInstant || r.Kind == KindDateTime {
-			return r, true
+			return r
 		}
-		return invalidIntervalType(input, label, r.Kind), false
+		return invalidIntervalType(input, label, r.Kind)
 	case StatusAmbiguous:
 		for i := range r.Candidates {
 			candidate := &r.Candidates[i]
 			if candidate.Status != StatusResolved {
-				return invalidIntervalType(input, label, candidate.Kind), false
+				return invalidIntervalType(input, label, candidate.Kind)
 			}
-			if checked, ok := validateIntervalPart(input, label, *candidate); !ok {
-				return checked, false
+			if checked := validateIntervalPart(input, label, *candidate); checked.Status != StatusResolved {
+				return checked
 			}
 		}
 		r.Input = input
-		return r, false
+		return r
 	case StatusInvalid:
 		if r.Error != nil {
 			err := *r.Error
@@ -162,15 +162,15 @@ func validateIntervalPart(input, label string, r ParseResult) (ParseResult, bool
 			err.Input = input
 			r.Input = input
 			r.Error = &err
-			return r, false
+			return r
 		}
 		return invalidResult(input, ErrInvalidFormat,
 			fmt.Sprintf("invalid interval %s: parse failed", label),
-			"Use ISO 8601 interval format"), false
+			"Use ISO 8601 interval format")
 	default:
 		return invalidResult(input, ErrUnparseable,
 			fmt.Sprintf("invalid interval %s", label),
-			"Use ISO 8601 interval format"), false
+			"Use ISO 8601 interval format")
 	}
 }
 

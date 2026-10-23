@@ -27,7 +27,7 @@ func TestParseIntervalRejectsAmbiguousDates(t *testing.T) {
 	// A valid first candidate must not hide an incompatible later candidate.
 	r := Parse("2026-11-01T01:30:00", WithZone(MustLoadZone("America/New_York")))
 	r.Candidates = append(r.Candidates, Parse("2026-11-01"))
-	if got, _ := validateIntervalPart("interval", "end", r); !errors.Is(got.Error, ErrIncompatibleTypes) {
+	if got := validateIntervalPart("interval", "end", r); !errors.Is(got.Error, ErrIncompatibleTypes) {
 		t.Errorf("mixed endpoint candidates accepted: %#v", got)
 	}
 }
