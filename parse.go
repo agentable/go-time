@@ -91,6 +91,11 @@ type ParseResult struct {
 	// Reference is the reference instant used for relative expressions.
 	Reference Instant
 	// HasZone reports whether the input explicitly included timezone or offset information.
+	// Interpret it only when Status is StatusResolved or StatusAmbiguous.
+	// For intervals, it is true if at least one endpoint included an explicit offset;
+	// it does not establish that every endpoint supplied one.
+	// WithZone does not set HasZone, so false does not mean the result lacks a zone.
+	// In StatusInvalid results it is unspecified, not evidence about input syntax.
 	HasZone bool
 	// Warnings is a caller-owned slice describing lossy assumptions made while parsing.
 	Warnings []Warning

@@ -196,23 +196,32 @@ func TestParseResult_HasZone(t *testing.T) {
 		name    string
 		input   string
 		hasZone bool
+		opts    []Option
+		status  Status
 	}{
-		{"RFC3339 UTC", "2026-03-27T04:00:00Z", true},
-		{"RFC3339 offset", "2026-03-27T13:00:00+09:00", true},
-		{"naive datetime", "2026-03-27T13:00:00", false},
-		{"date only", "2026-03-27", false},
-		{"compact UTC", "20260327T130000Z", true},
-		{"compact no offset", "20260327T130000", false},
-		{"time only", "13:00", false},
+		{"RFC3339 UTC", "2026-03-27T04:00:00Z", true, nil, StatusResolved},
+		{"RFC3339 offset", "2026-03-27T13:00:00+09:00", true, nil, StatusResolved},
+		{"naive datetime", "2026-03-27T13:00:00", false, nil, StatusResolved},
+		{"date only", "2026-03-27", false, nil, StatusResolved},
+		{"compact UTC", "20260327T130000Z", true, nil, StatusResolved},
+		{"compact no offset", "20260327T130000", false, nil, StatusResolved},
+		{"time only", "13:00", false, nil, StatusResolved},
+		{"configured zone", "2026-03-27T13:00:00", false, []Option{WithZone(UTC)}, StatusResolved},
+		{"DST candidates", "2026-11-01T01:30:00", false, []Option{WithZone(MustLoadZone("America/New_York"))}, StatusAmbiguous},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			r := Parse(tc.input)
-			if r.Status == StatusInvalid {
-				t.Fatalf("Parse(%q).Status = invalid, error = %#v; want non-invalid", tc.input, r.Error)
+			r := Parse(tc.input, tc.opts...)
+			if r.Status != tc.status {
+				t.Fatalf("Parse(%q).Status = %s, want %s", tc.input, r.Status, tc.status)
 			}
 			if r.HasZone != tc.hasZone {
 				t.Errorf("Parse(%q).HasZone = %v, want %v", tc.input, r.HasZone, tc.hasZone)
+			}
+			for _, candidate := range r.Candidates {
+				if candidate.Status != StatusResolved || candidate.HasZone != tc.hasZone {
+					t.Errorf("candidate status/HasZone = %s/%v, want resolved/%v", candidate.Status, candidate.HasZone, tc.hasZone)
+				}
 			}
 		})
 	}

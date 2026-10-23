@@ -8,6 +8,25 @@ import (
 	"time"
 )
 
+func TestInstantResultMetadata(t *testing.T) {
+	t.Parallel()
+
+	const input = " 2026-03-27T13:00:00.123456789+09:00 "
+	cfg := applyOptions([]Option{WithZone(MustLoadZone("America/New_York")), WithReference(fixedNow)})
+	moment := time.Date(2026, time.March, 27, 13, 0, 0, 123456789, time.FixedZone("offset", 9*60*60))
+	r := instantResult(input, moment, &cfg)
+	i, ok := r.Instant()
+	if !ok || !i.Std().Equal(moment) || i.Std().Location() != time.UTC {
+		t.Fatalf("Instant() = %v, %v; want the same instant in UTC", i, ok)
+	}
+	if r.Input != input || !r.Reference.Equal(fixedNow) {
+		t.Errorf("input/reference = %q/%v, want %q/%v", r.Input, r.Reference, input, fixedNow)
+	}
+	if !r.HasZone || !r.Zone.IsZero() || len(r.Warnings) != 0 {
+		t.Errorf("offset result retained default zone metadata: HasZone=%v Zone=%v warnings=%v", r.HasZone, r.Zone, r.Warnings)
+	}
+}
+
 func TestParse_RFC3339_UTC(t *testing.T) {
 	r := Parse("2026-03-27T04:00:00Z")
 	if r.Status != StatusResolved {

@@ -255,7 +255,13 @@ Removing ambiguity warnings does not change the corresponding typed error
 identity. Precision-loss rejection is the separate resolved-result rule above. Typed parsers narrow the same shared parse result; they are not a
 second parser engine.
 
-`HasZone` reports whether the original input explicitly included a timezone or offset. It is the caller's hook for detecting floating time.
+For `StatusResolved` and `StatusAmbiguous` results, `HasZone` reports whether
+the original input explicitly included a timezone or offset. `WithZone` does
+not set it: a false value does not mean that the result lacks a usable zone.
+In `StatusInvalid` results, the field is unspecified; false does not prove that
+the input omitted an offset (for example, `2026-02-30T13:00:00Z` is invalid).
+To identify a floating datetime, check the result's status and `KindLocalDateTime`
+rather than relying on this flag alone.
 
 Interval boundaries must resolve to `KindInstant` or `KindDateTime`. This
 constraint applies to every ambiguous candidate before interval construction. Date-only interval boundaries are invalid because an interval is an absolute UTC range and a bare date has no time or zone.
@@ -269,9 +275,13 @@ Distinct intervals are sorted by start, then end. Zero valid combinations
 return `ErrIntervalReversed`, one resolves, and multiple return ambiguous
 `KindInterval` with resolved Interval candidates. Duration forms require a
 non-negative exact duration and follow the same candidate rules.
-Interval results and their candidates retain complete input text. `HasZone`
-is true when either endpoint explicitly includes an offset, not merely when
-`WithZone` is supplied. Endpoint warnings are merged in input order, with
+Interval results and their candidates retain complete input text. For resolved
+or ambiguous intervals, `HasZone` is the logical OR of the endpoints' flags:
+true means at least one endpoint explicitly includes an offset, not that every
+endpoint does. For example, an interval with one offset endpoint and one local
+endpoint resolved using `WithZone` has `HasZone == true`. Intervals rejected
+because every candidate is reversed have no interpretable `HasZone` metadata.
+Endpoint warnings are merged in input order, with
 equal code/message pairs deduplicated. Candidate fold warnings describe
 only the occurrences used by that complete interval.
 When a formal interval endpoint is recognized but semantically invalid, the

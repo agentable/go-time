@@ -42,7 +42,7 @@ func tryParseDateTime(input string, cfg *config) (ParseResult, bool) {
 			Error: newTimeErrorWithCause(sentinel, err, fmt.Sprintf("invalid datetime %q", input), input, hint)}, true
 	}
 
-	r := buildDateTimeResult(input, t, cfg)
+	r := instantResult(input, t, cfg)
 	if truncated {
 		r.Warnings = append(r.Warnings, truncatedPrecisionWarning())
 	}
@@ -222,14 +222,14 @@ func tryParseCompactDateTime(input string, cfg *config) (ParseResult, bool) {
 		}
 	}
 	t := time.Date(year, time.Month(mon), day, hour, min, sec, nsec, loc)
-	r := buildDateTimeResult(input, t, cfg)
+	r := instantResult(input, t, cfg)
 	if truncated {
 		r.Warnings = append(r.Warnings, truncatedPrecisionWarning())
 	}
 	return r, true
 }
 
-func buildDateTimeResult(input string, t time.Time, cfg *config) ParseResult {
+func instantResult(input string, t time.Time, cfg *config) ParseResult {
 	r := resolvedResult(input, KindInstant, cfg)
 	r.Zone = Zone{}
 	r.instant = InstantFromTime(t)

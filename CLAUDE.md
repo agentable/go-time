@@ -4,11 +4,6 @@ Time semantics foundation library for Agent OS. Converts ambiguous human time ex
 
 **Module path**: `github.com/agentable/go-time`
 
-## Release Inventory
-
-The only publishable module is the repository root, `github.com/agentable/go-time`,
-with unprefixed `vX.Y.Z` tags. There are no nested or validation-only modules.
-
 ## Commands
 
 ```bash
@@ -40,7 +35,7 @@ When updating documentation:
 Do not duplicate contracts in `README.md`, and do not turn `SPECS/` into tutorials.
 Improvement plans are temporary working artifacts: after implementation, move
 durable usage, contract, and workflow decisions into the three owners above,
-then delete `improve.md` and `improves/`.
+then delete the completed plans and their supporting task reports.
 
 ## Architecture
 
@@ -209,7 +204,7 @@ Operational corollaries:
 - `Duration.Seconds/Minutes/Hours` directly use standard-library projections; `Abs` retains its documented minimum-int64 saturation. `Time.Compare` follows Go time ordering.
 - `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
 - `ParseResult` has no public `Value() any` escape hatch — dispatch unknown input with `Status`, `Kind`, and comma-ok accessors.
-- `ParseResult.HasZone` indicates whether the input explicitly included timezone/offset information — use this to detect floating times
+- Interpret `ParseResult.HasZone` only for resolved/ambiguous results: it records input timezone/offset information, not `WithZone`. Intervals OR their endpoint flags; true does not mean every endpoint supplied an offset. Invalid results leave it unspecified. Detect floating datetimes using status and `KindLocalDateTime`.
 - `errors.Is(err, gotime.ErrAmbiguousDate)` for control flow; `errors.As(err, &te)` for detail extraction. `*TimeError` unwraps a chain containing its sentinel and any parser/loader/codec cause; `Code` is JSON/log metadata. Typed parsers map DST duplicate local-time ambiguity to `ErrDuplicateTime`, not generic date ambiguity.
 - `Code*` is `ErrorCode` (string metadata); `Err*` is a sentinel `error`. Never mix prefixes.
 - `MustLoadZone` is the only public `Must*`. Never add `MustParse`, `MustNewInterval`, etc.

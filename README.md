@@ -177,6 +177,14 @@ Keep these values caller-owned: load the zone from application configuration, pa
 
 Use `Parse` when the input kind is unknown or the application needs candidates, warnings, or explicit-zone metadata. This is the path for user-facing ambiguity workflows.
 
+Read `HasZone` only after checking for `StatusResolved` or `StatusAmbiguous`.
+It describes explicit timezone or offset information in the input; supplying
+`WithZone` does not set it. For intervals, it means at least one endpoint has
+an explicit offset, so the other endpoint may still depend on `WithZone`.
+For invalid results it is unspecified: false does not prove that the input
+omitted an offset. To recognize a floating datetime, check the status and
+`KindLocalDateTime` rather than this flag alone.
+
 ```go
 result := gotime.Parse("04/05/2026")
 
