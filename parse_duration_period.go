@@ -116,7 +116,7 @@ func parseISODurationMatch(input string, m []string, cfg *config) ParseResult {
 			if errors.Is(err, ErrInvalidDuration) {
 				return invalidResult(input, ErrInvalidDuration, "duration component exceeds supported decimal precision", "use at most nine fractional digits in each duration component")
 			}
-			return ParseResult{Status: StatusInvalid, Input: input, Error: newTimeErrorWithCause(
+			return ParseResult{status: StatusInvalid, Input: input, Error: newTimeErrorWithCause(
 				ErrOverflow, err, fmt.Sprintf("duration %s component overflows nanoseconds: %q", component.name, component.raw), input, "Use a smaller duration component")}
 		}
 		if ns > limit-totalNs {

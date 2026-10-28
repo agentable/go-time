@@ -37,11 +37,11 @@ func TestParse_Natural_Zh(t *testing.T) {
 				WithZone(MustLoadZone(tt.zone)),
 				WithReference(fixedNow),
 			)
-			if r.Status != StatusResolved {
-				t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+			if r.Status() != StatusResolved {
+				t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 			}
-			if r.Kind != tt.wantKind {
-				t.Fatalf("Kind = %v, want %v", r.Kind, tt.wantKind)
+			if r.Kind() != tt.wantKind {
+				t.Fatalf("Kind = %v, want %v", r.Kind(), tt.wantKind)
 			}
 			if tt.wantKind == KindDate {
 				d, _ := r.Date()
@@ -80,11 +80,11 @@ func TestParse_Natural_En(t *testing.T) {
 				WithZone(MustLoadZone("America/New_York")),
 				WithReference(fixedNow),
 			)
-			if r.Status != StatusResolved {
-				t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+			if r.Status() != StatusResolved {
+				t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 			}
-			if r.Kind != tt.wantKind {
-				t.Fatalf("Kind = %v, want %v", r.Kind, tt.wantKind)
+			if r.Kind() != tt.wantKind {
+				t.Fatalf("Kind = %v, want %v", r.Kind(), tt.wantKind)
 			}
 			if tt.wantKind == KindDuration {
 				d, _ := r.Duration()
@@ -104,8 +104,8 @@ func TestParse_Natural_RelativeDateRequiresReference(t *testing.T) {
 		WithInputLocale(language.English),
 		WithZone(MustLoadZone("America/New_York")),
 	)
-	if r.Status != StatusInvalid {
-		t.Fatalf("Parse(tomorrow).Status = %s, want %s", r.Status, StatusInvalid)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("Parse(tomorrow).Status = %s, want %s", r.Status(), StatusInvalid)
 	}
 	if !errors.Is(r.Error, ErrInvalidFormat) {
 		t.Fatalf("Parse(tomorrow).Error = %v, want ErrInvalidFormat", r.Error)
@@ -120,8 +120,8 @@ func TestParse_Natural_ExplicitZeroReferenceIsPresent(t *testing.T) {
 		WithZone(Zone{}),
 		WithReference(Instant{}),
 	)
-	if r.Status != StatusResolved || r.Kind != KindDate {
-		t.Fatalf("Parse(tomorrow) status/kind = %q/%q (error=%v), want resolved/date", r.Status, r.Kind, r.Error)
+	if r.Status() != StatusResolved || r.Kind() != KindDate {
+		t.Fatalf("Parse(tomorrow) status/kind = %q/%q (error=%v), want resolved/date", r.Status(), r.Kind(), r.Error)
 	}
 	d, ok := r.Date()
 	if !ok {
@@ -143,8 +143,8 @@ func TestParse_Natural_ReferenceUsesExplicitZoneDate(t *testing.T) {
 		WithZone(zone),
 		WithReference(reference),
 	)
-	if r.Status != StatusResolved {
-		t.Fatalf("Parse(tomorrow).Status = %s (error=%v), want %s", r.Status, r.Error, StatusResolved)
+	if r.Status() != StatusResolved {
+		t.Fatalf("Parse(tomorrow).Status = %s (error=%v), want %s", r.Status(), r.Error, StatusResolved)
 	}
 	d, ok := r.Date()
 	if !ok {
@@ -177,8 +177,8 @@ func TestParse_Natural_RelativeDateRejectsCivilDomainOverflow(t *testing.T) {
 				WithReference(InstantFromTime(tc.reference)),
 				WithZone(UTC),
 			)
-			if r.Status != StatusInvalid {
-				t.Fatalf("Parse(%q) status = %s, want %s; date=%v", tc.input, r.Status, StatusInvalid, r.date)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("Parse(%q) status = %s, want %s; date=%v", tc.input, r.Status(), StatusInvalid, r.date)
 			}
 			if !errors.Is(r.Error, ErrInvalidDate) {
 				t.Fatalf("Parse(%q) error = %v, want ErrInvalidDate", tc.input, r.Error)
@@ -191,11 +191,11 @@ func TestParse_Natural_DurationDoesNotRequireReference(t *testing.T) {
 	t.Parallel()
 
 	r := Parse("in 2 hours", WithInputLocale(language.English))
-	if r.Status != StatusResolved {
-		t.Fatalf("Parse(in 2 hours).Status = %s (err=%v), want %s", r.Status, r.Error, StatusResolved)
+	if r.Status() != StatusResolved {
+		t.Fatalf("Parse(in 2 hours).Status = %s (err=%v), want %s", r.Status(), r.Error, StatusResolved)
 	}
-	if r.Kind != KindDuration {
-		t.Fatalf("Parse(in 2 hours).Kind = %s, want %s", r.Kind, KindDuration)
+	if r.Kind() != KindDuration {
+		t.Fatalf("Parse(in 2 hours).Kind = %s, want %s", r.Kind(), KindDuration)
 	}
 	d, ok := r.Duration()
 	if !ok {
@@ -217,8 +217,8 @@ func TestParse_Natural_ReferenceDependentInputRequiresZone(t *testing.T) {
 				WithInputLocale(language.English),
 				WithReference(fixedNow),
 			)
-			if r.Status != StatusInvalid {
-				t.Fatalf("Parse(%q).Status = %s, want %s", input, r.Status, StatusInvalid)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("Parse(%q).Status = %s, want %s", input, r.Status(), StatusInvalid)
 			}
 			if !errors.Is(r.Error, ErrInvalidZone) {
 				t.Fatalf("Parse(%q).Error = %v, want ErrInvalidZone", input, r.Error)
@@ -277,8 +277,8 @@ func TestParse_Natural_DateTimeUsesLocalResolution(t *testing.T) {
 				WithReference(InstantFromTime(tc.reference)),
 			}
 			r := Parse(tc.input, opts...)
-			if r.Status != tc.wantStatus {
-				t.Fatalf("Parse(%q).Status = %q, want %q", tc.input, r.Status, tc.wantStatus)
+			if r.Status() != tc.wantStatus {
+				t.Fatalf("Parse(%q).Status = %q, want %q", tc.input, r.Status(), tc.wantStatus)
 			}
 			if len(r.Candidates) != tc.wantCandidates {
 				t.Fatalf("len(Parse(%q).Candidates) = %d, want %d", tc.input, len(r.Candidates), tc.wantCandidates)
@@ -358,12 +358,12 @@ func TestParse_Natural_DateTimeMatchesExplicitResolution(t *testing.T) {
 
 			switch want.Status {
 			case LocalNonexistent:
-				if got.Status != StatusInvalid || !errors.Is(got.Error, ErrNonexistentTime) {
-					t.Fatalf("Parse(%q) status/error = %q/%v, want invalid/ErrNonexistentTime", tc.input, got.Status, got.Error)
+				if got.Status() != StatusInvalid || !errors.Is(got.Error, ErrNonexistentTime) {
+					t.Fatalf("Parse(%q) status/error = %q/%v, want invalid/ErrNonexistentTime", tc.input, got.Status(), got.Error)
 				}
 			case LocalAmbiguous:
-				if got.Status != StatusAmbiguous {
-					t.Fatalf("Parse(%q).Status = %q, want ambiguous", tc.input, got.Status)
+				if got.Status() != StatusAmbiguous {
+					t.Fatalf("Parse(%q).Status = %q, want ambiguous", tc.input, got.Status())
 				}
 				if len(got.Candidates) != len(want.Candidates) {
 					t.Fatalf("len(Parse(%q).Candidates) = %d, want %d", tc.input, len(got.Candidates), len(want.Candidates))
@@ -390,11 +390,11 @@ func TestParse_Natural_Ja(t *testing.T) {
 		WithZone(MustLoadZone("Asia/Tokyo")),
 		WithReference(fixedNow),
 	)
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v, want Resolved", r.Status())
 	}
-	if r.Kind != KindDate {
-		t.Fatalf("Kind = %v, want KindDate", r.Kind)
+	if r.Kind() != KindDate {
+		t.Fatalf("Kind = %v, want KindDate", r.Kind())
 	}
 	d, _ := r.Date()
 	if d.Year() != 2026 || d.Month() != time.March || d.Day() != 31 {
@@ -408,22 +408,22 @@ func TestParse_Natural_Ko(t *testing.T) {
 		WithZone(MustLoadZone("Asia/Seoul")),
 		WithReference(fixedNow),
 	)
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v, want Resolved", r.Status())
 	}
-	if r.Kind != KindDate {
-		t.Fatalf("Kind = %v, want KindDate", r.Kind)
+	if r.Kind() != KindDate {
+		t.Fatalf("Kind = %v, want KindDate", r.Kind())
 	}
 }
 
 func TestParse_Natural_ISO_Priority(t *testing.T) {
 	// ISO 8601 must still take priority over natural language
 	r := Parse("2026-03-27", WithInputLocale(language.MustParse("zh-Hans")))
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v, want Resolved", r.Status())
 	}
-	if r.Kind != KindDate {
-		t.Fatalf("Kind = %v, want KindDate", r.Kind)
+	if r.Kind() != KindDate {
+		t.Fatalf("Kind = %v, want KindDate", r.Kind())
 	}
 	d, _ := r.Date()
 	if d.Year() != 2026 || d.Month() != time.March || d.Day() != 27 {
@@ -434,8 +434,8 @@ func TestParse_Natural_ISO_Priority(t *testing.T) {
 func TestParse_Natural_NoLocale(t *testing.T) {
 	// Without locale, natural parsing should be skipped
 	r := Parse("今天") // no locale
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid (no locale → no natural parse)", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid (no locale → no natural parse)", r.Status())
 	}
 }
 
@@ -467,29 +467,29 @@ func TestParse_Natural_SupportedLanguagesUseExplicitContext(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if r := Parse(tc.date); r.Status != StatusInvalid {
-				t.Fatalf("Parse(%q) without locale status = %s, want %s", tc.date, r.Status, StatusInvalid)
+			if r := Parse(tc.date); r.Status() != StatusInvalid {
+				t.Fatalf("Parse(%q) without locale status = %s, want %s", tc.date, r.Status(), StatusInvalid)
 			}
-			if r := Parse(tc.date, WithInputLocale(tc.locale), WithZone(zone)); r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidFormat) {
+			if r := Parse(tc.date, WithInputLocale(tc.locale), WithZone(zone)); r.Status() != StatusInvalid || !errors.Is(r.Error, ErrInvalidFormat) {
 				t.Fatalf("Parse(%q) without reference = %#v, want ErrInvalidFormat", tc.date, r)
 			}
-			if r := Parse(tc.date, WithInputLocale(tc.locale), WithReference(fixedNow)); r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidZone) {
+			if r := Parse(tc.date, WithInputLocale(tc.locale), WithReference(fixedNow)); r.Status() != StatusInvalid || !errors.Is(r.Error, ErrInvalidZone) {
 				t.Fatalf("Parse(%q) without zone = %#v, want ErrInvalidZone", tc.date, r)
 			}
-			if r := Parse(tc.date, WithInputLocale(tc.locale), WithReference(fixedNow), WithZone(zone)); r.Status != StatusResolved || r.Kind != KindDate {
+			if r := Parse(tc.date, WithInputLocale(tc.locale), WithReference(fixedNow), WithZone(zone)); r.Status() != StatusResolved || r.Kind() != KindDate {
 				t.Fatalf("Parse(%q) with explicit context = %#v, want resolved date", tc.date, r)
 			}
 
-			if r := Parse(tc.duration); r.Status != StatusInvalid {
-				t.Fatalf("Parse(%q) without locale status = %s, want %s", tc.duration, r.Status, StatusInvalid)
+			if r := Parse(tc.duration); r.Status() != StatusInvalid {
+				t.Fatalf("Parse(%q) without locale status = %s, want %s", tc.duration, r.Status(), StatusInvalid)
 			}
-			if r := Parse(tc.duration, WithInputLocale(tc.locale)); r.Status != StatusResolved || r.Kind != KindDuration {
+			if r := Parse(tc.duration, WithInputLocale(tc.locale)); r.Status() != StatusResolved || r.Kind() != KindDuration {
 				t.Fatalf("Parse(%q) with locale = %#v, want reference-independent duration", tc.duration, r)
 			}
-			if r := Parse(tc.period); r.Status != StatusInvalid {
-				t.Fatalf("Parse(%q) without locale status = %s, want %s", tc.period, r.Status, StatusInvalid)
+			if r := Parse(tc.period); r.Status() != StatusInvalid {
+				t.Fatalf("Parse(%q) without locale status = %s, want %s", tc.period, r.Status(), StatusInvalid)
 			}
-			if r := Parse(tc.period, WithInputLocale(tc.locale)); r.Status != StatusResolved || r.Kind != KindPeriod {
+			if r := Parse(tc.period, WithInputLocale(tc.locale)); r.Status() != StatusResolved || r.Kind() != KindPeriod {
 				t.Fatalf("Parse(%q) with locale = %#v, want reference-independent period", tc.period, r)
 			}
 		})
@@ -498,8 +498,8 @@ func TestParse_Natural_SupportedLanguagesUseExplicitContext(t *testing.T) {
 
 func TestParse_Natural_Unrecognised(t *testing.T) {
 	r := Parse("hello world", WithInputLocale(language.English))
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 	if r.Error == nil {
 		t.Fatal("Error must not be nil when status is Invalid")
@@ -517,8 +517,8 @@ func TestParse_Natural_OverflowPreservesSentinel(t *testing.T) {
 		"in 3000000000 hours",
 	} {
 		r := Parse(input, WithInputLocale(language.English))
-		if r.Status != StatusInvalid {
-			t.Fatalf("Parse(%q).Status = %v, want Invalid", input, r.Status)
+		if r.Status() != StatusInvalid {
+			t.Fatalf("Parse(%q).Status = %v, want Invalid", input, r.Status())
 		}
 		if r.Error == nil {
 			t.Fatalf("Parse(%q).Error = nil, want error", input)
@@ -539,7 +539,7 @@ func TestParse_Natural_ChineseNumericAndOverflow(t *testing.T) {
 	t.Parallel()
 
 	resolved := Parse("一百零一分钟后", WithInputLocale(language.SimplifiedChinese))
-	if resolved.Status != StatusResolved || resolved.Kind != KindDuration {
+	if resolved.Status() != StatusResolved || resolved.Kind() != KindDuration {
 		t.Fatalf("Parse(一百零一分钟后) = %#v, want resolved duration", resolved)
 	}
 	duration, ok := resolved.Duration()
@@ -549,7 +549,7 @@ func TestParse_Natural_ChineseNumericAndOverflow(t *testing.T) {
 
 	const input = "9223372036854775808分钟后"
 	r := Parse(input, WithInputLocale(language.SimplifiedChinese))
-	if r.Status != StatusInvalid || !errors.Is(r.Error, ErrOverflow) {
+	if r.Status() != StatusInvalid || !errors.Is(r.Error, ErrOverflow) {
 		t.Fatalf("Parse(%q) = %#v, want ErrOverflow", input, r)
 	}
 	if r.Error.Code != CodeOverflow || r.Error.Hint == "" {
@@ -567,7 +567,7 @@ func TestNaturalResultToParseResultRejectsUnknownErrorKind(t *testing.T) {
 		ErrHint:    "do not expose this hint",
 	}
 	got := naturalResultToParseResult("input", &r, &config{})
-	if got.Status != StatusInvalid || got.Error == nil {
+	if got.Status() != StatusInvalid || got.Error == nil {
 		t.Fatalf("result = %#v, want invalid result with error", got)
 	}
 	if !errors.Is(got.Error, ErrUnparseable) || got.Error.Code != CodeUnparseable {
@@ -583,11 +583,11 @@ func TestParse_Natural_Duration_En(t *testing.T) {
 		WithInputLocale(language.English),
 		WithReference(fixedNow),
 	)
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v, want Resolved", r.Status())
 	}
-	if r.Kind != KindDuration {
-		t.Fatalf("Kind = %v, want KindDuration", r.Kind)
+	if r.Kind() != KindDuration {
+		t.Fatalf("Kind = %v, want KindDuration", r.Kind())
 	}
 	d, _ := r.Duration()
 	if d.Std() != 2*time.Hour {
@@ -615,11 +615,11 @@ func TestParse_Natural_CalendarUnits_En(t *testing.T) {
 				WithInputLocale(language.English),
 				WithReference(fixedNow),
 			)
-			if r.Status != StatusResolved {
-				t.Fatalf("Parse(%q).Status = %v (err=%v), want Resolved", tc.input, r.Status, r.Error)
+			if r.Status() != StatusResolved {
+				t.Fatalf("Parse(%q).Status = %v (err=%v), want Resolved", tc.input, r.Status(), r.Error)
 			}
-			if r.Kind != KindPeriod {
-				t.Fatalf("Parse(%q).Kind = %v, want KindPeriod", tc.input, r.Kind)
+			if r.Kind() != KindPeriod {
+				t.Fatalf("Parse(%q).Kind = %v, want KindPeriod", tc.input, r.Kind())
 			}
 			got, ok := r.Period()
 			if !ok {
@@ -689,7 +689,7 @@ func TestParseNaturalEnglishHourDomain(t *testing.T) {
 			t.Errorf("%s: %v", input, err)
 		}
 		r := Parse(input, opts...)
-		if r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) {
+		if r.Status() != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) {
 			t.Errorf("%s: %#v", input, r)
 		}
 	}
@@ -720,8 +720,8 @@ func TestParseNaturalJapaneseKoreanHourDomain(t *testing.T) {
 				r := Parse(input, opts...)
 				_, err := ParseDateTime(input, opts...)
 				var detail *TimeError
-				if r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) || !errors.Is(err, ErrInvalidTime) || !errors.As(err, &detail) || detail.Input != input || detail.Hint == "" {
-					t.Errorf("%s: status=%s error=%v", input, r.Status, err)
+				if r.Status() != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) || !errors.Is(err, ErrInvalidTime) || !errors.As(err, &detail) || detail.Input != input || detail.Hint == "" {
+					t.Errorf("%s: status=%s error=%v", input, r.Status(), err)
 				}
 			}
 		}
@@ -764,8 +764,8 @@ func TestParseNaturalChineseTwelveHourBoundaries(t *testing.T) {
 					r := Parse(input, opts...)
 					_, err := ParseDateTime(input, opts...)
 					var detail *TimeError
-					if r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) || !errors.Is(err, ErrInvalidTime) || !errors.As(err, &detail) || detail.Input != input || !strings.Contains(detail.Hint, "ISO") {
-						t.Errorf("%s %s: status=%s error=%v", locale, input, r.Status, err)
+					if r.Status() != StatusInvalid || !errors.Is(r.Error, ErrInvalidTime) || !errors.Is(err, ErrInvalidTime) || !errors.As(err, &detail) || detail.Input != input || !strings.Contains(detail.Hint, "ISO") {
+						t.Errorf("%s %s: status=%s error=%v", locale, input, r.Status(), err)
 					}
 				}
 			}
@@ -796,13 +796,13 @@ func TestParseNaturalHindiDateAmbiguity(t *testing.T) {
 			r := Parse(tc.word, opts...)
 			_, err := ParseDate(tc.word, opts...)
 			if strings.HasPrefix(reference, "0000") || strings.HasPrefix(reference, "9999") {
-				if r.Status != StatusInvalid || !errors.Is(err, ErrInvalidDate) {
-					t.Errorf("boundary %s %s: %s %v", reference, tc.word, r.Status, err)
+				if r.Status() != StatusInvalid || !errors.Is(err, ErrInvalidDate) {
+					t.Errorf("boundary %s %s: %s %v", reference, tc.word, r.Status(), err)
 				}
 				continue
 			}
-			if r.Status != StatusAmbiguous || r.Kind != KindDate || len(r.Candidates) != 2 || !errors.Is(err, ErrAmbiguousDate) {
-				t.Errorf("%s %s: status=%s candidates=%d error=%v", reference, tc.word, r.Status, len(r.Candidates), err)
+			if r.Status() != StatusAmbiguous || r.Kind() != KindDate || len(r.Candidates) != 2 || !errors.Is(err, ErrAmbiguousDate) {
+				t.Errorf("%s %s: status=%s candidates=%d error=%v", reference, tc.word, r.Status(), len(r.Candidates), err)
 				continue
 			}
 			for i, days := range []int{-tc.days, tc.days} {
@@ -844,8 +844,8 @@ func TestParseNaturalKoreanWeekWhitespace(t *testing.T) {
 			}
 		}
 	}
-	if r := Parse("잘못 주 금요일", opts...); r.Status != StatusInvalid {
-		t.Errorf("invalid modifier: %s", r.Status)
+	if r := Parse("잘못 주 금요일", opts...); r.Status() != StatusInvalid {
+		t.Errorf("invalid modifier: %s", r.Status())
 	}
 }
 
@@ -887,7 +887,7 @@ func TestParseNaturalRussianWholeUnits(t *testing.T) {
 				}
 				invalid := strings.Replace(input, unit, unit+"мусор", 1)
 				r := Parse(invalid, opts...)
-				if r.Status != StatusInvalid || !errors.Is(r.Error, ErrUnparseable) {
+				if r.Status() != StatusInvalid || !errors.Is(r.Error, ErrUnparseable) {
 					t.Errorf("garbage accepted: %s", invalid)
 				}
 			}
@@ -909,11 +909,98 @@ func TestParseNaturalJapaneseTags(t *testing.T) {
 		}
 	}
 	for _, tag := range []string{"en", "ko", "zh-Hans"} {
-		if r := Parse("明日", WithInputLocale(language.MustParse(tag)), WithReference(fixedNow), WithZone(UTC)); r.Status != StatusInvalid {
+		if r := Parse("明日", WithInputLocale(language.MustParse(tag)), WithReference(fixedNow), WithZone(UTC)); r.Status() != StatusInvalid {
 			t.Errorf("unexpected match: %s", tag)
 		}
 	}
 	if _, ok := natural.Parse("明日", natural.Context{Locale: "jax", RelativeTo: fixedNow.Std()}); ok {
 		t.Error("matched jax")
+	}
+}
+
+func TestParseNaturalChineseHourDomain(t *testing.T) {
+	t.Parallel()
+	hours := []int{0, 1, 11, 12, 13, 23, 24, 99}
+	for _, locale := range []string{"zh-Hans", "zh-Hant"} {
+		opts := []Option{WithInputLocale(language.Make(locale)), WithReference(fixedNow), WithZone(UTC)}
+		for _, tc := range []struct {
+			marker string
+			want   []int // -1 denotes an unsupported time.
+		}{
+			{"早上", []int{-1, 1, 11, -1, -1, -1, -1, -1}},
+			{"上午", []int{-1, 1, 11, -1, -1, -1, -1, -1}},
+			{"下午", []int{-1, 13, 23, 12, 13, 23, -1, -1}},
+			{"晚上", []int{-1, 13, 23, -1, 13, 23, -1, -1}},
+			{"", []int{0, 1, 11, 12, 13, 23, -1, -1}},
+		} {
+			for i, hour := range hours {
+				for _, suffix := range []string{"点", "點"} {
+					input := fmt.Sprintf("  明天%s%02d%s  ", tc.marker, hour, suffix)
+					r := Parse(input, opts...)
+					dt, err := ParseDateTime(input, opts...)
+					if tc.want[i] >= 0 {
+						parsed, ok := r.DateTime()
+						if err != nil || !ok || !parsed.Equal(dt) || dt.Clock().Hour() != tc.want[i] {
+							t.Errorf("%s %q: %v %v, want hour %d", locale, input, dt, err, tc.want[i])
+						}
+						continue
+					}
+					var detail *TimeError
+					_, ok := r.DateTime()
+					if r.Status() != StatusInvalid || ok || !dt.IsZero() || !errors.Is(r.Error, ErrInvalidTime) || !errors.Is(err, ErrInvalidTime) || !errors.As(err, &detail) || detail.Input != input || detail.Hint == "" {
+						t.Errorf("%s %q: status=%s value=%v error=%v", locale, input, r.Status(), dt, err)
+					}
+				}
+			}
+			if _, err := ParseDateTime("明天"+tc.marker+"1点60分", opts...); !errors.Is(err, ErrInvalidTime) {
+				t.Errorf("minute 60: %v", err)
+			}
+		}
+		for _, input := range []string{"明天上午13点", "明天晚上0点"} {
+			if _, err := ParseDateTime(input, WithInputLocale(language.Make(locale)), WithZone(UTC)); !errors.Is(err, ErrInvalidFormat) {
+				t.Errorf("missing reference: %v", err)
+			}
+			if _, err := ParseDateTime(input, WithInputLocale(language.Make(locale)), WithReference(fixedNow)); !errors.Is(err, ErrInvalidZone) {
+				t.Errorf("missing zone: %v", err)
+			}
+		}
+	}
+}
+
+func TestParseNaturalChineseMonthReference(t *testing.T) {
+	t.Parallel()
+	for _, locale := range []string{"zh-Hans", "zh-Hant"} {
+		for _, reference := range []string{"2026-01-31T12:00:00Z", "2024-02-15T12:00:00Z", "2026-12-31T12:00:00Z"} {
+			ref, err := ParseInstant(reference)
+			if err != nil {
+				t.Fatal(err)
+			}
+			opts := []Option{WithInputLocale(language.Make(locale)), WithReference(ref), WithZone(UTC)}
+			for _, phrase := range []string{"下个月", "下個月", "上个月", "上個月"} {
+				input := "  " + phrase + "  "
+				r := Parse(input, opts...)
+				d, err := ParseDate(input, opts...)
+				var detail *TimeError
+				_, ok := r.Date()
+				if r.Status() != StatusInvalid || ok || !d.IsZero() || !errors.Is(r.Error, ErrInvalidDate) || !errors.Is(err, ErrInvalidDate) || !errors.As(err, &detail) || detail.Input != input || !strings.Contains(detail.Hint, "day") {
+					t.Errorf("%s %s %q: status=%s date=%v error=%v", locale, reference, input, r.Status(), d, err)
+				}
+				if _, err := ParseDate(input, WithInputLocale(language.Make(locale)), WithZone(UTC)); !errors.Is(err, ErrInvalidFormat) {
+					t.Errorf("missing reference: %v", err)
+				}
+				if _, err := ParseDate(input, WithInputLocale(language.Make(locale)), WithReference(ref)); !errors.Is(err, ErrInvalidZone) {
+					t.Errorf("missing zone: %v", err)
+				}
+			}
+			want := time.Date(ref.Std().Year(), ref.Std().Month()+1, 0, 0, 0, 0, 0, time.UTC)
+			got, err := ParseDate("本月底", opts...)
+			if err != nil || got.String() != want.Format("2006-01-02") {
+				t.Errorf("month end %s: %v %v", reference, got, err)
+			}
+		}
+		p, err := ParsePeriod("1个月后", WithInputLocale(language.Make(locale)))
+		if err != nil || p != Months(1) {
+			t.Errorf("month period: %v %v", p, err)
+		}
 	}
 }

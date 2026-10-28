@@ -157,7 +157,7 @@ func parseISO8601Duration(s string) (Duration, error) {
 			return 0, fmt.Errorf("duration %s component %q: %w: %w", component.name, component.raw, errInvalidISO8601Duration, err)
 		}
 		if magnitude > limit-totalNs {
-			return 0, fmt.Errorf("duration %q overflows nanoseconds: %w", s, errInvalidISO8601Duration)
+			return 0, fmt.Errorf("duration %q overflows nanoseconds: %w: %w", s, errInvalidISO8601Duration, ErrOverflow)
 		}
 		totalNs += magnitude
 	}

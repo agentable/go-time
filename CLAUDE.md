@@ -191,6 +191,7 @@ Operational corollaries:
 - `Interval.Expand(before, after)` returns `(Interval, error)` — reject negative expansion durations and preserve the same `end >= start` invariant as constructors.
 - `Interval` carries no zone field — projection zone belongs to the rendering layer (which is outside this module)
 - Use `ResolveZone` for fuzzy timezone resolution (Windows names and case-insensitive IANA names) — use `LoadZone` for strict IANA-only. Require explicit identities; reject the process-dependent `Local` name. Fixed offsets are not zones; RFC3339 numeric offsets parse to `Instant`.
+- The bundled rule archive owns accepted named identities and link spelling. Host sources may override rules for those identities, never add names. Keep `Zones()` as the selection catalog; it is not the complete identity set.
 - Treat `internal/zone/catalog.go` and `internal/zone/windows.go` as generated artifacts. Regenerate them only from local inputs verified against `internal/zone/sources.json`; headers derive version and source filename from the lock, never the local path. Never hand-edit or canonicalize CLDR territory `001` targets.
 - `.Std()` returns stdlib types (`time.Time` / `time.Duration`); `.Clock()` returns a `Time`; `Duration.Decompose()` returns `DurationComponents` (clock slots only). Naming is load-bearing: stdlib vs. clock vs. structured slot. `Period` has no `Decompose` — read `p.Years` / `p.Months` / `p.Days` directly (exported fields), no parallel struct.
 - `Zone.Location()` is total — the zero `Zone` falls back to `UTC`; do not reintroduce parallel fallback helpers
@@ -202,8 +203,8 @@ Operational corollaries:
 - Parsing preserves original input, including surrounding whitespace, in results, errors and candidates. Incomplete year-month/ISO-week input prompts for a complete date; never default the missing day.
 - Concrete JSON values are strings except DateTime `{instant,zone}` and Interval `{start,end}`. Diagnostic ParseResult uses only one `kind` discriminator; it is not a persistence or commit API.
 - `Duration.Seconds/Minutes/Hours` directly use standard-library projections; `Abs` retains its documented minimum-int64 saturation. `Time.Compare` follows Go time ordering.
-- `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind` doesn't match
-- `ParseResult` has no public `Value() any` escape hatch — dispatch unknown input with `Status`, `Kind`, and comma-ok accessors.
+- `ParseResult` accessors are comma-ok (`Instant() (Instant, bool)` etc.) — never silently return zero values when `Kind()` doesn't match.
+- `ParseResult` keeps status, kind, and typed storage private. Dispatch unknown input with `Status()`, `Kind()`, and comma-ok accessors; do not add writable identity fields, mirror tags, or a public `Value() any` escape hatch. Diagnostic fields remain caller-owned, so this is not a promise of whole-result immutability.
 - Interpret `ParseResult.HasZone` only for resolved/ambiguous results: it records input timezone/offset information, not `WithZone`. Intervals OR their endpoint flags; true does not mean every endpoint supplied an offset. Invalid results leave it unspecified. Detect floating datetimes using status and `KindLocalDateTime`.
 - `errors.Is(err, gotime.ErrAmbiguousDate)` for control flow; `errors.As(err, &te)` for detail extraction. `*TimeError` unwraps a chain containing its sentinel and any parser/loader/codec cause; `Code` is JSON/log metadata. Typed parsers map DST duplicate local-time ambiguity to `ErrDuplicateTime`, not generic date ambiguity.
 - `Code*` is `ErrorCode` (string metadata); `Err*` is a sentinel `error`. Never mix prefixes.
@@ -282,7 +283,7 @@ See SPECS/ for detailed patterns:
 
 ## Error Handling
 
-Sentinel + typed struct hybrid (`os.ErrNotExist` + `*fs.PathError` pattern). Go system errors use `error`; parse semantic states use `ParseResult.Status` (`StatusResolved` / `StatusAmbiguous` / `StatusInvalid`); typed `Parse*` functions translate `StatusAmbiguous`/`StatusInvalid` to a returned `*TimeError`.
+Sentinel + typed struct hybrid (`os.ErrNotExist` + `*fs.PathError` pattern). Go system errors use `error`; parse semantic states use `ParseResult.Status()` (`StatusResolved` / `StatusAmbiguous` / `StatusInvalid`); typed `Parse*` functions translate `StatusAmbiguous`/`StatusInvalid` to a returned `*TimeError`.
 
 `ErrorCode` constants (typed string, prefix `Code*`):
 `CodeEmptyInput`, `CodeInvalidFormat`, `CodeInvalidDate`, `CodeInvalidTime`, `CodeInvalidDuration`, `CodeInvalidPeriod`, `CodeInvalidZone`, `CodeAmbiguousDate`, `CodeNonexistentTime`, `CodeDuplicateTime`, `CodeIntervalReversed`, `CodeIntervalsDisjoint`, `CodeUnparseable`, `CodeOverflow`, `CodeIncompatibleTypes`.

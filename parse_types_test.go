@@ -4,11 +4,11 @@ import "testing"
 
 func TestParseResult_ZeroValue(t *testing.T) {
 	var r ParseResult
-	if r.Status != "" {
-		t.Errorf("zero ParseResult.Status = %q, want empty", r.Status)
+	if r.Status() != "" {
+		t.Errorf("zero ParseResult.Status = %q, want empty", r.Status())
 	}
-	if r.Kind != "" {
-		t.Errorf("zero ParseResult.Kind = %q, want empty", r.Kind)
+	if r.Kind() != "" {
+		t.Errorf("zero ParseResult.Kind = %q, want empty", r.Kind())
 	}
 	if r.Warnings != nil {
 		t.Errorf("zero ParseResult.Warnings = %v, want nil", r.Warnings)
@@ -156,11 +156,11 @@ func TestParseResult_Accessors_ByKind(t *testing.T) {
 			t.Parallel()
 
 			r := Parse(tc.input, tc.opts...)
-			if r.Status != StatusResolved {
-				t.Fatalf("Parse(%q).Status = %q, want resolved", tc.input, r.Status)
+			if r.Status() != StatusResolved {
+				t.Fatalf("Parse(%q).Status = %q, want resolved", tc.input, r.Status())
 			}
-			if r.Kind != tc.wantKind {
-				t.Fatalf("Parse(%q).Kind = %q, want %q", tc.input, r.Kind, tc.wantKind)
+			if r.Kind() != tc.wantKind {
+				t.Fatalf("Parse(%q).Kind = %q, want %q", tc.input, r.Kind(), tc.wantKind)
 			}
 			tc.assert(t, r)
 		})
@@ -171,8 +171,8 @@ func TestParseResult_Accessors_NonResolvedReturnFalse(t *testing.T) {
 	t.Parallel()
 
 	r := Parse("nonsense gibberish 12345!@#")
-	if r.Status == StatusResolved {
-		t.Fatalf("expected non-resolved status, got %q", r.Status)
+	if r.Status() == StatusResolved {
+		t.Fatalf("expected non-resolved status, got %q", r.Status())
 	}
 	if _, ok := r.Date(); ok {
 		t.Fatal("Date() ok=true, want false")
@@ -183,8 +183,8 @@ func TestParseResult_Accessors_AmbiguousReturnFalse(t *testing.T) {
 	t.Parallel()
 
 	r := Parse("04/05/2026")
-	if r.Status != StatusAmbiguous || r.Kind != KindDate {
-		t.Fatalf("Parse status/kind = %q/%q, want ambiguous/date", r.Status, r.Kind)
+	if r.Status() != StatusAmbiguous || r.Kind() != KindDate {
+		t.Fatalf("Parse status/kind = %q/%q, want ambiguous/date", r.Status(), r.Kind())
 	}
 	if _, ok := r.Date(); ok {
 		t.Fatal("ambiguous Date() ok=true, want false")
@@ -212,15 +212,15 @@ func TestParseResult_HasZone(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			r := Parse(tc.input, tc.opts...)
-			if r.Status != tc.status {
-				t.Fatalf("Parse(%q).Status = %s, want %s", tc.input, r.Status, tc.status)
+			if r.Status() != tc.status {
+				t.Fatalf("Parse(%q).Status = %s, want %s", tc.input, r.Status(), tc.status)
 			}
 			if r.HasZone != tc.hasZone {
 				t.Errorf("Parse(%q).HasZone = %v, want %v", tc.input, r.HasZone, tc.hasZone)
 			}
 			for _, candidate := range r.Candidates {
-				if candidate.Status != StatusResolved || candidate.HasZone != tc.hasZone {
-					t.Errorf("candidate status/HasZone = %s/%v, want resolved/%v", candidate.Status, candidate.HasZone, tc.hasZone)
+				if candidate.Status() != StatusResolved || candidate.HasZone != tc.hasZone {
+					t.Errorf("candidate status/HasZone = %s/%v, want resolved/%v", candidate.Status(), candidate.HasZone, tc.hasZone)
 				}
 			}
 		})

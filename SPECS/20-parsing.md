@@ -9,7 +9,7 @@ There are two entry paths:
 - **Typed path**: `ParseInstant`, `ParseDateTime`, `ParseLocalDateTime`, `ParseDate`, `ParseTime`, `ParseDuration`, `ParsePeriod`, `ParseInterval`. These return `(T, error)` and are the default choice when the caller knows the expected type.
 - **Diagnostic path**: `Parse` returns `ParseResult` with status, kind, candidates, warnings, `HasZone`, and error details. Use it when the input type is unknown or ambiguity metadata matters.
 
-`Parse` never returns a Go `error`; semantic outcomes live in `ParseResult.Status`.
+`Parse` never returns a Go `error`; semantic outcomes live in `ParseResult.Status()`.
 
 ## Supported Inputs
 
@@ -113,8 +113,7 @@ const (
 )
 
 type ParseResult struct {
-    Status     Status
-    Kind       Kind
+    // Identity and typed value storage are private.
     Input      string
     Zone       Zone
     Reference  Instant
@@ -124,6 +123,15 @@ type ParseResult struct {
     Error      *TimeError
 }
 ```
+
+`Status() Status` and `Kind() Kind` read the package-owned identity. Callers
+cannot retag a stored value or construct a successful result by setting fields.
+A zero result has empty status/kind and all typed accessors return false.
+Other diagnostic fields remain caller-owned: changing Input, warnings, errors,
+or candidates does not change the stored value or its type. Such edits can make
+the diagnostic differ from the original parse; this is not an immutable result
+or an editable value builder. To obtain another interpretation, parse again or
+select an already-resolved candidate.
 
 `Candidates` is recursive: each candidate is a resolved `ParseResult`. Access parsed values through comma-ok accessors.
 
@@ -159,9 +167,9 @@ new runtime result must retain the original result or parse the original input
 again with explicit options.
 
 ```go
-switch result.Status {
+switch result.Status() {
 case gotime.StatusResolved:
-    switch result.Kind {
+    switch result.Kind() {
     case gotime.KindDateTime:
         if dt, ok := result.DateTime(); ok {
             handle(dt)
@@ -180,7 +188,7 @@ case gotime.StatusAmbiguous, gotime.StatusInvalid:
 }
 ```
 
-Accessors such as `DateTime() (DateTime, bool)` and `LocalDateTime() (LocalDateTime, bool)` return `ok=false` unless `Status == StatusResolved` and the kind matches.
+Accessors such as `DateTime() (DateTime, bool)` and `LocalDateTime() (LocalDateTime, bool)` return `ok=false` unless `Status() == StatusResolved` and the kind matches.
 
 ## Options
 
@@ -343,9 +351,21 @@ Their existing zero-hour and twelve-hour conversions are unchanged. Russian rela
 finite table of complete words, including the 1/2/5 forms for seconds, minutes,
 hours, days, weeks, and months; arbitrary suffixes return `ErrUnparseable`.
 
-Chinese 早上/上午/晚上 with twelve o'clock are rejected with
-`ErrInvalidTime`; callers provide an ISO date-time with an explicit date and
-clock instead. The parser does not guess the midnight date boundary.
+Chinese marked hours are validated before conversion. All four supported
+time-of-day words reject hour 0; 早上/上午 also reject hours 12..23, and 晚上
+rejects hour 12. These combinations return `ErrInvalidTime` with a hint to use
+an ISO date-time with an explicit date and 24-hour clock. The parser does not
+guess the midnight date boundary. 下午/晚上 retain explicit 13..23 hours;
+marked 1..11 hours keep their existing conversion, and 下午12 is noon.
+Unmarked 0..23 hours are 24-hour input; all hours above 23 are invalid.
+These are controlled grammar rules, not geographic definitions of day periods.
+
+Chinese 上个月/上個月/下个月/下個月 identify a month, not a calendar day.
+They are recognized but return `ErrInvalidDate` with a hint requesting a
+complete date; the parser does not fill in day 1. They retain the relative
+expression context requirements and missing-context error precedence.
+本月底 identifies the final calendar day of the reference month. Relative
+month counts such as 1个月后 still produce Period, not Date.
 
 Hindi bare कल and परसों return chronological Date candidates for respectively
 ±1 and ±2 calendar days; they do not imply a future preference. Typed ParseDate

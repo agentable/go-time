@@ -93,9 +93,9 @@ func ParseInterval(input string, opts ...Option) (Interval, error) {
 // Returns nil if r is Resolved with the requested Kind and no truncated
 // precision; otherwise returns a *TimeError appropriate to the failure mode.
 func parseResultError(r ParseResult, want Kind) error {
-	switch r.Status {
+	switch r.status {
 	case StatusResolved:
-		if r.Kind == want {
+		if r.kind == want {
 			for _, warning := range r.Warnings {
 				if warning.Code == WarnTruncatedPrecision {
 					return newTimeError(
@@ -112,7 +112,7 @@ func parseResultError(r ParseResult, want Kind) error {
 			ErrIncompatibleTypes,
 			"parsed value has a different kind than the typed parser expected",
 			r.Input,
-			"input parsed as "+string(r.Kind)+", call "+parseFunctionForKind(r.Kind)+" instead",
+			"input parsed as "+string(r.kind)+", call "+parseFunctionForKind(r.kind)+" instead",
 		)
 	case StatusAmbiguous:
 		hint, sentinel := ambiguousErrorForResult(r)

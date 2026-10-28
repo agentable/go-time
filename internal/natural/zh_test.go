@@ -90,31 +90,15 @@ func TestZh_WeekRelative(t *testing.T) {
 
 func TestZh_MonthRelative(t *testing.T) {
 	ctx := zhCtx("zh-Hans")
-	loc := mustLoadLocation(t, "Asia/Shanghai")
-
-	tests := []struct {
-		input    string
-		wantDate time.Time
-	}{
-		{"下个月", time.Date(2026, 4, 1, 0, 0, 0, 0, loc)},
-		{"下個月", time.Date(2026, 4, 1, 0, 0, 0, 0, loc)},
-		{"本月底", time.Date(2026, 3, 31, 0, 0, 0, 0, loc)},
-		{"上个月", time.Date(2026, 2, 1, 0, 0, 0, 0, loc)},
-		{"上個月", time.Date(2026, 2, 1, 0, 0, 0, 0, loc)},
+	for _, input := range []string{"下个月", "下個月", "上个月", "上個月"} {
+		r, ok := Parse(input, ctx)
+		if !ok || r.Kind != KindInvalid || r.ErrorKind != ErrorInvalidDate || !r.NeedsReference || r.ErrHint == "" {
+			t.Errorf("%s: %+v, recognized=%v", input, r, ok)
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			r, ok := Parse(tt.input, ctx)
-			if !ok {
-				t.Fatalf("Parse(%q) returned ok=false", tt.input)
-			}
-			if r.Kind != KindDate {
-				t.Fatalf("Kind = %v, want KindDate", r.Kind)
-			}
-			if !equalCivil(r, tt.wantDate) {
-				t.Errorf("Time = %v, want %v", civilTime(r), tt.wantDate)
-			}
-		})
+	r, ok := Parse("本月底", ctx)
+	if !ok || r.Kind != KindDate || r.Year != 2026 || r.Month != time.March || r.Day != 31 {
+		t.Errorf("month end: %+v, recognized=%v", r, ok)
 	}
 }
 

@@ -26,7 +26,8 @@ type Zone struct {
 	custom bool
 }
 
-// LoadZone loads a Zone by IANA timezone id.
+// LoadZone loads a Zone using an exact IANA name from the bundled rule archive.
+// Host sources may override its rules, but cannot introduce additional names.
 func LoadZone(id string) (Zone, error) {
 	if id == "" || id == "Local" {
 		return Zone{}, newTimeError(

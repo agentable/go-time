@@ -171,8 +171,8 @@ func TestZoneResolutionShortRulePeriod(t *testing.T) {
 	if _, err := ParseDateTime(local.String(), WithZone(z)); !errors.Is(err, ErrDuplicateTime) {
 		t.Errorf("ParseDateTime: %v", err)
 	}
-	if got := Parse(local.String(), WithZone(z)); got.Status != StatusAmbiguous || len(got.Candidates) != 2 {
-		t.Errorf("Parse: status=%s candidates=%d", got.Status, len(got.Candidates))
+	if got := Parse(local.String(), WithZone(z)); got.Status() != StatusAmbiguous || len(got.Candidates) != 2 {
+		t.Errorf("Parse: status=%s candidates=%d", got.Status(), len(got.Candidates))
 	}
 	if _, err := NewDateTime(local.Date, local.Time, z); !errors.Is(err, ErrDuplicateTime) {
 		t.Errorf("NewDateTime: %v", err)
@@ -186,7 +186,7 @@ func TestZoneResolutionShortRulePeriod(t *testing.T) {
 	}
 	reference := InstantFromTime(time.Date(2025, 12, 30, 12, 0, 0, 0, time.UTC))
 	natural := Parse("tomorrow at 11:55pm", WithInputLocale(language.English), WithReference(reference), WithZone(z))
-	if natural.Status != StatusAmbiguous || len(natural.Candidates) != 2 {
+	if natural.Status() != StatusAmbiguous || len(natural.Candidates) != 2 {
 		t.Fatalf("natural Parse: %v", natural)
 	}
 	for i, candidate := range natural.Candidates {
@@ -203,9 +203,7 @@ func TestZoneResolutionShortRulePeriod(t *testing.T) {
 }
 
 func TestZoneResolutionFooterOffsets(t *testing.T) {
-	if runZoneSnapshotProcess(t) {
-		return
-	}
+	t.Parallel()
 	for _, tc := range []struct {
 		name, footer string
 		month        time.Month
@@ -219,7 +217,10 @@ func TestZoneResolutionFooterOffsets(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Neither footer offset is in the explicit type table.
 			data := snapshotTZif([]int64{0}, []byte{0}, []int32{0}, tc.footer)
-			z := loadSnapshotZone(t, "Test/"+tc.name, data)
+			z, err := LoadZoneFromTZData("Test/"+tc.name, data)
+			if err != nil {
+				t.Fatal(err)
+			}
 			civil := time.Date(2050, tc.month, 15, 12, 0, 0, 123456789, time.UTC)
 			want := civil.Add(-time.Duration(tc.offset) * time.Second)
 			assertSnapshotResolution(t, z, civil, []time.Time{want})
@@ -319,7 +320,7 @@ func TestZoneResolutionSnapshotBoundaries(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	at := func(minutes int) time.Time { return base.Add(time.Duration(minutes) * time.Minute) }
 	data := snapshotTZif([]int64{at(2).Unix(), at(8).Unix(), at(12).Unix(), at(18).Unix()}, []byte{1, 0, 2, 0}, []int32{0, -600, -1200}, "")
-	z := loadSnapshotZone(t, "Test/Multiple", data)
+	z := loadSnapshotZone(t, "America/New_York", data)
 	for _, tc := range []struct {
 		name  string
 		civil time.Time
@@ -336,13 +337,13 @@ func TestZoneResolutionSnapshotBoundaries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) { assertSnapshotResolution(t, z, tc.civil, tc.want) })
 	}
 	// Replacing rules affects new loads, never the old Location/offset snapshot.
-	fresh := loadSnapshotZone(t, "Test/Multiple", snapshotTZif(nil, nil, []int32{3600}, ""))
+	fresh := loadSnapshotZone(t, "America/New_York", snapshotTZif(nil, nil, []int32{3600}, ""))
 	if z.Equal(fresh) {
 		t.Fatal("same name with replaced rules must not compare equal")
 	}
 	assertSnapshotResolution(t, fresh, at(-5), []time.Time{at(-65)})
 	assertSnapshotResolution(t, z, at(-5), []time.Time{at(-5), at(5), at(15)})
-	if err := os.Remove(filepath.Join(os.Getenv("ZONEINFO"), "Test", "Multiple")); err != nil {
+	if err := os.Remove(filepath.Join(os.Getenv("ZONEINFO"), "America", "New_York")); err != nil {
 		t.Fatal(err)
 	}
 	assertSnapshotResolution(t, z, at(-5), []time.Time{at(-5), at(5), at(15)})
@@ -356,7 +357,10 @@ func TestZoneResolutionSnapshotBoundaries(t *testing.T) {
 		{"negative", -2147483648, time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fixed := loadSnapshotZone(t, "Test/"+tc.name, snapshotTZif(nil, nil, []int32{tc.offset}, ""))
+			fixed, err := LoadZoneFromTZData("Test/"+tc.name, snapshotTZif(nil, nil, []int32{tc.offset}, ""))
+			if err != nil {
+				t.Fatal(err)
+			}
 			want := tc.civil.Add(-time.Duration(tc.offset) * time.Second)
 			assertSnapshotResolution(t, fixed, tc.civil, []time.Time{want})
 		})

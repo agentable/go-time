@@ -12,11 +12,6 @@ func ResolveLocation(id string) (string, *Rules, bool) {
 	}
 
 	if loc, err := Load(id); err == nil {
-		if canonical, ok := findCanonicalCase(id); ok && canonical != id {
-			if canonicalLoc, loadErr := Load(canonical); loadErr == nil {
-				return canonical, canonicalLoc, true
-			}
-		}
 		return id, loc, true
 	}
 
@@ -36,9 +31,13 @@ func ResolveLocation(id string) (string, *Rules, bool) {
 }
 
 func findCanonicalCase(id string) (string, bool) {
-	for _, candidate := range Zones {
-		if strings.EqualFold(candidate, id) {
-			return candidate, true
+	archive, err := bundledArchive()
+	if err != nil {
+		return "", false
+	}
+	for _, entry := range archive.File {
+		if strings.EqualFold(entry.Name, id) {
+			return entry.Name, true
 		}
 	}
 	return "", false

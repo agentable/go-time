@@ -24,6 +24,17 @@ func Load(name string) (*Rules, error) {
 	if name == "" || name == "Local" || !fs.ValidPath(name) || strings.ContainsAny(name, "\\:") || strings.Contains(name, "..") {
 		return nil, fmt.Errorf("invalid IANA zone name %q", name)
 	}
+	archive, err := bundledArchive()
+	if err != nil {
+		return nil, err
+	}
+	info, err := fs.Stat(archive, name)
+	if err != nil {
+		return nil, fmt.Errorf("unknown IANA zone name %q: %w", name, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("invalid IANA zone name %q", name)
+	}
 	return loadSources(name, []string{
 		zoneinfo(),
 		"/usr/share/zoneinfo", "/usr/share/lib/zoneinfo", "/usr/lib/locale/TZ", "/etc/zoneinfo",

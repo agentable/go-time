@@ -57,8 +57,12 @@ func (p *zhParser) parse(input string, ctx Context) (Result, bool) {
 	}
 
 	if m := reZhMonthRelative.FindStringSubmatch(input); m != nil {
-		t := zhMonthDate(base, m[1])
-		return dateResult(t), true
+		if m[1] != "本月底" {
+			r := invalidResult(ErrorInvalidDate, "month reference does not identify a calendar day", "provide a complete date including the day, such as 2026-02-15")
+			r.NeedsReference = true
+			return r, true
+		}
+		return dateResult(time.Date(base.Year(), base.Month()+1, 0, 0, 0, 0, 0, base.Location())), true
 	}
 
 	if m := reZhDateTime.FindStringSubmatch(input); m != nil {
@@ -77,13 +81,12 @@ func (p *zhParser) parse(input string, ctx Context) (Result, bool) {
 			return Result{}, false
 		}
 
-		hour := zhHourToInt(hourStr)
-		if hour == 12 && (timeWord == "早上" || timeWord == "上午" || timeWord == "晚上") {
-			r := invalidResult(ErrorInvalidTime, "twelve o'clock with this time-of-day word has no supported interpretation", "use an ISO date-time with an explicit date and 00:00 or 12:00")
+		hour, ok := zhApplyTimeWord(zhHourToInt(hourStr), timeWord)
+		if !ok {
+			r := invalidResult(ErrorInvalidTime, "hour and time-of-day word have no supported interpretation", "use an ISO date-time with an explicit date and a 24-hour clock")
 			r.NeedsReference = true
 			return r, true
 		}
-		hour = zhApplyTimeWord(hour, timeWord)
 		min := zhMinutes(halfOrMin, digitMin)
 		return datetimeAt(dateBase, hour, min), true
 	}
@@ -153,23 +156,6 @@ func zhWeekdayChar(c string) time.Weekday {
 	}
 }
 
-// zhMonthDate computes the target date from a month-relative keyword.
-func zhMonthDate(base time.Time, keyword string) time.Time {
-	switch keyword {
-	case "下个月", "下個月":
-		// First day of next month
-		return time.Date(base.Year(), base.Month()+1, 1, 0, 0, 0, 0, base.Location())
-	case "本月底":
-		// Last day of current month = first day of next month - 1 day
-		return time.Date(base.Year(), base.Month()+1, 0, 0, 0, 0, 0, base.Location())
-	case "上个月", "上個月":
-		// First day of previous month
-		return time.Date(base.Year(), base.Month()-1, 1, 0, 0, 0, 0, base.Location())
-	default:
-		return base
-	}
-}
-
 // zhHourToInt converts a Chinese or Arabic hour string to 24h integer (raw, before AM/PM).
 func zhHourToInt(s string) int {
 	switch s {
@@ -183,26 +169,29 @@ func zhHourToInt(s string) int {
 	}
 }
 
-// zhApplyTimeWord converts a raw 1-12 hour to 0-23 using the Chinese time-of-day word.
-func zhApplyTimeWord(hour int, timeWord string) int {
+// zhApplyTimeWord validates the raw hour before interpreting its time-of-day word.
+func zhApplyTimeWord(hour int, timeWord string) (int, bool) {
+	if hour < 0 || hour > 23 {
+		return 0, false
+	}
+	if timeWord == "" {
+		return hour, true
+	}
+	if hour == 0 {
+		return 0, false
+	}
 	switch timeWord {
 	case "早上", "上午":
-		return hour
-	case "下午":
-		// Afternoon: add 12 if hour < 12
-		if hour < 12 {
-			return hour + 12
-		}
-		return hour
+		return hour, hour < 12
 	case "晚上":
-		if hour < 12 {
-			return hour + 12
+		if hour == 12 {
+			return 0, false
 		}
-		return hour
-	default:
-		// No time word — return as-is (treat as 24h already, or 12h ambiguous)
-		return hour
 	}
+	if (timeWord == "下午" || timeWord == "晚上") && hour < 12 {
+		hour += 12
+	}
+	return hour, true
 }
 
 // zhMinutes extracts minutes from the half/min suffix.

@@ -32,8 +32,8 @@ func TestParseDurationPrecisionAndRange(t *testing.T) {
 			continue
 		}
 		var detail *TimeError
-		if d != 0 || r.Status != StatusInvalid || !errors.Is(r.Error, tc.err) || !errors.Is(err, tc.err) || !errors.As(err, &detail) || detail.Hint == "" {
-			t.Errorf("%s: status=%s error=%v", tc.input, r.Status, err)
+		if d != 0 || r.Status() != StatusInvalid || !errors.Is(r.Error, tc.err) || !errors.Is(err, tc.err) || !errors.As(err, &detail) || detail.Hint == "" {
+			t.Errorf("%s: status=%s error=%v", tc.input, r.Status(), err)
 		}
 		if errors.Is(tc.err, ErrInvalidDuration) && errors.Is(err, ErrOverflow) {
 			t.Errorf("precision error is also overflow: %v", err)
@@ -55,11 +55,11 @@ func TestParse_Duration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			r := Parse(tt.input)
-			if r.Status != StatusResolved {
-				t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+			if r.Status() != StatusResolved {
+				t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 			}
-			if r.Kind != KindDuration {
-				t.Fatalf("kind = %v, want KindDuration", r.Kind)
+			if r.Kind() != KindDuration {
+				t.Fatalf("kind = %v, want KindDuration", r.Kind())
 			}
 			d, _ := r.Duration()
 			got := d.Minutes()
@@ -73,11 +73,11 @@ func TestParse_Duration(t *testing.T) {
 func TestParse_Period_Days(t *testing.T) {
 	// P5D = 5 calendar days (Period, not Duration).
 	r := Parse("P5D")
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v, want Resolved", r.Status())
 	}
-	if r.Kind != KindPeriod {
-		t.Fatalf("kind = %v, want KindPeriod (P-with-date-components is Period, not Duration)", r.Kind)
+	if r.Kind() != KindPeriod {
+		t.Fatalf("kind = %v, want KindPeriod (P-with-date-components is Period, not Duration)", r.Kind())
 	}
 	p, _ := r.Period()
 	if p.Days != 5 {
@@ -88,11 +88,11 @@ func TestParse_Period_Days(t *testing.T) {
 func TestParse_Period_Years(t *testing.T) {
 	// P1Y = 1 calendar year — routes to Period, not Duration with 365.25-day approximation.
 	r := Parse("P1Y")
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v, want Resolved", r.Status())
 	}
-	if r.Kind != KindPeriod {
-		t.Fatalf("kind = %v, want KindPeriod", r.Kind)
+	if r.Kind() != KindPeriod {
+		t.Fatalf("kind = %v, want KindPeriod", r.Kind())
 	}
 	p, _ := r.Period()
 	if p.Years != 1 {
@@ -107,8 +107,8 @@ func TestParse_MixedISO_Rejected(t *testing.T) {
 	for _, input := range tests {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input)
-			if r.Status != StatusInvalid {
-				t.Fatalf("status = %v, want Invalid for mixed ISO input", r.Status)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid for mixed ISO input", r.Status())
 			}
 			if r.Error.Code != CodeInvalidFormat {
 				t.Errorf("error code = %q, want %q", r.Error.Code, CodeInvalidFormat)
@@ -122,8 +122,8 @@ func TestParse_Duration_Invalid(t *testing.T) {
 	for _, input := range tests {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input)
-			if r.Status != StatusInvalid {
-				t.Fatalf("status = %v, want Invalid", r.Status)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid", r.Status())
 			}
 			if r.Error.Code != CodeInvalidFormat {
 				t.Errorf("error code = %q, want %q", r.Error.Code, CodeInvalidFormat)
@@ -136,8 +136,8 @@ func TestParsePeriodRejectsIncompleteTimeSection(t *testing.T) {
 	for _, input := range []string{"P1DT", "P1YT", "-P2WT", "P+1Y-2MT", " P1DT ", "P", "PT", "P1DT1H"} {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input)
-			if r.Status != StatusInvalid || !errors.Is(r.Error, ErrInvalidFormat) {
-				t.Errorf("Parse(%q): status=%s error=%v, want Invalid and ErrInvalidFormat", input, r.Status, r.Error)
+			if r.Status() != StatusInvalid || !errors.Is(r.Error, ErrInvalidFormat) {
+				t.Errorf("Parse(%q): status=%s error=%v, want Invalid and ErrInvalidFormat", input, r.Status(), r.Error)
 			}
 			if r.Input != input || r.Error == nil || r.Error.Input != input || r.Error.Hint == "" {
 				t.Errorf("Parse(%q): input=%q detail=%+v, want original input and actionable error", input, r.Input, r.Error)
@@ -193,8 +193,8 @@ func TestParse_Duration_RejectsExponentSeconds(t *testing.T) {
 	for _, input := range []string{"PT1e3S", "PT1E-9S"} {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input)
-			if r.Status != StatusInvalid {
-				t.Fatalf("Parse(%q).Status = %v, want Invalid", input, r.Status)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("Parse(%q).Status = %v, want Invalid", input, r.Status())
 			}
 			if r.Error.Code != CodeInvalidFormat {
 				t.Errorf("Parse(%q).Error.Code = %q, want %q", input, r.Error.Code, CodeInvalidFormat)
@@ -217,8 +217,8 @@ func TestParse_Duration_Overflow(t *testing.T) {
 	for _, input := range tests {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input)
-			if r.Status != StatusInvalid {
-				t.Fatalf("status = %v, want Invalid", r.Status)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid", r.Status())
 			}
 			if r.Error.Code != CodeOverflow {
 				t.Errorf("error code = %q, want %q", r.Error.Code, CodeOverflow)
@@ -231,8 +231,8 @@ func TestParse_Period_Overflow(t *testing.T) {
 	for _, input := range []string{"P2147483648D", "P2147483649D"} {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input)
-			if r.Status != StatusInvalid {
-				t.Fatalf("status = %v, want Invalid", r.Status)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid", r.Status())
 			}
 			if r.Error == nil || !errors.Is(r.Error, ErrOverflow) || r.Error.Code != CodeOverflow {
 				t.Errorf("error = %v, want ErrOverflow with code %q", r.Error, CodeOverflow)
@@ -261,7 +261,7 @@ func TestParse_Period_RejectsLeadingAndComponentSigns(t *testing.T) {
 			t.Parallel()
 
 			r := Parse(input)
-			if r.Status != StatusInvalid || r.Error == nil {
+			if r.Status() != StatusInvalid || r.Error == nil {
 				t.Fatalf("Parse(%q) = %#v, want invalid result", input, r)
 			}
 			if !errors.Is(r.Error, ErrInvalidPeriod) {

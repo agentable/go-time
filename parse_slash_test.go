@@ -21,7 +21,7 @@ func TestParseSlashDistinctDates(t *testing.T) {
 	}
 	for _, locale := range []language.Tag{language.Und, language.English} {
 		r := Parse("04/05/2026", WithInputLocale(locale))
-		if r.Status != StatusAmbiguous || len(r.Candidates) != 2 {
+		if r.Status() != StatusAmbiguous || len(r.Candidates) != 2 {
 			t.Errorf("%s: ambiguity missing", locale)
 		}
 		if _, err := ParseDate("13/02/2026", WithInputLocale(locale)); err != nil {

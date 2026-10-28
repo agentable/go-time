@@ -100,9 +100,9 @@ Do not add a Field precision/profile attribute or a go-time storage framework.
 
 ```go
 result := gotime.Parse(input, gotime.WithInputLocale(locale), gotime.WithZone(zone))
-switch result.Status {
+switch result.Status() {
 case gotime.StatusResolved:
-    switch result.Kind {
+    switch result.Kind() {
     case gotime.KindDateTime:
         if dt, ok := result.DateTime(); ok {
             previewDateTime(dt)

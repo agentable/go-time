@@ -14,8 +14,8 @@ func TestParseIntervalRejectsAmbiguousDates(t *testing.T) {
 		for _, input := range []string{"PT1H/04/05/2026", "2026-01-01T00:00:00Z/04/05/2026"} {
 			opts := []Option{WithInputLocale(language.Make(locale))}
 			r := Parse(input, opts...)
-			if _, ok := r.Interval(); ok || r.Status != StatusInvalid || !errors.Is(r.Error, ErrIncompatibleTypes) {
-				t.Errorf("%s locale=%q: status=%s error=%v", input, locale, r.Status, r.Error)
+			if _, ok := r.Interval(); ok || r.Status() != StatusInvalid || !errors.Is(r.Error, ErrIncompatibleTypes) {
+				t.Errorf("%s locale=%q: status=%s error=%v", input, locale, r.Status(), r.Error)
 			}
 			iv, err := ParseInterval(input, opts...)
 			var detail *TimeError
@@ -52,8 +52,8 @@ func TestParse_Interval_InvalidEndpointPreservesSemanticError(t *testing.T) {
 			t.Parallel()
 
 			r := Parse(tc.input, WithZone(UTC))
-			if r.Status != StatusInvalid {
-				t.Fatalf("Parse(%q).Status = %s, want %s", tc.input, r.Status, StatusInvalid)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("Parse(%q).Status = %s, want %s", tc.input, r.Status(), StatusInvalid)
 			}
 			if !errors.Is(r.Error, tc.wantErr) {
 				t.Fatalf("Parse(%q).Error = %v, want %v", tc.input, r.Error, tc.wantErr)
@@ -110,7 +110,7 @@ func TestParse_Interval_InvalidScenarios(t *testing.T) {
 			t.Parallel()
 
 			r := Parse(tc.input, tc.opts...)
-			if r.Status != StatusInvalid || r.Error == nil {
+			if r.Status() != StatusInvalid || r.Error == nil {
 				t.Fatalf("Parse(%q) = %#v, want invalid result", tc.input, r)
 			}
 			if !errors.Is(r.Error, tc.wantErr) {
@@ -128,8 +128,8 @@ func TestParse_Interval_InvalidScenarios(t *testing.T) {
 
 func TestParse_Interval_DateToDate(t *testing.T) {
 	r := Parse("2026-03-27/2026-03-28")
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 	if r.Error.Code != CodeIncompatibleTypes {
 		t.Errorf("error code = %q, want %q", r.Error.Code, CodeIncompatibleTypes)
@@ -138,21 +138,21 @@ func TestParse_Interval_DateToDate(t *testing.T) {
 
 func TestParse_Interval_DatetimeToDatetime(t *testing.T) {
 	r := Parse("2026-03-27T00:00:00Z/2026-03-28T00:00:00Z")
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 	}
-	if r.Kind != KindInterval {
-		t.Fatalf("kind = %v, want KindInterval", r.Kind)
+	if r.Kind() != KindInterval {
+		t.Fatalf("kind = %v, want KindInterval", r.Kind())
 	}
 }
 
 func TestParse_Interval_StartDuration(t *testing.T) {
 	r := Parse("2026-03-27T00:00:00Z/PT12H")
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 	}
-	if r.Kind != KindInterval {
-		t.Fatalf("kind = %v, want KindInterval", r.Kind)
+	if r.Kind() != KindInterval {
+		t.Fatalf("kind = %v, want KindInterval", r.Kind())
 	}
 	iv, _ := r.Interval()
 	length, err := iv.Length()
@@ -166,8 +166,8 @@ func TestParse_Interval_StartDuration(t *testing.T) {
 
 func TestParse_Interval_DurationEnd(t *testing.T) {
 	r := Parse("PT12H/2026-03-28T00:00:00Z")
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 	}
 	iv, _ := r.Interval()
 	length, err := iv.Length()
@@ -182,8 +182,8 @@ func TestParse_Interval_DurationEnd(t *testing.T) {
 func TestParse_Interval_EndBeforeStart(t *testing.T) {
 	const input = "2026-03-28T00:00:00Z/2026-03-27T00:00:00Z"
 	r := Parse(input)
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 	if r.Error == nil {
 		t.Fatal("Error = nil, want ErrIntervalReversed details")
@@ -210,8 +210,8 @@ func TestParse_Interval_AmbiguousEndpoint(t *testing.T) {
 		"2026-11-01T01:30:00/2026-11-01T03:00:00",
 		WithZone(MustLoadZone("America/New_York")),
 	)
-	if r.Status != StatusAmbiguous {
-		t.Fatalf("status = %v (err=%v), want Ambiguous", r.Status, r.Error)
+	if r.Status() != StatusAmbiguous {
+		t.Fatalf("status = %v (err=%v), want Ambiguous", r.Status(), r.Error)
 	}
 }
 
@@ -221,8 +221,8 @@ func TestParse_Interval_RejectsNaturalLanguageEndpoint(t *testing.T) {
 		WithInputLocale(language.English),
 		WithReference(fixedNow),
 	)
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 }
 
@@ -240,8 +240,8 @@ func TestParseIntervalValidatesBothSides(t *testing.T) {
 	} {
 		for _, input := range []string{fold + "/" + tc.part, tc.part + "/" + fold} {
 			r := Parse(input, WithZone(zone))
-			if r.Status != StatusInvalid || !errors.Is(r.Error, tc.want) {
-				t.Errorf("%s: %s %v, want %v", input, r.Status, r.Error, tc.want)
+			if r.Status() != StatusInvalid || !errors.Is(r.Error, tc.want) {
+				t.Errorf("%s: %s %v, want %v", input, r.Status(), r.Error, tc.want)
 				continue
 			}
 			_, err := ParseInterval(input, WithZone(zone))
@@ -284,7 +284,7 @@ func TestParseIntervalCompleteCandidates(t *testing.T) {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input, WithZone(zone))
 			if len(tc.want) == 0 {
-				if r.Status != StatusInvalid || !errors.Is(r.Error, ErrIntervalReversed) {
+				if r.Status() != StatusInvalid || !errors.Is(r.Error, ErrIntervalReversed) {
 					t.Fatalf("reversed result = %#v", r)
 				}
 				return
@@ -293,11 +293,11 @@ func TestParseIntervalCompleteCandidates(t *testing.T) {
 			if len(tc.want) > 1 {
 				wantStatus = StatusAmbiguous
 			}
-			if r.Status != wantStatus || r.Kind != KindInterval {
-				t.Fatalf("result = %s/%s, want %s/interval", r.Status, r.Kind, wantStatus)
+			if r.Status() != wantStatus || r.Kind() != KindInterval {
+				t.Fatalf("result = %s/%s, want %s/interval", r.Status(), r.Kind(), wantStatus)
 			}
 			candidates := r.Candidates
-			if r.Status == StatusResolved {
+			if r.Status() == StatusResolved {
 				candidates = []ParseResult{r}
 			}
 			if len(candidates) != len(tc.want) {
@@ -350,7 +350,7 @@ func TestParseIntervalMetadata(t *testing.T) {
 	} {
 		input := tc.input
 		r := Parse(input, WithZone(zone))
-		if r.Status == StatusInvalid {
+		if r.Status() == StatusInvalid {
 			t.Fatalf("%s: %v", input, r.Error)
 		}
 		results := append([]ParseResult{r}, r.Candidates...)

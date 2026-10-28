@@ -109,6 +109,10 @@ Incomplete `2026-03` or `2026-W13` returns a hint requesting the missing day,
 instead of silently choosing the first day. Results and errors preserve the
 original input, including surrounding whitespace.
 
+Chinese `下个月` or `上个月` also needs clarification: supply a complete date
+such as `2026-02-15`. Use `本月底` when you mean the last day of this month,
+or `1个月后` for a calendar Period.
+
 ### Parse natural language deterministically
 
 Relative date and datetime phrases need three caller-owned inputs: a language, a reference instant, and the timezone whose calendar defines the phrase. Pin the reference in tests; use `gotime.Now()` at the product boundary when runtime behavior should follow the current clock.
@@ -177,6 +181,10 @@ Keep these values caller-owned: load the zone from application configuration, pa
 
 Use `Parse` when the input kind is unknown or the application needs candidates, warnings, or explicit-zone metadata. This is the path for user-facing ambiguity workflows.
 
+Read the outcome with `result.Status()` and the value type with `result.Kind()`.
+Use a typed accessor to retrieve the value, or select an existing candidate
+when resolving ambiguity.
+
 Read `HasZone` only after checking for `StatusResolved` or `StatusAmbiguous`.
 It describes explicit timezone or offset information in the input; supplying
 `WithZone` does not set it. For intervals, it means at least one endpoint has
@@ -188,7 +196,7 @@ omitted an offset. To recognize a floating datetime, check the status and
 ```go
 result := gotime.Parse("04/05/2026")
 
-switch result.Status {
+switch result.Status() {
 case gotime.StatusResolved:
 	date, ok := result.Date()
 	if ok {
@@ -453,7 +461,11 @@ fmt.Println(deadline.Instant())
 to it does not configure a process-wide default. Supply an explicit IANA identity;
 `Local` is rejected. `Zones()` returns a sorted, caller-owned copy of the generated
 IANA name catalog. Use `LoadZone` to validate an identifier: it also accepts IANA
-links such as `US/Eastern` that may be absent from the catalog.
+links such as `US/Eastern` that may be absent from the catalog. Names must match
+the bundled runtime archive exactly; host files can override their rules but
+cannot add names. Update the bundled data for newer identities, or use
+`LoadZoneFromTZData` for document-owned rules. For user-entered names,
+`ResolveZone("us/eastern")` restores `US/Eastern` while retaining the link identity.
 
 Use `LocalDateTime.Resolve` when a local wall time may fall in a DST gap or overlap and the application needs to inspect that state directly:
 

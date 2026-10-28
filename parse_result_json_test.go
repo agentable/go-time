@@ -37,8 +37,8 @@ func TestParseResultMarshalResolved(t *testing.T) {
 	z := MustLoadZone("Asia/Tokyo")
 	dt := mustDateTime(mustDate(2026, 3, 27), mustTime(13, 0, 0), z)
 	r := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindDateTime,
+		status: StatusResolved,
+		kind:   KindDateTime,
 		Input:  "下周五下午三点",
 		Zone:   z,
 	}
@@ -57,7 +57,7 @@ func TestParseResultMarshalResolved(t *testing.T) {
 
 func TestParseResultMarshalInvalid(t *testing.T) {
 	r := ParseResult{
-		Status: StatusInvalid,
+		status: StatusInvalid,
 		Input:  "04/05/2026",
 		Error: &TimeError{
 			Code:    CodeAmbiguousDate,
@@ -79,8 +79,8 @@ func TestParseResultMarshalInvalid(t *testing.T) {
 
 func TestParseResultMarshalAmbiguous(t *testing.T) {
 	monthFirst := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindDate,
+		status: StatusResolved,
+		kind:   KindDate,
 		Input:  "04/05/2026",
 		Warnings: []Warning{
 			{Code: WarnInferredCalendar, Message: "month-first interpretation"},
@@ -88,8 +88,8 @@ func TestParseResultMarshalAmbiguous(t *testing.T) {
 	}
 	monthFirst.date = mustDate(2026, time.April, 5)
 	dayFirst := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindDate,
+		status: StatusResolved,
+		kind:   KindDate,
 		Input:  "04/05/2026",
 		Warnings: []Warning{
 			{Code: WarnInferredCalendar, Message: "day-first interpretation"},
@@ -98,8 +98,8 @@ func TestParseResultMarshalAmbiguous(t *testing.T) {
 	dayFirst.date = mustDate(2026, time.May, 4)
 
 	r := ParseResult{
-		Status: StatusAmbiguous,
-		Kind:   KindDate,
+		status: StatusAmbiguous,
+		kind:   KindDate,
 		Input:  "04/05/2026",
 		Warnings: []Warning{
 			{Code: WarnInferredCalendar, Message: "date order ambiguous"},
@@ -120,13 +120,13 @@ func TestParseResultMarshalAmbiguous(t *testing.T) {
 func TestParseResultMarshalRejectsContradictoryWireState(t *testing.T) {
 	t.Parallel()
 
-	candidate := ParseResult{Status: StatusResolved, Kind: KindDate, Input: "04/05/2026"}
+	candidate := ParseResult{status: StatusResolved, kind: KindDate, Input: "04/05/2026"}
 	candidate.date = mustDate(2026, time.April, 5)
 	otherKind := candidate
-	otherKind.Kind = KindTime
+	otherKind.kind = KindTime
 	nested := ParseResult{
-		Status:     StatusAmbiguous,
-		Kind:       KindDate,
+		status:     StatusAmbiguous,
+		kind:       KindDate,
 		Candidates: []ParseResult{candidate, candidate},
 	}
 
@@ -134,15 +134,15 @@ func TestParseResultMarshalRejectsContradictoryWireState(t *testing.T) {
 		name   string
 		result ParseResult
 	}{
-		{name: "unknown status", result: ParseResult{Status: Status("other")}},
-		{name: "resolved unknown kind", result: ParseResult{Status: StatusResolved, Kind: Kind("other")}},
-		{name: "invalid without error", result: ParseResult{Status: StatusInvalid}},
-		{name: "ambiguous unknown kind", result: ParseResult{Status: StatusAmbiguous, Kind: Kind("other"), Candidates: []ParseResult{candidate, candidate}}},
-		{name: "ambiguous without candidates", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate}},
-		{name: "ambiguous with one candidate", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate, Candidates: []ParseResult{candidate}}},
-		{name: "ambiguous with invalid candidate", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate, Candidates: []ParseResult{candidate, {Status: StatusInvalid}}}},
-		{name: "ambiguous with nested candidate", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate, Candidates: []ParseResult{candidate, nested}}},
-		{name: "ambiguous with different candidate kind", result: ParseResult{Status: StatusAmbiguous, Kind: KindDate, Candidates: []ParseResult{candidate, otherKind}}},
+		{name: "unknown status", result: ParseResult{status: Status("other")}},
+		{name: "resolved unknown kind", result: ParseResult{status: StatusResolved, kind: Kind("other")}},
+		{name: "invalid without error", result: ParseResult{status: StatusInvalid}},
+		{name: "ambiguous unknown kind", result: ParseResult{status: StatusAmbiguous, kind: Kind("other"), Candidates: []ParseResult{candidate, candidate}}},
+		{name: "ambiguous without candidates", result: ParseResult{status: StatusAmbiguous, kind: KindDate}},
+		{name: "ambiguous with one candidate", result: ParseResult{status: StatusAmbiguous, kind: KindDate, Candidates: []ParseResult{candidate}}},
+		{name: "ambiguous with invalid candidate", result: ParseResult{status: StatusAmbiguous, kind: KindDate, Candidates: []ParseResult{candidate, {status: StatusInvalid}}}},
+		{name: "ambiguous with nested candidate", result: ParseResult{status: StatusAmbiguous, kind: KindDate, Candidates: []ParseResult{candidate, nested}}},
+		{name: "ambiguous with different candidate kind", result: ParseResult{status: StatusAmbiguous, kind: KindDate, Candidates: []ParseResult{candidate, otherKind}}},
 	}
 
 	for _, tc := range tests {
@@ -167,8 +167,8 @@ func TestParseResultMarshalRejectsContradictoryWireState(t *testing.T) {
 func TestParseResultMarshalResolvedDate(t *testing.T) {
 	d := mustDate(2026, 3, 27)
 	r := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindDate,
+		status: StatusResolved,
+		kind:   KindDate,
 		Input:  "2026-03-27",
 	}
 	r.date = d
@@ -187,8 +187,8 @@ func TestParseResultMarshalResolvedDate(t *testing.T) {
 func TestParseResultMarshalResolvedLocalDateTime(t *testing.T) {
 	ldt := NewLocalDateTime(mustDate(2026, 3, 27), mustTime(13, 0, 0))
 	r := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindLocalDateTime,
+		status: StatusResolved,
+		kind:   KindLocalDateTime,
 		Input:  "2026-03-27T13:00:00",
 	}
 	r.localDateTime = ldt
@@ -207,8 +207,8 @@ func TestParseResultMarshalResolvedLocalDateTime(t *testing.T) {
 func TestParseResultMarshalResolvedDuration(t *testing.T) {
 	dur := (2 * Hour)
 	r := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindDuration,
+		status: StatusResolved,
+		kind:   KindDuration,
 		Input:  "PT2H",
 	}
 	r.duration = dur
@@ -227,8 +227,8 @@ func TestParseResultMarshalResolvedDuration(t *testing.T) {
 func TestParseResultMarshalResolvedPeriod(t *testing.T) {
 	p := Period{Years: 1, Months: -2, Days: 3}
 	r := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindPeriod,
+		status: StatusResolved,
+		kind:   KindPeriod,
 		Input:  "P+1Y-2M+3D",
 		period: p,
 	}
@@ -247,8 +247,8 @@ func TestParseResultMarshalResolvedPeriod(t *testing.T) {
 func TestParseResultMarshalResolvedInstant(t *testing.T) {
 	instant := UnixMillis(0)
 	r := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindInstant,
+		status: StatusResolved,
+		kind:   KindInstant,
 		Input:  "1970-01-01T00:00:00Z",
 	}
 	r.instant = instant
@@ -267,8 +267,8 @@ func TestParseResultMarshalResolvedInstant(t *testing.T) {
 func TestParseResultMarshalResolvedTime(t *testing.T) {
 	tm := mustTime(13, 30, 45)
 	r := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindTime,
+		status: StatusResolved,
+		kind:   KindTime,
 		Input:  "13:30:45",
 	}
 	r.timeVal = tm
@@ -292,8 +292,8 @@ func TestParseResultMarshalResolvedInterval(t *testing.T) {
 		t.Fatalf("NewInterval error: %v", err)
 	}
 	r := ParseResult{
-		Status: StatusResolved,
-		Kind:   KindInterval,
+		status: StatusResolved,
+		kind:   KindInterval,
 		Input:  "1970-01-01T00:00:00Z/1970-01-01T01:00:00Z",
 	}
 	r.interval = iv

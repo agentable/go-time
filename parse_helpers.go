@@ -18,8 +18,8 @@ const (
 
 func resolvedResult(input string, kind Kind, cfg *config) ParseResult {
 	return ParseResult{
-		Status:    StatusResolved,
-		Kind:      kind,
+		status:    StatusResolved,
+		kind:      kind,
 		Input:     input,
 		Zone:      cfg.zone,
 		Reference: cfg.relativeTo,
@@ -28,7 +28,7 @@ func resolvedResult(input string, kind Kind, cfg *config) ParseResult {
 
 func invalidResult(input string, sentinel error, message, hint string) ParseResult {
 	return ParseResult{
-		Status: StatusInvalid,
+		status: StatusInvalid,
 		Input:  input,
 		Error:  newTimeError(sentinel, message, input, hint),
 	}

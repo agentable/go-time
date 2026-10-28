@@ -40,8 +40,8 @@ func mustDateTime(d gotime.Date, tm gotime.Time, z gotime.Zone) gotime.DateTime 
 // input without panicking.
 func ExampleParse() {
 	r := gotime.Parse("2026-03-27T13:00:00+09:00")
-	if r.Status != gotime.StatusResolved {
-		fmt.Println("unexpected status:", r.Status)
+	if r.Status() != gotime.StatusResolved {
+		fmt.Println("unexpected status:", r.Status())
 		return
 	}
 	i, _ := r.Instant()
@@ -61,7 +61,7 @@ func ExampleWithInputLocale() {
 		gotime.WithZone(gotime.MustLoadZone("Asia/Shanghai")),
 		gotime.WithReference(ref),
 	)
-	if r.Status != gotime.StatusResolved {
+	if r.Status() != gotime.StatusResolved {
 		return
 	}
 	d, _ := r.Date()
@@ -150,4 +150,31 @@ func Example_jsonMarshal() {
 	//   "instant": "2026-03-27T04:00:00Z",
 	//   "zone": "Asia/Tokyo"
 	// }
+}
+
+func ExampleParseResult() {
+	r := gotime.Parse("PT1H")
+	r.Input = "edited diagnostic label"
+	d, ok := r.Duration()
+	fmt.Println(r.Status(), r.Kind(), d, ok)
+	_, clockOK := r.Time()
+	fmt.Println("clock:", clockOK)
+
+	ambiguous := gotime.Parse("04/05/2026")
+	fmt.Println(ambiguous.Status(), ambiguous.Kind(), len(ambiguous.Candidates))
+	candidate, _ := ambiguous.Candidates[0].Date()
+	fmt.Println(candidate)
+
+	invalid := gotime.Parse("")
+	fmt.Println(invalid.Status(), invalid.Error.Code)
+	var zero gotime.ParseResult
+	_, ok = zero.Duration()
+	fmt.Println("zero:", ok)
+	// Output:
+	// resolved duration 1h0m0s true
+	// clock: false
+	// ambiguous date 2
+	// 2026-04-05
+	// invalid EMPTY_INPUT
+	// zero: false
 }

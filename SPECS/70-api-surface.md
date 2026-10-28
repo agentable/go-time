@@ -216,6 +216,13 @@ Diagnostic parser:
 func Parse(input string, opts ...Option) ParseResult
 ```
 
+ParseResult identity is read-only; diagnostic metadata retains caller ownership.
+
+```go
+func (r ParseResult) Status() Status
+func (r ParseResult) Kind() Kind
+```
+
 Comma-ok accessors:
 
 ```go

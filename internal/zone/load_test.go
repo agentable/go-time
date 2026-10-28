@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,7 +35,7 @@ func TestLoadSourcesZIPAndPrecedence(t *testing.T) {
 			path := filepath.Join(dir, "rules.zip")
 			var buf bytes.Buffer
 			archive := zip.NewWriter(&buf)
-			entry, err := archive.CreateHeader(&zip.FileHeader{Name: "Test/Fixed", Method: method})
+			entry, err := archive.CreateHeader(&zip.FileHeader{Name: "America/New_York", Method: method})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -47,7 +48,7 @@ func TestLoadSourcesZIPAndPrecedence(t *testing.T) {
 			if err := os.WriteFile(path, buf.Bytes(), 0600); err != nil {
 				t.Fatal(err)
 			}
-			rules, err := loadSources("Test/Fixed", []string{filepath.Join(dir, "missing"), path})
+			rules, err := loadSources("America/New_York", []string{filepath.Join(dir, "missing"), path})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,6 +113,10 @@ func TestBundledRulesProjection(t *testing.T) {
 	}
 	for _, entry := range archive.File {
 		t.Run(entry.Name, func(t *testing.T) {
+			id, _, ok := ResolveLocation(strings.ToLower(entry.Name))
+			if !ok || id != entry.Name {
+				t.Fatalf("folded identity = %q, %v; want %q", id, ok, entry.Name)
+			}
 			data, err := readBundledZone(entry.Name)
 			if err != nil {
 				t.Fatal(err)

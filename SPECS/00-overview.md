@@ -68,7 +68,7 @@ github.com/agentable/go-time
 
 ## Version Contract
 
-These specs describe the current v2 contract. If implementation and specs disagree, update the stale side in the same work cycle. Specs must describe behavior that code can satisfy or violate; tutorials belong in `README.md`.
+These specs describe the current library contract. If implementation and specs disagree, update the stale side in the same work cycle. Specs must describe behavior that code can satisfy or violate; tutorials belong in `README.md`.
 
 ## Permanent Non-Goals
 

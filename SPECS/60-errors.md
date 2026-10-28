@@ -153,6 +153,11 @@ to their precise existing sentinel. These failures support `errors.As` to
 `*TimeError`, always include a Hint, and retain an underlying parser or loader
 cause when one exists.
 
+Duration JSON keeps `ErrInvalidDuration` as its outer semantic category.
+Both a component overflow and an overflow of the component sum also retain
+`ErrOverflow`, independent of whether the same value uses seconds or an H/M/S
+decomposition. Excess decimal precision is not a range overflow.
+
 ## Public Panics
 
 Only `MustLoadZone` may panic. Every other public API returns a value plus `error`, a `ParseResult`, or a deterministic value.

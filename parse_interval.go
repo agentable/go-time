@@ -33,10 +33,10 @@ func parseInterval(input string, cfg *config) ParseResult {
 	} else {
 		er = parseIntervalBoundary(input, right, "end", cfg)
 	}
-	if sr.Status == StatusInvalid {
+	if sr.status == StatusInvalid {
 		return sr
 	}
-	if er.Status == StatusInvalid {
+	if er.status == StatusInvalid {
 		return er
 	}
 
@@ -49,7 +49,7 @@ func parseInterval(input string, cfg *config) ParseResult {
 				continue
 			}
 			if err != nil {
-				return ParseResult{Status: StatusInvalid, Input: input, Error: newTimeErrorWithCause(
+				return ParseResult{status: StatusInvalid, Input: input, Error: newTimeErrorWithCause(
 					err, nil, "cannot construct interval", input, "use absolute endpoints and a non-negative duration whose result can be represented")}
 			}
 			candidate := intervalParseResult(input, cfg, starts[si], ends[ei])
@@ -73,7 +73,7 @@ func parseInterval(input string, cfg *config) ParseResult {
 		return candidates[0]
 	default:
 		r := intervalParseResult(input, cfg, sr, er)
-		r.Status = StatusAmbiguous
+		r.status = StatusAmbiguous
 		r.Candidates = candidates
 		r.ambiguity = ambiguityDuplicateTime
 		return r
@@ -81,7 +81,7 @@ func parseInterval(input string, cfg *config) ParseResult {
 }
 
 func intervalPartCandidates(r ParseResult) []ParseResult {
-	if r.Status == StatusAmbiguous {
+	if r.status == StatusAmbiguous {
 		return r.Candidates
 	}
 	return []ParseResult{r}
@@ -90,16 +90,16 @@ func intervalPartCandidates(r ParseResult) []ParseResult {
 func intervalFromParts(start, end ParseResult) (Interval, error) {
 	startInstant, startOK := toInstant(&start)
 	endInstant, endOK := toInstant(&end)
-	if !startOK && start.Kind != KindDuration {
-		return Interval{}, invalidIntervalType(start.Input, "start", start.Kind).Error
+	if !startOK && start.kind != KindDuration {
+		return Interval{}, invalidIntervalType(start.Input, "start", start.kind).Error
 	}
-	if !endOK && end.Kind != KindDuration {
-		return Interval{}, invalidIntervalType(end.Input, "end", end.Kind).Error
+	if !endOK && end.kind != KindDuration {
+		return Interval{}, invalidIntervalType(end.Input, "end", end.kind).Error
 	}
-	if start.Kind == KindDuration {
+	if start.kind == KindDuration {
 		return NewIntervalEndingAt(endInstant, start.duration)
 	}
-	if end.Kind == KindDuration {
+	if end.kind == KindDuration {
 		return NewIntervalStartingAt(startInstant, end.duration)
 	}
 	return NewInterval(startInstant, endInstant)
@@ -126,30 +126,30 @@ func parseIntervalDuration(input, part string) ParseResult {
 }
 
 func validateIntervalPart(input, label string, r ParseResult) ParseResult {
-	switch r.Status {
+	switch r.status {
 	case StatusResolved:
 		if label == "duration" {
-			if r.Kind == KindDuration {
+			if r.kind == KindDuration {
 				if r.duration.IsNegative() {
 					return invalidResult(input, ErrInvalidDuration, "interval length must not be negative", "use a non-negative exact duration")
 				}
 				return r
 			}
 			return invalidResult(input, ErrIncompatibleTypes,
-				fmt.Sprintf("interval %s must be a duration, got %s", label, r.Kind),
+				fmt.Sprintf("interval %s must be a duration, got %s", label, r.kind),
 				"Use a PT-prefixed exact duration such as PT1H30M")
 		}
-		if r.Kind == KindInstant || r.Kind == KindDateTime {
+		if r.kind == KindInstant || r.kind == KindDateTime {
 			return r
 		}
-		return invalidIntervalType(input, label, r.Kind)
+		return invalidIntervalType(input, label, r.kind)
 	case StatusAmbiguous:
 		for i := range r.Candidates {
 			candidate := &r.Candidates[i]
-			if candidate.Status != StatusResolved {
-				return invalidIntervalType(input, label, candidate.Kind)
+			if candidate.status != StatusResolved {
+				return invalidIntervalType(input, label, candidate.kind)
 			}
-			if checked := validateIntervalPart(input, label, *candidate); checked.Status != StatusResolved {
+			if checked := validateIntervalPart(input, label, *candidate); checked.status != StatusResolved {
 				return checked
 			}
 		}
@@ -181,7 +181,7 @@ func invalidIntervalType(input, label string, kind Kind) ParseResult {
 }
 
 func toInstant(r *ParseResult) (Instant, bool) {
-	switch r.Kind {
+	switch r.kind {
 	case KindInstant:
 		return r.instant, true
 	case KindDateTime:

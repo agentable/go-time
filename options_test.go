@@ -64,7 +64,7 @@ func TestParsers_IgnoreNilOption(t *testing.T) {
 
 		result := Parse("2026-03-27", nil)
 		date, ok := result.Date()
-		if result.Status != StatusResolved || !ok || date.String() != "2026-03-27" {
+		if result.Status() != StatusResolved || !ok || date.String() != "2026-03-27" {
 			t.Fatalf("Parse() = %#v, want resolved Date 2026-03-27", result)
 		}
 	})

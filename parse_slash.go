@@ -99,8 +99,8 @@ func ambiguousSlashDate(input string, a, b, year int, cfg *config) ParseResult {
 	c2 := resolvedSlashDate(input, a, b, year, false, cfg)
 	c2.Warnings = append(c2.Warnings, Warning{Code: WarnInferredCalendar, Message: "day-first interpretation (e.g. en-GB)"})
 	return ParseResult{
-		Status:     StatusAmbiguous,
-		Kind:       KindDate,
+		status:     StatusAmbiguous,
+		kind:       KindDate,
 		Input:      input,
 		Zone:       cfg.zone,
 		Candidates: []ParseResult{c1, c2},

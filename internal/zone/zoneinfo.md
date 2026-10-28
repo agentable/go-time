@@ -17,6 +17,11 @@ verify its checksum and update this provenance alongside the archive. Run
 loads every entry and verifies forward/inverse projection. No build-time or
 runtime download occurs.
 
+The archive also owns the accepted named identities, including IANA links.
+Host sources may override their rules but cannot introduce other names or
+change the required spelling. Update this archive to accept newer identities;
+document rules can instead use `LoadZoneFromTZData`.
+
 Load order: `ZONEINFO` directory/ZIP, conventional Unix zoneinfo directories,
 then this archive. A Go installation is not needed at runtime. Missing host data therefore
 does not prevent IANA loading. Platform-specific packed stores (such as Android

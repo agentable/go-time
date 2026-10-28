@@ -38,7 +38,7 @@ func tryParseDateTime(input string, cfg *config) (ParseResult, bool) {
 			sentinel = ErrInvalidTime
 			hint = "Use hours 0-23 and minutes and seconds 0-59"
 		}
-		return ParseResult{Status: StatusInvalid, Input: input,
+		return ParseResult{status: StatusInvalid, Input: input,
 			Error: newTimeErrorWithCause(sentinel, err, fmt.Sprintf("invalid datetime %q", input), input, hint)}, true
 	}
 
@@ -123,7 +123,7 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 	switch resolution.Status {
 	case LocalNonexistent:
 		return ParseResult{
-			Status: StatusInvalid,
+			status: StatusInvalid,
 			Input:  input,
 			Error: newTimeError(
 				ErrNonexistentTime,
@@ -140,8 +140,8 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 		}
 
 		return ParseResult{
-			Status:     StatusAmbiguous,
-			Kind:       KindDateTime,
+			status:     StatusAmbiguous,
+			kind:       KindDateTime,
 			Input:      input,
 			Zone:       cfg.zone,
 			Warnings:   localDateTimeWarnings(cfg, z, truncated),

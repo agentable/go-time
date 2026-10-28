@@ -46,8 +46,8 @@ func TestTypedParsersRejectTruncatedPrecision(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			r := Parse(tt.input, tt.opts...)
-			if r.Status != StatusResolved || !hasWarning(r.Warnings, WarnTruncatedPrecision) {
-				t.Fatalf("diagnostic Parse = %s, %v", r.Status, r.Warnings)
+			if r.Status() != StatusResolved || !hasWarning(r.Warnings, WarnTruncatedPrecision) {
+				t.Fatalf("diagnostic Parse = %s, %v", r.Status(), r.Warnings)
 			}
 			zero, err := tt.parse(tt.input, tt.opts...)
 			if !zero || !errors.Is(err, ErrInvalidFormat) {
@@ -432,7 +432,7 @@ func TestParseDate_InvalidPropagatesError(t *testing.T) {
 }
 
 func TestParseResultError_InvalidWithoutErrorHasHint(t *testing.T) {
-	err := parseResultError(ParseResult{Status: StatusInvalid, Input: "??"}, KindDate)
+	err := parseResultError(ParseResult{status: StatusInvalid, Input: "??"}, KindDate)
 	if err == nil {
 		t.Fatal("parseResultError() error = nil, want error")
 	}
@@ -452,8 +452,8 @@ func TestParseResultError_DuplicateCauseDoesNotDependOnWarnings(t *testing.T) {
 	t.Parallel()
 
 	r := Parse("2026-11-01T01:30:00", WithZone(MustLoadZone("America/New_York")))
-	if r.Status != StatusAmbiguous {
-		t.Fatalf("Parse() status = %q, want ambiguous", r.Status)
+	if r.Status() != StatusAmbiguous {
+		t.Fatalf("Parse() status = %q, want ambiguous", r.Status())
 	}
 	r.Warnings = nil
 	for i := range r.Candidates {

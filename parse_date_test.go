@@ -21,16 +21,16 @@ func TestParse_Date_ISO(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			r := Parse(tt.input)
 			if tt.wantErr {
-				if r.Status != StatusInvalid {
-					t.Fatalf("status = %v, want Invalid", r.Status)
+				if r.Status() != StatusInvalid {
+					t.Fatalf("status = %v, want Invalid", r.Status())
 				}
 				return
 			}
-			if r.Status != StatusResolved {
-				t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+			if r.Status() != StatusResolved {
+				t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 			}
-			if r.Kind != KindDate {
-				t.Fatalf("kind = %v, want KindDate", r.Kind)
+			if r.Kind() != KindDate {
+				t.Fatalf("kind = %v, want KindDate", r.Kind())
 			}
 			d, _ := r.Date()
 			if d.Year() != tt.wantY || d.Month() != tt.wantM || d.Day() != tt.wantD {
@@ -57,8 +57,8 @@ func TestParse_Date_Ordinal(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			r := Parse(tt.input)
 			if tt.wantCode != "" {
-				if r.Status != StatusInvalid {
-					t.Fatalf("status = %v, want Invalid", r.Status)
+				if r.Status() != StatusInvalid {
+					t.Fatalf("status = %v, want Invalid", r.Status())
 				}
 				if r.Error == nil {
 					t.Fatal("Error must not be nil when status is Invalid")
@@ -69,11 +69,11 @@ func TestParse_Date_Ordinal(t *testing.T) {
 				return
 			}
 
-			if r.Status != StatusResolved {
-				t.Fatalf("status = %v, want Resolved", r.Status)
+			if r.Status() != StatusResolved {
+				t.Fatalf("status = %v, want Resolved", r.Status())
 			}
-			if r.Kind != KindDate {
-				t.Fatalf("kind = %v, want KindDate", r.Kind)
+			if r.Kind() != KindDate {
+				t.Fatalf("kind = %v, want KindDate", r.Kind())
 			}
 			d, _ := r.Date()
 			if d.Year() != tt.wantY || d.Month() != tt.wantM || d.Day() != tt.wantD {
@@ -86,11 +86,11 @@ func TestParse_Date_Ordinal(t *testing.T) {
 func TestParse_Date_WeekDate(t *testing.T) {
 	// 2026-W13-5 = ISO week 13, Friday of 2026 = March 27, 2026
 	r := Parse("2026-W13-5")
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v, want Resolved", r.Status)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v, want Resolved", r.Status())
 	}
-	if r.Kind != KindDate {
-		t.Fatalf("kind = %v, want KindDate", r.Kind)
+	if r.Kind() != KindDate {
+		t.Fatalf("kind = %v, want KindDate", r.Kind())
 	}
 	d, _ := r.Date()
 	if d.Year() != 2026 || d.Month() != time.March || d.Day() != 27 {
@@ -100,8 +100,8 @@ func TestParse_Date_WeekDate(t *testing.T) {
 
 func TestParse_Date_WeekDateRejectsInvalidWeek53(t *testing.T) {
 	r := Parse("2021-W53-1")
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 	if r.Error == nil {
 		t.Fatal("Error must not be nil when status is Invalid")
@@ -124,8 +124,8 @@ func TestParse_Date_Invalid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			r := Parse(tt.input)
-			if r.Status != StatusInvalid {
-				t.Fatalf("status = %v, want Invalid", r.Status)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid", r.Status())
 			}
 			if r.Error == nil {
 				t.Fatal("Error must not be nil when status is Invalid")
@@ -175,7 +175,7 @@ func TestParseDateRejectsIncompleteCalendar(t *testing.T) {
 	for _, input := range []string{"2026-03", "2026-W13"} {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input)
-			if r.Status != StatusInvalid || r.Error == nil || r.Error.Hint == "" {
+			if r.Status() != StatusInvalid || r.Error == nil || r.Error.Hint == "" {
 				t.Fatalf("incomplete date must prompt for missing components: %+v", r)
 			}
 			if _, err := ParseDate(input); err == nil {

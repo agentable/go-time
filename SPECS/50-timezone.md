@@ -17,10 +17,15 @@ func Zones() []string
 func ZoneCatalogVersion() string
 ```
 
-- `LoadZone` is strict IANA lookup from TZif rule data; `Local` is
-  rejected by both loaders and by Zone/DateTime JSON decoders with `ErrInvalidZone`.
+- `LoadZone` accepts exact names from the bundled runtime archive, including
+  IANA links, plus UTC. A host file cannot introduce a name or relax its spelling.
+  Newer names require a bundled-data update or explicit `LoadZoneFromTZData`.
+  Both loaders and Zone/DateTime JSON decoders reject `Local` with `ErrInvalidZone`.
 - `MustLoadZone` is only for source-code constants in `var` or `init` paths.
-- `ResolveZone` accepts real-world zone names: exact IANA, case-insensitive IANA, Windows names, and legacy aliases present in the rule data.
+- `ResolveZone` accepts exact or case-insensitive names and links from that same
+  archive, plus generated Windows names. It restores official spelling before
+  strict lookup: `us/eastern` becomes `US/Eastern`, not `America/New_York`.
+  Windows mapping targets remain unchanged.
 - `ResolveZone` does not resolve timezone abbreviations. Abbreviations are
   point-in-time display metadata available through stdlib `time.Time.Zone`.
 - `Zones` returns a sorted, cloned, caller-owned copy of the generated IANA

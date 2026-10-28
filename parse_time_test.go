@@ -19,11 +19,11 @@ func TestParse_Time_24h(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			r := Parse(tt.input)
-			if r.Status != StatusResolved {
-				t.Fatalf("status = %v, want Resolved", r.Status)
+			if r.Status() != StatusResolved {
+				t.Fatalf("status = %v, want Resolved", r.Status())
 			}
-			if r.Kind != KindTime {
-				t.Fatalf("kind = %v, want KindTime", r.Kind)
+			if r.Kind() != KindTime {
+				t.Fatalf("kind = %v, want KindTime", r.Kind())
 			}
 			ti, _ := r.Time()
 			if ti.Hour() != tt.h || ti.Minute() != tt.m || ti.Second() != tt.s {
@@ -48,11 +48,11 @@ func TestParse_Time_12h(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			r := Parse(tt.input)
-			if r.Status != StatusResolved {
-				t.Fatalf("status = %v, want Resolved", r.Status)
+			if r.Status() != StatusResolved {
+				t.Fatalf("status = %v, want Resolved", r.Status())
 			}
-			if r.Kind != KindTime {
-				t.Fatalf("kind = %v, want KindTime", r.Kind)
+			if r.Kind() != KindTime {
+				t.Fatalf("kind = %v, want KindTime", r.Kind())
 			}
 			ti, _ := r.Time()
 			if ti.Hour() != tt.h || ti.Minute() != tt.m {
@@ -64,8 +64,8 @@ func TestParse_Time_12h(t *testing.T) {
 
 func TestParse_Time_Invalid(t *testing.T) {
 	r := Parse("25:00")
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 	if r.Error.Code != CodeInvalidTime {
 		t.Errorf("error code = %q, want %q", r.Error.Code, CodeInvalidTime)
@@ -90,7 +90,7 @@ func TestParseTimeNanosecondRoundTrip(t *testing.T) {
 		t.Errorf("truncation: %v %v", clock, r.Error)
 	}
 	for _, input := range []string{"12:30.5", "12:30:45.1pm", "12:30:45."} {
-		if Parse(input).Status != StatusInvalid {
+		if Parse(input).Status() != StatusInvalid {
 			t.Errorf("accepted %s", input)
 		}
 	}

@@ -156,23 +156,49 @@ func TestDurationSignedISOParsing(t *testing.T) {
 			t.Errorf("%s: %v %v", d.ISO8601(), got, err)
 		}
 	}
-	for _, iso := range []string{"-PT2562047H47M16.854775808S", "-PT9223372036.854775808S"} {
-		d, err := ParseDuration(iso)
-		if err != nil || d != Duration(-1<<63) {
-			t.Errorf("%s: %v %v", iso, d, err)
+	for _, tc := range []struct {
+		iso  string
+		want Duration
+	}{
+		{"-PT2562047H47M16.854775808S", Duration(math.MinInt64)},
+		{"-PT9223372036.854775808S", Duration(math.MinInt64)},
+		{"PT2562047H47M16.854775807S", Duration(math.MaxInt64)},
+		{"PT9223372036.854775807S", Duration(math.MaxInt64)},
+		{"PT0S", 0}, {"PT0H0M0S", 0},
+		{"PT0.000000001S", Nanosecond}, {"PT0H0M0.000000001S", Nanosecond},
+		{"-PT0.000000001S", -Nanosecond}, {"-PT0H0M0.000000001S", -Nanosecond},
+	} {
+		d, err := ParseDuration(tc.iso)
+		if err != nil || d != tc.want {
+			t.Errorf("%s: %v %v", tc.iso, d, err)
 		}
 		var decoded Duration
-		if err := json.Unmarshal([]byte(`"`+iso+`"`), &decoded); err != nil || decoded != Duration(-1<<63) {
-			t.Errorf("wire %s: %v %v", iso, decoded, err)
+		if err := json.Unmarshal([]byte(`"`+tc.iso+`"`), &decoded); err != nil || decoded != tc.want {
+			t.Errorf("wire %s: %v %v", tc.iso, decoded, err)
+		}
+		encoded, err := json.Marshal(decoded)
+		if err != nil || string(encoded) != `"`+tc.want.ISO8601()+`"` {
+			t.Errorf("canonical %s: %s %v", tc.iso, encoded, err)
 		}
 	}
-	for _, iso := range []string{"PT9223372036.854775808S", "-PT9223372036.854775809S"} {
+	for _, iso := range []string{
+		"PT9223372036.854775808S", "PT2562047H47M16.854775808S",
+		"-PT9223372036.854775809S", "-PT2562047H47M16.854775809S",
+	} {
 		if _, err := ParseDuration(iso); !errors.Is(err, ErrOverflow) {
 			t.Errorf("%s: %v", iso, err)
 		}
-		var d Duration
-		if err := json.Unmarshal([]byte(`"`+iso+`"`), &d); err == nil {
-			t.Errorf("wire overflow accepted: %s", iso)
+		d := Second
+		err := json.Unmarshal([]byte(`"`+iso+`"`), &d)
+		if !errors.Is(err, ErrInvalidDuration) || !errors.Is(err, ErrOverflow) {
+			t.Errorf("wire %s: %v, want invalid duration and overflow", iso, err)
+		}
+		var detail *TimeError
+		if !errors.As(err, &detail) || detail.Code != CodeInvalidDuration || detail.Hint == "" {
+			t.Errorf("wire %s: missing duration diagnostic: %v", iso, err)
+		}
+		if d != Second {
+			t.Errorf("wire %s changed receiver to %v", iso, d)
 		}
 	}
 }

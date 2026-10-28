@@ -12,16 +12,16 @@ func TestParse_SlashDate_NoLocale_BothValid_ReturnsAmbiguous(t *testing.T) {
 	// With no locale and both month-first and day-first interpretations valid,
 	// return Ambiguous candidates so the caller can disambiguate.
 	r := Parse("04/05/2026")
-	if r.Status != StatusAmbiguous {
-		t.Fatalf("status = %v, want Ambiguous", r.Status)
+	if r.Status() != StatusAmbiguous {
+		t.Fatalf("status = %v, want Ambiguous", r.Status())
 	}
 	if len(r.Candidates) != 2 {
 		t.Fatalf("len(Candidates) = %d, want 2", len(r.Candidates))
 	}
 	dates := make([]Date, 0, len(r.Candidates))
 	for _, c := range r.Candidates {
-		if c.Status != StatusResolved || c.Kind != KindDate {
-			t.Fatalf("candidate status/kind = %q/%q, want resolved/date", c.Status, c.Kind)
+		if c.Status() != StatusResolved || c.Kind() != KindDate {
+			t.Fatalf("candidate status/kind = %q/%q, want resolved/date", c.Status(), c.Kind())
 		}
 		d, ok := c.Date()
 		if !ok {
@@ -40,11 +40,11 @@ func TestParse_SlashDate_NoLocale_BothValid_ReturnsAmbiguous(t *testing.T) {
 func TestParse_SlashDate_LocaleFirstUS(t *testing.T) {
 	// en-US → month-first → April 5
 	r := Parse("04/05/2026", WithInputLocale(language.MustParse("en-US")))
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 	}
-	if r.Kind != KindDate {
-		t.Fatalf("kind = %v, want KindDate", r.Kind)
+	if r.Kind() != KindDate {
+		t.Fatalf("kind = %v, want KindDate", r.Kind())
 	}
 	d, ok := r.Date()
 	if !ok {
@@ -58,8 +58,8 @@ func TestParse_SlashDate_LocaleFirstUS(t *testing.T) {
 func TestParse_SlashDate_LocaleFirstGB(t *testing.T) {
 	// en-GB → day-first → May 4
 	r := Parse("04/05/2026", WithInputLocale(language.MustParse("en-GB")))
-	if r.Status != StatusResolved {
-		t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+	if r.Status() != StatusResolved {
+		t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 	}
 	d, ok := r.Date()
 	if !ok {
@@ -93,8 +93,8 @@ func TestParse_SlashDate_ClosedLocalePolicy(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			r := Parse("04/05/2026", WithInputLocale(language.MustParse(tc.tag)))
-			if r.Status != tc.want {
-				t.Fatalf("Parse(locale %q) status = %v, want %v", tc.tag, r.Status, tc.want)
+			if r.Status() != tc.want {
+				t.Fatalf("Parse(locale %q) status = %v, want %v", tc.tag, r.Status(), tc.want)
 			}
 			if tc.want != StatusResolved {
 				return
@@ -123,8 +123,8 @@ func TestParse_SlashDate_UnsupportedLocaleUsesValidityInference(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			r := Parse(tc.input, WithInputLocale(language.MustParse("fr-FR")))
-			if r.Status != tc.want {
-				t.Fatalf("Parse(%q, fr-FR) status = %v, want %v", tc.input, r.Status, tc.want)
+			if r.Status() != tc.want {
+				t.Fatalf("Parse(%q, fr-FR) status = %v, want %v", tc.input, r.Status(), tc.want)
 			}
 		})
 	}
@@ -150,8 +150,8 @@ func TestParse_SlashDate_NoLocale_OnlyOneValid_AutoResolves(t *testing.T) {
 			t.Parallel()
 
 			r := Parse(tc.input)
-			if r.Status != StatusResolved {
-				t.Fatalf("status = %v (err=%v), want Resolved", r.Status, r.Error)
+			if r.Status() != StatusResolved {
+				t.Fatalf("status = %v (err=%v), want Resolved", r.Status(), r.Error)
 			}
 			d, ok := r.Date()
 			if !ok {
@@ -176,8 +176,8 @@ func TestParse_SlashDate_InvalidDateReportsActionableError(t *testing.T) {
 			t.Parallel()
 
 			r := Parse(input, WithInputLocale(language.MustParse("en-GB")))
-			if r.Status != StatusInvalid {
-				t.Fatalf("status = %v, want Invalid", r.Status)
+			if r.Status() != StatusInvalid {
+				t.Fatalf("status = %v, want Invalid", r.Status())
 			}
 			if r.Error == nil {
 				t.Fatal("Error is nil, want TimeError")
@@ -196,8 +196,8 @@ func TestParse_SlashDate_NoLocale_BothInvalid_ReturnsInvalid(t *testing.T) {
 	t.Parallel()
 
 	r := Parse("31/02/2026")
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 	if r.Error == nil || r.Error.Code != CodeInvalidDate {
 		t.Fatalf("error = %#v, want CodeInvalidDate", r.Error)
@@ -239,8 +239,8 @@ func TestParseDate_SlashDateValidInterpretationCount(t *testing.T) {
 
 func TestParse_Invalid_Unparseable(t *testing.T) {
 	r := Parse("not a time")
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 	if r.Error == nil {
 		t.Fatal("Error must not be nil")
@@ -255,8 +255,8 @@ func TestParse_Invalid_Unparseable(t *testing.T) {
 
 func TestParse_Invalid_Empty(t *testing.T) {
 	r := Parse("")
-	if r.Status != StatusInvalid {
-		t.Fatalf("status = %v, want Invalid", r.Status)
+	if r.Status() != StatusInvalid {
+		t.Fatalf("status = %v, want Invalid", r.Status())
 	}
 	if r.Error.Code != CodeEmptyInput {
 		t.Errorf("error code = %q, want %q", r.Error.Code, CodeEmptyInput)
@@ -279,7 +279,7 @@ func TestParse_Invalid_HintNeverEmpty(t *testing.T) {
 	for _, input := range inputs {
 		t.Run(input, func(t *testing.T) {
 			r := Parse(input)
-			if r.Status != StatusInvalid {
+			if r.Status() != StatusInvalid {
 				return // not invalid, skip
 			}
 			if r.Error.Hint == "" {

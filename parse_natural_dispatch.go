@@ -60,7 +60,7 @@ func naturalResultToParseResult(input string, r *natural.Result, cfg *config) Pa
 		pr.date = dateFromComponents(r.Year, r.Month, r.Day)
 		if len(r.DateOffsets) != 0 {
 			base := pr.date
-			pr.Status = StatusAmbiguous
+			pr.status = StatusAmbiguous
 			for _, offset := range r.DateOffsets {
 				date, err := base.Add(Days(offset))
 				if err != nil {
@@ -123,6 +123,8 @@ func naturalErrorSentinel(kind natural.ErrorKind) error {
 	switch kind {
 	case natural.ErrorOverflow:
 		return ErrOverflow
+	case natural.ErrorInvalidDate:
+		return ErrInvalidDate
 	case natural.ErrorInvalidTime:
 		return ErrInvalidTime
 	case natural.ErrorInvalidDuration:

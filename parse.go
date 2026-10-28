@@ -80,10 +80,8 @@ type Warning struct {
 // Check Status before calling the typed accessors (DateTime, Date, …).
 // Its JSON form is diagnostic output and does not preserve all runtime state.
 type ParseResult struct {
-	// Status reports whether parsing resolved, remained ambiguous, or failed.
-	Status Status
-	// Kind identifies the semantic type of the parsed value when Status is Resolved or Ambiguous.
-	Kind Kind
+	status Status
+	kind   Kind
 	// Input is the original input string.
 	Input string
 	// Zone is the zone applied when the input did not carry its own zone or offset.
@@ -118,9 +116,16 @@ type ParseResult struct {
 	ambiguity     ambiguityCause
 }
 
+// Status reports whether parsing resolved, remained ambiguous, or failed.
+// A zero ParseResult has an empty status and no parsed value.
+func (r ParseResult) Status() Status { return r.status }
+
+// Kind identifies the parsed value type for resolved or ambiguous results.
+func (r ParseResult) Kind() Kind { return r.kind }
+
 // Instant returns the parsed Instant. ok is false unless Status is Resolved and Kind == KindInstant.
 func (r ParseResult) Instant() (Instant, bool) {
-	if r.Status != StatusResolved || r.Kind != KindInstant {
+	if r.status != StatusResolved || r.kind != KindInstant {
 		return Instant{}, false
 	}
 	return r.instant, true
@@ -128,7 +133,7 @@ func (r ParseResult) Instant() (Instant, bool) {
 
 // DateTime returns the parsed DateTime. ok is false unless Status is Resolved and Kind == KindDateTime.
 func (r ParseResult) DateTime() (DateTime, bool) {
-	if r.Status != StatusResolved || r.Kind != KindDateTime {
+	if r.status != StatusResolved || r.kind != KindDateTime {
 		return DateTime{}, false
 	}
 	return r.dateTime, true
@@ -136,7 +141,7 @@ func (r ParseResult) DateTime() (DateTime, bool) {
 
 // LocalDateTime returns the parsed LocalDateTime. ok is false unless Status is Resolved and Kind == KindLocalDateTime.
 func (r ParseResult) LocalDateTime() (LocalDateTime, bool) {
-	if r.Status != StatusResolved || r.Kind != KindLocalDateTime {
+	if r.status != StatusResolved || r.kind != KindLocalDateTime {
 		return LocalDateTime{}, false
 	}
 	return r.localDateTime, true
@@ -144,7 +149,7 @@ func (r ParseResult) LocalDateTime() (LocalDateTime, bool) {
 
 // Date returns the parsed Date. ok is false unless Status is Resolved and Kind == KindDate.
 func (r ParseResult) Date() (Date, bool) {
-	if r.Status != StatusResolved || r.Kind != KindDate {
+	if r.status != StatusResolved || r.kind != KindDate {
 		return Date{}, false
 	}
 	return r.date, true
@@ -152,7 +157,7 @@ func (r ParseResult) Date() (Date, bool) {
 
 // Time returns the parsed Time. ok is false unless Status is Resolved and Kind == KindTime.
 func (r ParseResult) Time() (Time, bool) {
-	if r.Status != StatusResolved || r.Kind != KindTime {
+	if r.status != StatusResolved || r.kind != KindTime {
 		return Time{}, false
 	}
 	return r.timeVal, true
@@ -160,7 +165,7 @@ func (r ParseResult) Time() (Time, bool) {
 
 // Duration returns the parsed Duration. ok is false unless Status is Resolved and Kind == KindDuration.
 func (r ParseResult) Duration() (Duration, bool) {
-	if r.Status != StatusResolved || r.Kind != KindDuration {
+	if r.status != StatusResolved || r.kind != KindDuration {
 		return 0, false
 	}
 	return r.duration, true
@@ -168,7 +173,7 @@ func (r ParseResult) Duration() (Duration, bool) {
 
 // Period returns the parsed Period. ok is false unless Status is Resolved and Kind == KindPeriod.
 func (r ParseResult) Period() (Period, bool) {
-	if r.Status != StatusResolved || r.Kind != KindPeriod {
+	if r.status != StatusResolved || r.kind != KindPeriod {
 		return Period{}, false
 	}
 	return r.period, true
@@ -176,7 +181,7 @@ func (r ParseResult) Period() (Period, bool) {
 
 // Interval returns the parsed Interval. ok is false unless Status is Resolved and Kind == KindInterval.
 func (r ParseResult) Interval() (Interval, bool) {
-	if r.Status != StatusResolved || r.Kind != KindInterval {
+	if r.status != StatusResolved || r.kind != KindInterval {
 		return Interval{}, false
 	}
 	return r.interval, true
@@ -210,19 +215,19 @@ func (r ParseResult) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	wire := parseResultWire{
-		Status:   r.Status,
+		Status:   r.status,
 		Input:    r.Input,
 		Warnings: r.Warnings,
 	}
-	switch r.Status {
+	switch r.status {
 	case StatusResolved:
-		wire.Kind = r.Kind
+		wire.Kind = r.kind
 		wire.Value = parseResultValue(r)
 		if !r.Zone.IsZero() {
 			wire.Zone = r.Zone.ID()
 		}
 	case StatusAmbiguous:
-		wire.Kind = r.Kind
+		wire.Kind = r.kind
 		wire.Candidates = r.Candidates
 	case StatusInvalid:
 		wire.Error = r.Error
@@ -238,32 +243,32 @@ func (r *ParseResult) UnmarshalJSON([]byte) error {
 }
 
 func (r ParseResult) validateWire() error {
-	switch r.Status {
+	switch r.status {
 	case StatusResolved:
-		if !knownParseResultKind(r.Kind) {
+		if !knownParseResultKind(r.kind) {
 			return newTimeError(ErrInvalidFormat,
-				fmt.Sprintf("resolved ParseResult has unknown kind %q", r.Kind),
+				fmt.Sprintf("resolved ParseResult has unknown kind %q", r.kind),
 				r.Input,
-				"set Kind to the concrete value stored in the resolved ParseResult")
+				"call Parse to obtain a result with a concrete value")
 		}
 	case StatusAmbiguous:
-		if !knownParseResultKind(r.Kind) {
+		if !knownParseResultKind(r.kind) {
 			return newTimeError(ErrInvalidFormat,
-				fmt.Sprintf("ambiguous ParseResult has unknown kind %q", r.Kind),
+				fmt.Sprintf("ambiguous ParseResult has unknown kind %q", r.kind),
 				r.Input,
-				"set Kind to the shared kind of the ambiguity candidates")
+				"call Parse to obtain the ambiguity candidates")
 		}
 		if len(r.Candidates) < 2 {
 			return newTimeError(ErrInvalidFormat,
 				"ambiguous ParseResult must contain at least two candidates",
 				r.Input,
-				"use StatusResolved for one interpretation or include every resolved candidate")
+				"retain every resolved candidate returned by Parse")
 		}
 		for i := range r.Candidates {
 			candidate := &r.Candidates[i]
-			if candidate.Status != StatusResolved || candidate.Kind != r.Kind {
+			if candidate.status != StatusResolved || candidate.kind != r.kind {
 				return newTimeError(ErrInvalidFormat,
-					fmt.Sprintf("ambiguity candidate %d must be resolved with kind %q", i, r.Kind),
+					fmt.Sprintf("ambiguity candidate %d must be resolved with kind %q", i, r.kind),
 					r.Input,
 					"include only resolved candidates whose Kind matches the parent ParseResult")
 			}
@@ -277,9 +282,9 @@ func (r ParseResult) validateWire() error {
 		}
 	default:
 		return newTimeError(ErrInvalidFormat,
-			fmt.Sprintf("ParseResult has unknown status %q", r.Status),
+			fmt.Sprintf("ParseResult has unknown status %q", r.status),
 			r.Input,
-			"set Status to resolved, ambiguous, or invalid")
+			"call Parse to obtain a runtime result")
 	}
 	return nil
 }
@@ -306,10 +311,10 @@ type parseResultWire struct {
 }
 
 func parseResultValue(r ParseResult) any {
-	if r.Status != StatusResolved {
+	if r.status != StatusResolved {
 		return nil
 	}
-	switch r.Kind {
+	switch r.kind {
 	case KindInstant:
 		return r.instant
 	case KindDateTime:
