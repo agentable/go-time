@@ -342,7 +342,7 @@ Unresolved `Date` and `Time` values cross to stdlib only after
 
 ## JSON
 
-All package JSON uses only Go 1.27.3's native `encoding/json/v2` and
+All package JSON uses only Go 1.27.4's native `encoding/json/v2` and
 `encoding/json/jsontext`. No compatibility adapter or alternate JSON
 implementation is supported.
 
