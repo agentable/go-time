@@ -252,7 +252,9 @@ regions from language-only tags.
 Formal and natural local datetime parsing use `LocalDateTime.Resolve` when
 `WithZone` is supplied. DST fall-back local times return `StatusAmbiguous` with
 chronological `DateTime` candidates. Each candidate carries
-`WarnDuplicateTime` with its abbreviation and offset. DST spring-forward gaps
+`WarnDuplicateTime` with its abbreviation and offset. When interpreting a
+relative expression, the result and its candidates retain the reference instant
+used for parsing. DST spring-forward gaps
 return `StatusInvalid` with `CodeNonexistentTime`. The natural parser never
 normalizes or selects these states before the shared resolver sees them.
 

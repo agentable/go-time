@@ -189,10 +189,16 @@ func TestZoneResolutionShortRulePeriod(t *testing.T) {
 	if natural.Status() != StatusAmbiguous || len(natural.Candidates) != 2 {
 		t.Fatalf("natural Parse: %v", natural)
 	}
+	if !natural.Reference.Equal(reference) {
+		t.Errorf("natural Parse reference = %v, want %v", natural.Reference, reference)
+	}
 	for i, candidate := range natural.Candidates {
 		dt, ok := candidate.DateTime()
 		if !ok || !dt.Instant().Equal(want[i]) {
 			t.Errorf("natural candidate %d: %v, want %v", i, candidate, want[i])
+		}
+		if !candidate.Reference.Equal(reference) {
+			t.Errorf("natural candidate %d reference = %v, want %v", i, candidate.Reference, reference)
 		}
 	}
 	_, err = ParseDateTime(local.String(), WithZone(z))

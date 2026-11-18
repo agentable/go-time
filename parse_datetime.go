@@ -139,15 +139,12 @@ func resolveLocalDateTime(input string, cfg *config, year, mon, day, hour, min, 
 			candidates = append(candidates, duplicateTimeCandidate(input, cfg, z, candidate.Std(), truncated))
 		}
 
-		return ParseResult{
-			status:     StatusAmbiguous,
-			kind:       KindDateTime,
-			Input:      input,
-			Zone:       cfg.zone,
-			Warnings:   localDateTimeWarnings(cfg, z, truncated),
-			Candidates: candidates,
-			ambiguity:  ambiguityDuplicateTime,
-		}, true
+		r := resolvedResult(input, KindDateTime, cfg)
+		r.status = StatusAmbiguous
+		r.Warnings = localDateTimeWarnings(cfg, z, truncated)
+		r.Candidates = candidates
+		r.ambiguity = ambiguityDuplicateTime
+		return r, true
 	case LocalResolved:
 		dt := resolution.Candidates[0]
 		r := resolvedResult(input, KindDateTime, cfg)
