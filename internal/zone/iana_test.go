@@ -266,7 +266,6 @@ func TestResolveLocation_ExactCaseInsensitiveAndWindows(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -291,7 +290,6 @@ func TestWindowsToIANA_TargetsLoad(t *testing.T) {
 	t.Parallel()
 
 	for windowsName, ianaID := range WindowsToIANA {
-		windowsName, ianaID := windowsName, ianaID
 		t.Run(windowsName, func(t *testing.T) {
 			t.Parallel()
 			loc, err := Load(ianaID)
@@ -309,7 +307,6 @@ func TestResolveLocation_RejectsFixedOffsets(t *testing.T) {
 	t.Parallel()
 
 	for _, input := range []string{"+08:30", "-0530", "UTC+8"} {
-		input := input
 		t.Run(input, func(t *testing.T) {
 			t.Parallel()
 
@@ -324,7 +321,6 @@ func TestResolveLocation_InvalidOffsets(t *testing.T) {
 	t.Parallel()
 
 	for _, input := range []string{"+24:00", "+99:99", "UTC+24"} {
-		input := input
 		t.Run(input, func(t *testing.T) {
 			t.Parallel()
 			if canonical, loc, ok := ResolveLocation(input); ok || canonical != "" || loc != nil {

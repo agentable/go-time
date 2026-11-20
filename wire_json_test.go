@@ -325,12 +325,10 @@ func assertJSONStructuralError(t *testing.T, err error, causeType string) {
 	t.Helper()
 
 	if causeType == "syntax" {
-		var cause *jsontext.SyntacticError
-		if !errors.As(err, &cause) {
+		if _, ok := errors.AsType[*jsontext.SyntacticError](err); !ok {
 			t.Fatalf("Unmarshal error = %v, want *jsontext.SyntacticError", err)
 		}
-		var detail *TimeError
-		if errors.As(err, &detail) {
+		if _, ok := errors.AsType[*TimeError](err); ok {
 			t.Fatalf("Unmarshal error = %v, malformed JSON is rejected before the type decoder", err)
 		}
 		return
@@ -347,8 +345,7 @@ func assertJSONStructuralError(t *testing.T, err error, causeType string) {
 		t.Fatalf("Unmarshal detail = %#v, want CodeInvalidFormat and non-empty hint", detail)
 	}
 	if causeType == "semantic" {
-		var cause *json.SemanticError
-		if !errors.As(err, &cause) {
+		if _, ok := errors.AsType[*json.SemanticError](err); !ok {
 			t.Fatalf("Unmarshal error = %v, want wrapped *json.SemanticError", err)
 		}
 	}

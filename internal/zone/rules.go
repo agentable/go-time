@@ -142,11 +142,11 @@ func footerOffsets(s string) []int {
 
 func skipTZName(s string) (string, bool) {
 	if strings.HasPrefix(s, "<") {
-		end := strings.IndexByte(s, '>')
-		if end < 0 {
+		_, after, ok := strings.Cut(s, ">")
+		if !ok {
 			return "", false
 		}
-		return s[end+1:], true
+		return after, true
 	}
 	end := strings.IndexAny(s, "0123456789,-+")
 	if end < 0 {

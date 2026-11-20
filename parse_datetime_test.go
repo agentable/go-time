@@ -480,8 +480,7 @@ func TestParseDateTimeComponentErrors(t *testing.T) {
 		}
 	}
 	_, err := ParseInstant("2026-02-30T12:00:00Z")
-	var cause *time.ParseError
-	if !errors.As(err, &cause) {
+	if _, ok := errors.AsType[*time.ParseError](err); !ok {
 		t.Errorf("missing stdlib cause: %v", err)
 	}
 }
