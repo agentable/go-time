@@ -224,8 +224,9 @@ When `WithZone` resolves a formal floating datetime, `ParseResult.Warnings`
 includes `WarnAssumedZone`. Without `WithZone`, the same formal input resolves
 to `KindLocalDateTime` and carries no zone assumption. Relative natural
 date/datetime input instead returns `ErrInvalidZone` when the option is absent.
-In diagnostic `Parse`, fractional seconds beyond nanosecond precision in
-clock and datetime input produce `WarnTruncatedPrecision` and truncate to nanoseconds. Duration components
+In diagnostic `Parse`, the first nine fractional-second digits in clock and
+datetime input determine the nanosecond value. Any additional digits produce
+`WarnTruncatedPrecision` and are discarded without rounding. Duration components
 with more than nine fractional digits instead return `ErrInvalidDuration`;
 values beyond the signed nanosecond range return `ErrOverflow`.
 Typed parsers reject a resolved, matching-kind result carrying

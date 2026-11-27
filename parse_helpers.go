@@ -85,13 +85,6 @@ func atoi(s string) int {
 	return n
 }
 
-func intOrZero(s string) int {
-	if s == "" {
-		return 0
-	}
-	return atoi(s)
-}
-
 func localDateTimeWarnings(cfg *config, z Zone, truncated bool) []Warning {
 	var warnings []Warning
 	if cfg.zoneSet {
@@ -133,14 +126,16 @@ func hasTruncatedFraction(s string) bool {
 }
 
 func parseFracNano(frac string) (int, bool) {
+	if frac == "" {
+		return 0, false
+	}
 	truncated := len(frac) > 9
-	// frac is the digits after the decimal point, up to 9 digits
 	if truncated {
 		frac = frac[:9]
 	}
-	for len(frac) < 9 {
-		frac += "0"
+	nanoseconds := atoi(frac)
+	for range 9 - len(frac) {
+		nanoseconds *= 10
 	}
-	ns, _ := strconv.Atoi(frac)
-	return ns, truncated
+	return nanoseconds, truncated
 }

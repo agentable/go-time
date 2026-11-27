@@ -174,15 +174,9 @@ func tryParseCompactDateTime(input string, cfg *config) (ParseResult, bool) {
 	if m == nil {
 		return ParseResult{}, false
 	}
-	// Require at least 8 digits + T + 2 digit hour to distinguish from other patterns
-	if len(m[1]) != 8 {
-		return ParseResult{}, false
-	}
 	datePart := m[1]
-	dateStr := datePart[:4] + "-" + datePart[4:6] + "-" + datePart[6:8]
-	hour := intOrZero(m[2])
-	min := intOrZero(m[3])
-	sec := intOrZero(m[4])
+	year, mon, day := atoi(datePart[:4]), atoi(datePart[4:6]), atoi(datePart[6:])
+	hour, min, sec := atoi(m[2]), atoi(m[3]), atoi(m[4])
 	// Parse fractional seconds
 	var nsec int
 	truncated := false
@@ -192,7 +186,6 @@ func tryParseCompactDateTime(input string, cfg *config) (ParseResult, bool) {
 		}
 		nsec, truncated = parseFracNano(m[5])
 	}
-	year, mon, day := parseDateComponents(dateStr)
 	if msg := validateDateComponents(year, mon, day); msg != "" {
 		return invalidResult(input, ErrInvalidDate, msg,
 			"Provide a valid calendar date, e.g. 20260327T130000"), true
